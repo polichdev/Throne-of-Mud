@@ -118,10 +118,10 @@ export class MovementSystem {
           if (reg?.bounds) {
             const b = reg.bounds;
             if (
-              nextWaypoint[0] < b.minX ||
-              nextWaypoint[0] > b.maxX ||
-              nextWaypoint[1] < b.minZ ||
-              nextWaypoint[1] > b.maxZ
+              nextWaypoint[0] < b.minX - 2 ||
+              nextWaypoint[0] > b.maxX + 2 ||
+              nextWaypoint[1] < b.minZ - 2 ||
+              nextWaypoint[1] > b.maxZ + 2
             ) {
               entity.path = [];
               stuckTracker.delete(entity.id);

@@ -108,6 +108,9 @@ export type JobType =
   | 'build_structure'
   | 'demolish_structure'
   | 'haul_resource'
+  | 'haul_log_with_mule'
+  | 'haul_construction_mule'
+  | 'return_mule'
   | 'make_flour'
   | 'bake_bread'
   | 'brew_ale'
@@ -143,12 +146,15 @@ export interface Job {
     resourceType?: ResourceType;
     amount?: number;
     buildingType?: BuildingType;
+    logPosition?: [number, number];
+    hitchingPostId?: string;
   };
 }
 
 export type BuildingType =
   | 'campfire'
   | 'tent'
+  | 'hitching_post'
   | 'lumberjack_hut'
   | 'peasant_house'
   | 'manor'

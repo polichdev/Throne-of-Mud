@@ -443,6 +443,89 @@ export function BuildingInspectorSection({
         );
       })()}
 
+      {entity.isCompleted && !isForeign && bType === 'hitching_post' && (
+        <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🫏</span>
+              {language === 'uk' ? 'Робочі мули' : 'Pack Mules'}
+            </span>
+            <span className="font-mono text-xs font-bold text-amber-300">
+              {entity.mulesCount ?? 1} / {entity.maxMules ?? 3}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1.5">
+            {Array.from({ length: entity.maxMules ?? 3 }).map((_, idx) => {
+              const curMules = entity.mulesCount ?? 1;
+              const isPresent = idx < curMules;
+              const mulesInUse = Array.from(characterEntities).filter((c) => c.hasMule && c.assignedMuleHutId === entity.id).length;
+              const isWorking = idx < mulesInUse;
+              return (
+                <div
+                  key={`mule-slot-${idx}`}
+                  className={`p-2 rounded-lg border flex flex-col items-center justify-center text-center gap-1 ${
+                    isPresent
+                      ? isWorking
+                        ? 'bg-amber-950/40 border-amber-600/50 text-amber-200'
+                        : 'bg-emerald-950/40 border-emerald-600/50 text-emerald-200'
+                      : 'bg-slate-900/40 border-slate-800 text-slate-600'
+                  }`}
+                >
+                  <span className="text-base">{isPresent ? '🫏' : '⭕'}</span>
+                  <span className="text-[9px] font-semibold">
+                    {isPresent
+                      ? isWorking
+                        ? (language === 'uk' ? 'У рейсі' : 'Hauling')
+                        : (language === 'uk' ? 'Вільний' : 'Available')
+                      : (language === 'uk' ? 'Порожньо' : 'Empty')}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          {(entity.mulesCount ?? 1) < (entity.maxMules ?? 3) && (
+            <button
+              onClick={() => {
+                const curMules = entity.mulesCount ?? 1;
+                const maxM = entity.maxMules ?? 3;
+                if (curMules >= maxM) return;
+                if (resources.gold < 50) {
+                  audioManager.playUIError();
+                  addChronicleEvent({
+                    title: 'Бракує золота!',
+                    description: 'Для купівлі нового мула потрібно 50 золота.',
+                    type: 'warning',
+                  });
+                  return;
+                }
+                consumeResource('gold', 50);
+                entity.mulesCount = curMules + 1;
+                incrementBuildingVersion();
+                audioManager.playUIClick();
+                addChronicleEvent({
+                  title: 'Куплено мула!',
+                  description: `До прив'язі додано нового робочого мула (${entity.mulesCount}/3).`,
+                  type: 'success',
+                });
+              }}
+              disabled={resources.gold < 50}
+              className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition border cursor-pointer ${
+                resources.gold >= 50
+                  ? 'bg-amber-950/70 hover:bg-amber-900 text-amber-300 border-amber-700/60 shadow-md active:scale-98'
+                  : 'bg-slate-800/40 text-slate-500 border-slate-750 cursor-not-allowed'
+              }`}
+            >
+              <span>🫏</span>
+              {language === 'uk' ? 'Купити мула (50' : 'Buy Mule (50'}
+              <GoldIcon className="w-3.5 h-3.5 text-amber-400" />
+              {')'}
+            </button>
+          )}
+        </div>
+      )}
+
       {entity.isCompleted && !isForeign && isProduction && (
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2">
           <div className="flex items-center justify-between">

@@ -39,6 +39,7 @@ import {
   ForestersHutModel,
   WoodenChurchModel,
   TavernModel,
+  HitchingPostModel,
 } from './buildings/models';
 import { InstancedWallsRenderer } from './buildings/InstancedWallsRenderer';
 
@@ -314,6 +315,8 @@ function Building3D({
         return <LumberjackHutModel isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
       case 'campfire':
         return <CampfireModel />;
+      case 'hitching_post':
+        return <HitchingPostModel isLightOn={isLightOn} building={building} roofRef={roofRef} />;
       case 'peasant_house':
         return <PeasantHouseModel isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
       case 'market':
@@ -450,6 +453,7 @@ const Building3DMemo = memo(Building3D, (prev, next) => {
     prev.building.buildingHeight === next.building.buildingHeight &&
     prev.building.isCompleted === next.building.isCompleted &&
     prev.building.constructionProgress === next.building.constructionProgress &&
-    prev.building.isDemolishing === next.building.isDemolishing
+    prev.building.isDemolishing === next.building.isDemolishing &&
+    prev.building.mulesCount === next.building.mulesCount
   );
 });

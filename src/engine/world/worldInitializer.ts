@@ -39,7 +39,7 @@ export function initializeWorldEntities(
   pRegion.population = 3;
   pRegion.approval = 80;
   pRegion.wealth = 50;
-  pRegion.buildingsCount = 2;
+  pRegion.buildingsCount = 3;
 
   let cx = pRegion.center[0];
   let cz = pRegion.center[1];
@@ -84,7 +84,7 @@ export function initializeWorldEntities(
   grid.occupyForBuilding(cx, cz, 2, 2, campfireId);
   world.add({
     id: campfireId,
-    name: 'Багаття поселення',
+    name: 'Вогнище поселення',
     isBuilding: true,
     buildingType: 'campfire',
     buildingHealth: 100,
@@ -114,6 +114,27 @@ export function initializeWorldEntities(
     constructionProgress: 100,
     gridPosition: [cx - 4, cz - 1],
     position: [cx - 2.5, pCampH, cz],
+    factionId: 'player',
+    regionId: playerRegionId,
+  });
+
+  const hitchingPostId = 'building-hitching-post-player';
+  grid.occupyForBuilding(cx + 3, cz - 1, 3, 2, hitchingPostId);
+  world.add({
+    id: hitchingPostId,
+    name: 'Прив\'язь для мулів',
+    isBuilding: true,
+    buildingType: 'hitching_post',
+    buildingHealth: 150,
+    maxBuildingHealth: 150,
+    buildingWidth: 3,
+    buildingHeight: 2,
+    isCompleted: true,
+    constructionProgress: 100,
+    mulesCount: 1,
+    maxMules: 3,
+    gridPosition: [cx + 3, cz - 1],
+    position: [cx + 4.5, pCampH, cz],
     factionId: 'player',
     regionId: playerRegionId,
   });
@@ -206,7 +227,7 @@ export function initializeWorldEntities(
       botReg.population = 3;
       botReg.approval = 75 + activeBotIndex * 3;
       botReg.wealth = 40 + activeBotIndex * 10;
-      botReg.buildingsCount = 2;
+      botReg.buildingsCount = 3;
 
       const bSpawn = (botReg.spawnPoints && botReg.spawnPoints[0]) ? botReg.spawnPoints[0].position : botReg.center;
       const bx = bSpawn[0];
@@ -251,6 +272,27 @@ export function initializeWorldEntities(
         constructionProgress: 100,
         gridPosition: [bx - 4, bz - 1],
         position: [bx - 2.5, bCampH, bz],
+        factionId: botFactionId,
+        regionId: regId,
+      });
+
+      const bHitchingPostId = `building-hitching-post-${botFactionId}`;
+      grid.occupyForBuilding(bx + 3, bz - 1, 3, 2, bHitchingPostId);
+      world.add({
+        id: bHitchingPostId,
+        name: `Прив\'язь (${bot.name})`,
+        isBuilding: true,
+        buildingType: 'hitching_post',
+        buildingHealth: 150,
+        maxBuildingHealth: 150,
+        buildingWidth: 3,
+        buildingHeight: 2,
+        isCompleted: true,
+        constructionProgress: 100,
+        mulesCount: 1,
+        maxMules: 3,
+        gridPosition: [bx + 3, bz - 1],
+        position: [bx + 4.5, bCampH, bz],
         factionId: botFactionId,
         regionId: regId,
       });

@@ -45,6 +45,27 @@ export class ConstructionJobHandler {
           return true;
         }
 
+        if (job.type === 'build_structure' && bEnt.requiredMaterials) {
+          let materialsDelivered = true;
+          for (const [res, needed] of Object.entries(bEnt.requiredMaterials)) {
+            const del = (bEnt.deliveredMaterials && (bEnt.deliveredMaterials as any)[res]) || 0;
+            if (del < (needed || 0)) {
+              materialsDelivered = false;
+              break;
+            }
+          }
+          if (!materialsDelivered) {
+            if (currentTick % 20 === 0) {
+              unit.speechBubble = {
+                text: 'Очікую підвезення матеріалів мулом...',
+                expiresAtTick: currentTick + 15,
+                type: 'work',
+              };
+            }
+            return false;
+          }
+        }
+
         const pendingJob = useGameStore.getState().pendingJobs.find((pj) => pj.id === job.id || pj.targetBuildingId === job.targetBuildingId);
         if (pendingJob) {
           pendingJob.progress = (pendingJob.progress || 0) + workStep;

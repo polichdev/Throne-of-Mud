@@ -905,7 +905,7 @@ export function TerrainRenderer({ grid }: Props) {
     const tile = grid.getTile(gx, gz);
     if (!tile) return;
 
-    const { addChronicleEvent, consumeResource, addPendingJob, resources, playerRegionId = 0, regions } = useGameStore.getState();
+    const { addChronicleEvent, addPendingJob, resources, playerRegionId = 0, regions } = useGameStore.getState();
 
     if (activeTool === 'road') {
       if (!isRoadPlacementAllowed(gx, gz)) {
@@ -1075,10 +1075,6 @@ export function TerrainRenderer({ grid }: Props) {
         return;
       }
 
-      for (const [res, cost] of Object.entries(blueprint.cost)) {
-        consumeResource(res as any, cost || 0);
-      }
-
       audioManager.playBuildingPlace(Math.floor(cx), Math.floor(cz));
 
       const buildingId = `building-${activeBuildType}-${Date.now()}`;
@@ -1096,6 +1092,10 @@ export function TerrainRenderer({ grid }: Props) {
         rotationAngle: buildRotation,
         isCompleted: false,
         constructionProgress: 0,
+        requiredMaterials: { ...blueprint.cost },
+        deliveredMaterials: {},
+        mulesCount: activeBuildType === 'hitching_post' ? 1 : undefined,
+        maxMules: activeBuildType === 'hitching_post' ? 3 : undefined,
         gridPosition: [footprint.minGridX, footprint.minGridZ],
         position: [cx, buildingH, cz],
         localInventory: { wood: 0 },

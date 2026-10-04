@@ -50,6 +50,11 @@ export interface GameEntity {
   morale?: number;
   isLevy?: boolean;
   commandingLordId?: string;
+  hasMule?: boolean;
+  isHaulingLog?: boolean;
+  assignedMuleHutId?: string;
+  muleTransition?: 'taking' | 'returning';
+  muleTransitionProgress?: number;
   speechBubble?: {
     text: string;
     expiresAtTick: number;
@@ -75,6 +80,10 @@ export interface GameEntity {
   efficiencyBonus?: number;
   localInventory?: Partial<ResourceInventory>;
   maxStorage?: number;
+  mulesCount?: number;
+  maxMules?: number;
+  requiredMaterials?: Partial<ResourceInventory>;
+  deliveredMaterials?: Partial<ResourceInventory>;
 
   isHarvestable?: boolean;
   resourceType?: 'wood' | 'stone' | 'wheat';

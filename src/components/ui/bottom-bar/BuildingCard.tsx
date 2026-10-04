@@ -95,6 +95,8 @@ export const BuildingCard: React.FC<BuildingCardProps> = React.memo(({ blueprint
         );
       case 'stockpile':
         return <StorageIcon className="w-3.5 h-3.5 text-amber-200" />;
+      case 'hitching_post':
+        return <span className="text-xs">🫏</span>;
       case 'campfire':
       case 'charcoal_kiln':
         return <FlameIcon className="w-3.5 h-3.5 text-orange-400" />;

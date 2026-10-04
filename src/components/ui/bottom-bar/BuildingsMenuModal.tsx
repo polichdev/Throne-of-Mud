@@ -88,6 +88,7 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
       BUILDING_BLUEPRINTS.foragers_hut,
       BUILDING_BLUEPRINTS.hunters_hut,
       BUILDING_BLUEPRINTS.stockpile,
+      BUILDING_BLUEPRINTS.hitching_post,
       BUILDING_BLUEPRINTS.campfire,
     ].filter(Boolean),
     farming: [
@@ -116,6 +117,7 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
     ].filter(Boolean),
     trade: [
       BUILDING_BLUEPRINTS.market,
+      BUILDING_BLUEPRINTS.hitching_post,
     ].filter(Boolean),
   };
 

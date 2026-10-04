@@ -3,18 +3,19 @@ import { buildingEntities, characterEntities } from '../../world';
 import { GridMap } from '../../../grid/GridMap';
 import {
   createPathSafely,
-  createPathToAreaSafely,
 } from '../../../buildings/buildingNavigation';
 import { distance2D } from '../../../../utils/mathUtils';
 import { isNoble } from '../../entityHelpers';
 import { useGameStore } from '../../../../store/useGameStore';
+import { HaulingJobHandler } from './HaulingJobHandler';
+import { AStar } from '../../../pathfinding/AStar';
 
 export class ManualJobHandler {
   public static assignPendingJob(
     unit: GameEntity,
     pendingJobs: Job[],
     grid: GridMap,
-    uBounds: { minX: number; maxX: number; minZ: number; maxZ: number } | undefined,
+    _uBounds: { minX: number; maxX: number; minZ: number; maxZ: number } | undefined,
     currentTick: number
   ): boolean {
     if (!unit.gridPosition) return false;
@@ -26,7 +27,9 @@ export class ManualJobHandler {
       unit.currentJob.type === 'chop_tree' ||
       unit.currentJob.type === 'chop_fallen_log' ||
       unit.currentJob.type === 'mine_rock' ||
-      unit.currentJob.type === 'harvest_wheat'
+      unit.currentJob.type === 'harvest_wheat' ||
+      unit.currentJob.type === 'haul_construction_mule' ||
+      unit.currentJob.type === 'haul_log_with_mule'
     )) {
       return true;
     }
@@ -53,6 +56,11 @@ export class ManualJobHandler {
       }
     }
 
+    const buildingMap = new Map<string, GameEntity>();
+    for (const b of buildingEntities) {
+      buildingMap.set(b.id, b);
+    }
+
     const candidateJobs = pendingJobs.filter((j) => {
       if (j.type === 'build_structure' || j.type === 'demolish_structure') {
         const count = j.targetBuildingId ? (activeBuildersCount.get(j.targetBuildingId) || 0) : 0;
@@ -77,20 +85,99 @@ export class ManualJobHandler {
       return true;
     });
 
-    if (candidateJobs.length === 0) {
+    const unitGx = unit.gridPosition[0];
+    const unitGz = unit.gridPosition[1];
+    const uX = unit.position ? unit.position[0] : unitGx + 0.5;
+    const uZ = unit.position ? unit.position[2] : unitGz + 0.5;
+
+    for (const job of candidateJobs) {
+      if (job.type === 'build_structure' && job.targetBuildingId) {
+        const b = buildingMap.get(job.targetBuildingId);
+        if (b && !b.isCompleted && b.requiredMaterials) {
+          let hasMissing = false;
+          for (const [res, needed] of Object.entries(b.requiredMaterials)) {
+            const del = (b.deliveredMaterials && (b.deliveredMaterials as any)[res]) || 0;
+            if (del < (needed || 0)) {
+              hasMissing = true;
+              break;
+            }
+          }
+
+          if (hasMissing) {
+            const isHaulerAssigned = [...characterEntities].some(
+              (c: GameEntity) =>
+                c.id !== unit.id &&
+                c.currentJob?.type === 'haul_construction_mule' &&
+                c.currentJob?.targetBuildingId === b.id
+            );
+
+            if (!isHaulerAssigned) {
+              const hp = unit.hasMule ? null : HaulingJobHandler.findAvailableHitchingPost(unit, b.regionId);
+              if (unit.hasMule || hp) {
+                unit.currentJob = {
+                  id: `haul-const-${b.id}-${Date.now()}`,
+                  type: 'haul_construction_mule',
+                  targetBuildingId: b.id,
+                  progress: 0,
+                  totalWork: 30,
+                };
+
+                if (!unit.hasMule && hp) {
+                  unit.assignedMuleHutId = hp.id;
+                  const hpPos = hp.position || [hp.gridPosition ? hp.gridPosition[0] + 1.5 : uX, 0, hp.gridPosition ? hp.gridPosition[1] + 1.0 : uZ];
+                  const path = AStar.findPathToArea(grid, [Math.floor(uX), Math.floor(uZ)], hp.gridPosition ? hp.gridPosition[0] : Math.floor(hpPos[0]), hp.gridPosition ? hp.gridPosition[1] : Math.floor(hpPos[2]), hp.buildingWidth || 3, hp.buildingHeight || 2);
+                  if (path && path.length > 0) {
+                    unit.path = path;
+                  }
+                  unit.speechBubble = {
+                    text: "Іду по мула до прив'язі...",
+                    expiresAtTick: currentTick + 25,
+                    type: 'work',
+                  };
+                } else {
+                  const storageHub = HaulingJobHandler.getSettlementStorageHub(b.regionId, b.factionId, useGameStore.getState().playerRegionId);
+                  if (storageHub) {
+                    const sPos = storageHub.position || [storageHub.gridPosition ? storageHub.gridPosition[0] + 1 : uX, 0, storageHub.gridPosition ? storageHub.gridPosition[1] + 1 : uZ];
+                    const path = AStar.findPathToArea(grid, [Math.floor(uX), Math.floor(uZ)], storageHub.gridPosition ? storageHub.gridPosition[0] : Math.floor(sPos[0]), storageHub.gridPosition ? storageHub.gridPosition[1] : Math.floor(sPos[2]), storageHub.buildingWidth || 2, storageHub.buildingHeight || 2);
+                    if (path && path.length > 0) {
+                      unit.path = path;
+                    }
+                    unit.speechBubble = {
+                      text: `Веду мула за матеріалами для ${b.name || 'будівництва'}...`,
+                      expiresAtTick: currentTick + 25,
+                      type: 'work',
+                    };
+                  }
+                }
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const viableJobs = candidateJobs.filter((j) => {
+      if (j.type === 'build_structure' && j.targetBuildingId) {
+        const b = buildingMap.get(j.targetBuildingId);
+        if (b && !b.isCompleted && b.requiredMaterials) {
+          for (const [res, needed] of Object.entries(b.requiredMaterials)) {
+            const del = (b.deliveredMaterials && (b.deliveredMaterials as any)[res]) || 0;
+            if (del < (needed || 0)) {
+              return false;
+            }
+          }
+        }
+      }
+      return true;
+    });
+
+    if (viableJobs.length === 0) {
       (unit as any).nextPendingJobCheckTick = currentTick + 4;
       return false;
     }
 
-    const unitGx = unit.gridPosition[0];
-    const unitGz = unit.gridPosition[1];
-
-    const buildingMap = new Map<string, GameEntity>();
-    for (const b of buildingEntities) {
-      buildingMap.set(b.id, b);
-    }
-
-    const sortedJobs = [...candidateJobs].sort((a, b) => {
+    const sortedJobs = [...viableJobs].sort((a, b) => {
       let ax = a.targetPosition ? a.targetPosition[0] : unitGx;
       let az = a.targetPosition ? a.targetPosition[1] : unitGz;
       if (a.targetBuildingId) {
@@ -136,17 +223,7 @@ export class ManualJobHandler {
           if (isAdjacent) {
             path = [];
           } else {
-            path = createPathToAreaSafely(
-              grid,
-              unit.position,
-              unit.gridPosition,
-              bx,
-              bz,
-              bw,
-              bh,
-              buildingEntities,
-              uBounds
-            );
+            path = AStar.findPathToArea(grid, [unitGx, unitGz], bx, bz, bw, bh);
           }
         } else if (job.targetPosition) {
           const targetTile: [number, number] = [
@@ -157,15 +234,7 @@ export class ManualJobHandler {
           if (dist <= 1.5) {
             path = [];
           } else {
-            path = createPathSafely(
-              grid,
-              unit.position,
-              unit.gridPosition,
-              targetTile,
-              buildingEntities,
-              true,
-              uBounds
-            );
+            path = AStar.findPath(grid, [unitGx, unitGz], targetTile, true);
           }
         }
       } else {
@@ -183,15 +252,7 @@ export class ManualJobHandler {
         if (dist <= 1.5 && isAdjacentWork) {
           path = [];
         } else {
-          path = createPathSafely(
-            grid,
-            unit.position,
-            unit.gridPosition,
-            targetTile,
-            buildingEntities,
-            isAdjacentWork,
-            uBounds
-          );
+          path = AStar.findPath(grid, [unitGx, unitGz], targetTile, isAdjacentWork);
         }
       }
 
@@ -243,20 +304,27 @@ export class ManualJobHandler {
             b.isCompleted &&
             b.gridPosition
           ) {
+            if (uBounds) {
+              const bx = b.gridPosition[0];
+              const bz = b.gridPosition[1];
+              if (bx < uBounds.minX || bx > uBounds.maxX || bz < uBounds.minZ || bz > uBounds.maxZ) {
+                continue;
+              }
+            }
             playerBuildings.push(b);
           }
         }
 
         let anchorX = cx;
         let anchorZ = cz;
-        let wanderRange = 12;
+        let wanderRange = 8;
 
-        if (playerBuildings.length > 0 && Math.random() < 0.65) {
+        if (playerBuildings.length > 0 && Math.random() < 0.88) {
           const randomB = playerBuildings[Math.floor(Math.random() * playerBuildings.length)];
           if (randomB.gridPosition) {
             anchorX = randomB.gridPosition[0] + Math.floor((randomB.buildingWidth || 2) / 2);
             anchorZ = randomB.gridPosition[1] + Math.floor((randomB.buildingHeight || 2) / 2);
-            wanderRange = 5;
+            wanderRange = 4;
           }
         }
 
@@ -300,8 +368,6 @@ export class ManualJobHandler {
             false,
             uBounds
           );
-
-
 
           const movementPath = wanderPath?.filter(([x, z]) => x !== unitX || z !== unitZ) ?? [];
           if (movementPath.length > 0) {
@@ -368,6 +434,10 @@ export class ManualJobHandler {
         return 'Час збирати врожай';
       case 'work_at_building':
         return 'Іду на робоче місце';
+      case 'haul_construction_mule':
+        return 'Веду мула за матеріалами';
+      case 'haul_log_with_mule':
+        return 'Веду мула по колоду';
       case 'patrol':
         return 'Патрулюю володіння';
       case 'sleep':

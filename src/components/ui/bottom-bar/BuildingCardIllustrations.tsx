@@ -927,6 +927,52 @@ export const BuildingIllustration: React.FC<{ type: BuildingType; className?: st
         </svg>
       );
 
+    case 'hitching_post':
+      return (
+        <svg viewBox="0 0 100 110" className={className} fill="none">
+          <defs>
+            <linearGradient id="sky_hitch" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#dce8ec" />
+              <stop offset="50%" stopColor="#ede5d2" />
+              <stop offset="100%" stopColor="#c9b99f" />
+            </linearGradient>
+            <linearGradient id="ground_hitch" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#687948" />
+              <stop offset="35%" stopColor="#55442f" />
+              <stop offset="100%" stopColor="#3d3020" />
+            </linearGradient>
+          </defs>
+          <rect width="100" height="110" fill="url(#sky_hitch)" />
+          <path d="M0 64 C30 60 70 62 100 64 L100 110 L0 110 Z" fill="url(#ground_hitch)" />
+          <ellipse cx="50" cy="88" rx="36" ry="12" fill="#d97706" opacity="0.35" />
+
+          <line x1="18" y1="42" x2="18" y2="82" stroke="#452c16" strokeWidth="3.5" strokeLinecap="round" />
+          <line x1="82" y1="42" x2="82" y2="82" stroke="#452c16" strokeWidth="3.5" strokeLinecap="round" />
+          <line x1="50" y1="44" x2="50" y2="82" stroke="#452c16" strokeWidth="3.5" strokeLinecap="round" />
+
+          <line x1="12" y1="52" x2="88" y2="52" stroke="#664424" strokeWidth="3" strokeLinecap="round" />
+          <line x1="12" y1="62" x2="88" y2="62" stroke="#664424" strokeWidth="2.5" strokeLinecap="round" />
+
+          <ellipse cx="50" cy="74" rx="14" ry="9" fill="#71717a" stroke="#27272a" strokeWidth="1.5" />
+          <ellipse cx="38" cy="62" rx="7" ry="10" fill="#71717a" stroke="#27272a" strokeWidth="1.5" />
+          <ellipse cx="33" cy="60" rx="4" ry="4" fill="#52525b" />
+          <polygon points="36,52 33,40 40,50" fill="#71717a" stroke="#27272a" strokeWidth="1" />
+          <polygon points="41,52 44,40 46,50" fill="#71717a" stroke="#27272a" strokeWidth="1" />
+          <circle cx="34" cy="58" r="1" fill="#09090b" />
+
+          <line x1="42" y1="78" x2="42" y2="95" stroke="#3f3f46" strokeWidth="2.2" strokeLinecap="round" />
+          <line x1="47" y1="78" x2="47" y2="94" stroke="#3f3f46" strokeWidth="2.2" strokeLinecap="round" />
+          <line x1="56" y1="78" x2="56" y2="95" stroke="#3f3f46" strokeWidth="2.2" strokeLinecap="round" />
+          <line x1="61" y1="78" x2="61" y2="94" stroke="#3f3f46" strokeWidth="2.2" strokeLinecap="round" />
+
+          <rect x="47" y="67" width="9" height="7" fill="#b45309" rx="1.5" stroke="#451a03" strokeWidth="1" />
+          <line x1="38" y1="58" x2="50" y2="53" stroke="#92400e" strokeWidth="1.2" strokeDasharray="1.5 1" />
+
+          <rect x="70" y="72" width="16" height="8" fill="#ca8a04" rx="2" stroke="#713f12" strokeWidth="1" />
+          <circle cx="20" cy="80" r="4.5" fill="#3b82f6" opacity="0.8" stroke="#1e3a8a" strokeWidth="1" />
+        </svg>
+      );
+
     default:
       return (
         <svg viewBox="0 0 100 110" className={className} fill="none">

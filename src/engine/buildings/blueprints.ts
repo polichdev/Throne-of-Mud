@@ -41,6 +41,18 @@ export const BUILDING_BLUEPRINTS: Record<BuildingType, BuildingBlueprint> = {
     health: 100,
     color: '#ea580c',
   },
+  hitching_post: {
+    type: 'hitching_post',
+    name: 'Прив\'язь для мулів',
+    description: 'Стоянка для робочих мулів (до 3 мулів). Працівники складу беруть мула, щоб витягувати важкі колоди з лісоповалу та доставляти матеріали на будівельні майданчики.',
+    width: 3,
+    height: 2,
+    cost: { wood: 5 },
+    category: 'infrastructure',
+    workSlots: 0,
+    health: 150,
+    color: '#854d0e',
+  },
   peasant_house: {
     type: 'peasant_house',
     name: 'Хатина селян',

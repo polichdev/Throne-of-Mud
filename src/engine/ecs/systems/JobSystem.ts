@@ -169,7 +169,13 @@ export class JobSystem {
         (!unit.path || unit.path.length === 0)
       ) {
         if (isPlayerUnit) {
-          const assigned = ManualJobHandler.assignPendingJob(unit, pendingJobs, grid, uBounds, currentTick);
+          let assigned = ManualJobHandler.assignPendingJob(unit, pendingJobs, grid, uBounds, currentTick);
+          if (!assigned) {
+            const storageHub = HaulingJobHandler.getSettlementStorageHub(uRegionId, unit.factionId, playerRegionId);
+            if (storageHub) {
+              assigned = HaulingJobHandler.assignStockpileHaulingJob(unit, storageHub, grid, uBounds, currentTick, cx, cz);
+            }
+          }
           if (!assigned) {
             ManualJobHandler.handleIdleWander(unit, grid, uBounds, cx, cz, currentTick);
           }
@@ -188,7 +194,13 @@ export class JobSystem {
         const buildSkill = unit.skills?.building || DEFAULT_WORK_SKILL;
         const woodSkill = unit.skills?.woodcutting || DEFAULT_WORK_SKILL;
 
-        if (job.type === 'chop_tree') {
+        if (job.type === 'haul_log_with_mule' || job.type === 'haul_construction_mule' || job.type === 'return_mule') {
+          const storageHub = HaulingJobHandler.getSettlementStorageHub(uRegionId, unit.factionId, playerRegionId);
+          if (storageHub) {
+            HaulingJobHandler.assignStockpileHaulingJob(unit, storageHub, grid, uBounds, currentTick, cx, cz);
+          }
+          continue;
+        } else if (job.type === 'chop_tree') {
           const finishedTree = WoodcuttingJobHandler.handleChopTreeProgress(unit, job, grid, currentTick, woodSkill);
           if (finishedTree) continue;
         } else if (job.type === 'wait_tree_fall') {

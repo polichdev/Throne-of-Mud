@@ -138,6 +138,7 @@ export const TopHUD: React.FC = React.memo(() => {
     housingStats,
     storageUsage,
     totalFood,
+    muleStats,
   } = useSettlementMetrics();
 
   const handleLordClick = useCallback(() => {
@@ -220,9 +221,9 @@ export const TopHUD: React.FC = React.memo(() => {
               )}
             </div>
 
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={dict.hud.oxenTooltip}>
+            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={`${dict.hud.oxenTooltip}: ${muleStats.available}/${muleStats.total}`}>
               <OxIcon className="w-3.5 h-3.5 text-amber-400/90 drop-shadow" />
-              <span className="font-bold text-slate-200">1</span>
+              <span className="font-bold text-slate-200">{muleStats.available}/{muleStats.total}</span>
             </div>
 
             <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={`${dict.hud.storageCapacityTooltip}: ${storageUsage.current}/${storageUsage.max}`}>

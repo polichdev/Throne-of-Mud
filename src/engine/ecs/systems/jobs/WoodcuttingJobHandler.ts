@@ -1,5 +1,5 @@
 import type { GameEntity, Job } from '../../world';
-import { buildingEntities, characterEntities } from '../../world';
+import { characterEntities } from '../../world';
 import { GridMap } from '../../../grid/GridMap';
 import { AStar } from '../../../pathfinding/AStar';
 import { getTreeProceduralData } from '../../../world/foliageGeneration';
@@ -108,7 +108,7 @@ export class WoodcuttingJobHandler {
           if (takenTreePositions.has(key)) continue;
 
           const tile = grid.tiles[x]?.[z];
-          if (tile && !tile.buildingId && (tile.foliageType === 'fallen_tree' || tile.foliageType === 'tree')) {
+          if (tile && !tile.buildingId && !tile.itemOnGround && (tile.foliageType === 'fallen_tree' || tile.foliageType === 'tree')) {
             const distFromHut = distance2D(x, z, hutPos[0], hutPos[1]);
             const distFromUnit = distance2D(x, z, ux, uz);
             if (distFromHut <= WOODCUTTING_SEARCH_RADIUS) {
@@ -317,52 +317,23 @@ export class WoodcuttingJobHandler {
     unit: GameEntity,
     grid: GridMap,
     currentTick: number,
-    isPlayerUnit: boolean
+    _isPlayerUnit: boolean
   ): void {
-    const { addResource, incrementFoliageVersion } = useGameStore.getState();
+    const { incrementFoliageVersion } = useGameStore.getState();
 
     if (job.targetPosition) {
-      grid.removeFoliage(job.targetPosition[0], job.targetPosition[1]);
+      const [gx, gz] = job.targetPosition;
+      const tile = grid.getTile(gx, gz);
+      if (tile) {
+        tile.itemOnGround = { type: 'wood', amount: CHOP_LOG_YIELD };
+      }
       incrementFoliageVersion();
 
-      let b: GameEntity | undefined;
-      if (unit.workBuildingId) {
-        for (const be of buildingEntities) {
-          if (be.id === unit.workBuildingId) {
-            b = be;
-            break;
-          }
-        }
-      }
-
-      if (b && b.buildingType === 'lumberjack_hut') {
-        if (!b.localInventory) b.localInventory = { wood: 0 };
-        const maxStorage = LUMBERJACK_HUT_MAX_STORAGE;
-        const currentWood = b.localInventory.wood || 0;
-        const addAmt = Math.min(CHOP_LOG_YIELD, Math.max(0, maxStorage - currentWood));
-        b.localInventory.wood = currentWood + addAmt;
-        if (isPlayerUnit) {
-          addResource('wood', addAmt);
-        }
-
-        const isFull = b.localInventory.wood >= maxStorage;
-        unit.speechBubble = {
-          text: isFull
-            ? `Деревину заготовлено! Сховище повне (${b.localInventory.wood}/${maxStorage})`
-            : `Деревину заготовлено! (${b.localInventory.wood}/${maxStorage} у хатині)`,
-          expiresAtTick: currentTick + 30,
-          type: 'work',
-        };
-      } else {
-        if (isPlayerUnit) {
-          addResource('wood', CHOP_LOG_YIELD);
-        }
-        unit.speechBubble = {
-          text: `Деревину заготовлено! (+${CHOP_LOG_YIELD} деревини)`,
-          expiresAtTick: currentTick + 25,
-          type: 'work',
-        };
-      }
+      unit.speechBubble = {
+        text: 'Колоду підготовлено! Потрібен мул для вивезення на склад',
+        expiresAtTick: currentTick + 30,
+        type: 'work',
+      };
     }
   }
 }

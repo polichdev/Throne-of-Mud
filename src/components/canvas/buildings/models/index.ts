@@ -28,4 +28,5 @@ export * from './WeaversWorkshopModel';
 export * from './ForestersHutModel';
 export * from './WoodenChurchModel';
 export * from './TavernModel';
+export * from './HitchingPostModel';
 

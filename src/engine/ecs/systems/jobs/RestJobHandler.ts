@@ -68,6 +68,14 @@ export class RestJobHandler {
     };
     (unit as any).idleCooldownTicks = currentTick + Math.floor(Math.random() * 25 + 15);
 
+    if (unit.hasMule || unit.muleTransition || unit.isHaulingLog) {
+      unit.hasMule = false;
+      unit.isHaulingLog = false;
+      unit.muleTransition = undefined;
+      unit.muleTransitionProgress = undefined;
+      unit.assignedMuleHutId = undefined;
+    }
+
     if (unit.needs) {
       if (wasSleeping) {
         unit.needs.energy = Math.max(BED_SLEEP_RESTORE_ENERGY, unit.needs.energy);
@@ -149,6 +157,14 @@ export class RestJobHandler {
   ): boolean {
     const isAlreadySleeping = unit.currentJob?.type === 'sleep';
     const isAlreadySitting = unit.currentJob?.type === 'sit_by_fire';
+
+    if (unit.hasMule || unit.muleTransition || unit.isHaulingLog) {
+      unit.hasMule = false;
+      unit.isHaulingLog = false;
+      unit.muleTransition = undefined;
+      unit.muleTransitionProgress = undefined;
+      unit.assignedMuleHutId = undefined;
+    }
 
     if (isAlreadySleeping && unit.currentJob) {
       const sleepJob = unit.currentJob;

@@ -97,6 +97,27 @@ export function useSettlementMetrics() {
     return (resources.bread || 0) + (resources.wheat || 0) + (resources.fish || 0) + (resources.berries || 0);
   }, [resources.bread, resources.wheat, resources.fish, resources.berries]);
 
+  const muleStats = useMemo(() => {
+    const hitchingPosts = Array.from(buildingEntities).filter(
+      (b) =>
+        b.isCompleted &&
+        b.buildingType === 'hitching_post' &&
+        (b.factionId === 'player' || b.factionId === undefined) &&
+        (b.regionId === playerRegionId || b.regionId === undefined)
+    );
+
+    let total = 0;
+    for (const hp of hitchingPosts) {
+      total += hp.mulesCount ?? 1;
+    }
+    const inUse = allCharacters.filter((c) => c.hasMule).length;
+    return {
+      total,
+      inUse,
+      available: Math.max(0, total - inUse),
+    };
+  }, [playerRegionId, buildingEntities.size, allCharacters]);
+
   return {
     allCharacters,
     lords,
@@ -109,6 +130,7 @@ export function useSettlementMetrics() {
     housingStats,
     storageUsage,
     totalFood,
+    muleStats,
   };
 }
 

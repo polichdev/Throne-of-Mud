@@ -241,7 +241,7 @@ export class AStar {
 
     sharedHeap.push(startIdx);
 
-    const maxIterations = regionBounds ? 500 : 800;
+    const maxIterations = regionBounds ? 600 : 1000;
     let iterations = 0;
 
     const dirDx = [1, -1, 0, 0, 1, -1, 1, -1];

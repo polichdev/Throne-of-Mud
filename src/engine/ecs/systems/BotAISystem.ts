@@ -6,6 +6,7 @@ import { getSmartRoadPath, isRoadPathValid } from '../../grid/roadGeneration';
 import { BUILDING_BLUEPRINTS } from '../../buildings/blueprints';
 import { isOverlappingResourceDeposit } from '../../buildings/buildingValidation';
 import { getBuildingDoorInfo } from '../../buildings/buildingNavigation';
+import { HaulingJobHandler } from './jobs/HaulingJobHandler';
 import type { BuildingType, ResourceDeposit, ResourceType, RegionData } from '../../../types/game';
 import {
   BOT_AI_TICK_INTERVAL,
@@ -634,33 +635,92 @@ export class BotAISystem {
           const curBuilders = builderCounts.get(targetB.id) || 0;
 
           if (curBuilders < 3 && targetB.gridPosition) {
-            builderCounts.set(targetB.id, curBuilders + 1);
-            assignedBuilderThisTick = true;
-            const bW = targetB.buildingWidth || 2;
-            const bH = targetB.buildingHeight || 2;
-            const buildPath = isRegionOffscreen ? null : AStar.findPathToArea(grid, p.gridPosition, targetB.gridPosition[0], targetB.gridPosition[1], bW, bH, region.bounds);
-            p.currentJob = {
-              id: `bot-build-${targetB.id}-${Date.now()}`,
-              type: 'build_structure',
-              targetBuildingId: targetB.id,
-              targetPosition: targetB.gridPosition,
-              progress: Math.floor(((targetB.constructionProgress || 0) / 100) * 100),
-              totalWork: 100,
-            };
-            if (buildPath && buildPath.length > 0) {
-              p.path = buildPath;
-            } else if (isRegionOffscreen) {
-              p.gridPosition = [targetB.gridPosition[0], targetB.gridPosition[1]];
-              p.position = [targetB.gridPosition[0] + 0.5, 0.05, targetB.gridPosition[1] + 0.5];
+            let matsDelivered = true;
+            if (targetB.requiredMaterials) {
+              for (const [res, needed] of Object.entries(targetB.requiredMaterials)) {
+                const del = (targetB.deliveredMaterials && (targetB.deliveredMaterials as any)[res]) || 0;
+                if (del < (needed || 0)) {
+                  matsDelivered = false;
+                  break;
+                }
+              }
             }
-            if (!isRegionOffscreen && Math.random() < 0.2) {
-              p.speechBubble = {
-                text: `Зводжу ${targetB.name || 'споруду'}!`,
-                expiresAtTick: currentTick + 30,
-                type: 'work',
+
+            if (!matsDelivered) {
+              const alreadyHauling = peasants.some(
+                (other) =>
+                  other.currentJob?.type === 'haul_construction_mule' &&
+                  other.currentJob?.targetBuildingId === targetB.id
+              );
+
+              if (!alreadyHauling) {
+                const hp = p.hasMule ? null : HaulingJobHandler.findAvailableHitchingPost(p, region.id);
+                if (p.hasMule || hp) {
+                  p.currentJob = {
+                    id: `bot-haul-const-${targetB.id}-${Date.now()}`,
+                    type: 'haul_construction_mule',
+                    targetBuildingId: targetB.id,
+                    progress: 0,
+                    totalWork: 30,
+                  };
+
+                  if (!p.hasMule && hp) {
+                    p.assignedMuleHutId = hp.id;
+                    const hpDoor = getBuildingDoorInfo(hp);
+                    const pathToHp = isRegionOffscreen ? null : AStar.findPath(grid, p.gridPosition, hpDoor.doorApproachPos, true, region.bounds);
+                    if (pathToHp && pathToHp.length > 0) {
+                      p.path = pathToHp;
+                    }
+                  } else {
+                    const storageHub = HaulingJobHandler.getSettlementStorageHub(region.id, botFactionId);
+                    if (storageHub) {
+                      const doorInfo = getBuildingDoorInfo(storageHub);
+                      const path = isRegionOffscreen ? null : AStar.findPath(grid, p.gridPosition, doorInfo.doorApproachPos, true, region.bounds);
+                      if (path && path.length > 0) {
+                        p.path = path;
+                      }
+                    }
+                  }
+
+                  if (!isRegionOffscreen) {
+                    p.speechBubble = {
+                      text: p.hasMule ? `Веду мула за матеріалами для ${targetB.name || 'споруди'}!` : `Іду до прив'язі взяти мула!`,
+                      expiresAtTick: currentTick + 30,
+                      type: 'work',
+                    };
+                  }
+                  continue;
+                }
+              }
+            } else {
+              builderCounts.set(targetB.id, curBuilders + 1);
+              assignedBuilderThisTick = true;
+              const bW = targetB.buildingWidth || 2;
+              const bH = targetB.buildingHeight || 2;
+              const buildPath = isRegionOffscreen ? null : AStar.findPathToArea(grid, p.gridPosition, targetB.gridPosition[0], targetB.gridPosition[1], bW, bH, region.bounds);
+              p.currentJob = {
+                id: `bot-build-${targetB.id}-${Date.now()}`,
+                type: 'build_structure',
+                targetBuildingId: targetB.id,
+                targetPosition: targetB.gridPosition,
+                progress: Math.floor(((targetB.constructionProgress || 0) / 100) * 100),
+                totalWork: 100,
               };
+              if (buildPath && buildPath.length > 0) {
+                p.path = buildPath;
+              } else if (isRegionOffscreen) {
+                p.gridPosition = [targetB.gridPosition[0], targetB.gridPosition[1]];
+                p.position = [targetB.gridPosition[0] + 0.5, 0.05, targetB.gridPosition[1] + 0.5];
+              }
+              if (!isRegionOffscreen && Math.random() < 0.2) {
+                p.speechBubble = {
+                  text: `Зводжу ${targetB.name || 'споруду'}!`,
+                  expiresAtTick: currentTick + 30,
+                  type: 'work',
+                };
+              }
+              continue;
             }
-            continue;
           }
         }
 
@@ -675,21 +735,6 @@ export class BotAISystem {
           const curZ = p.gridPosition[1];
           const candidateDestinations: [number, number][] = [];
 
-          if (grid.roadCoords && grid.roadCoords.size > 0) {
-            const gWidth = grid.width;
-            let sampleCount = 0;
-            for (const code of grid.roadCoords) {
-              if (++sampleCount > 30) break;
-              const rx = Math.floor(code / gWidth);
-              const rz = code % gWidth;
-              const dist = Math.hypot(rx - curX, rz - curZ);
-              if (dist >= 5 && dist <= 18 && rx >= region.bounds.minX + 1 && rx <= region.bounds.maxX - 1 && rz >= region.bounds.minZ + 1 && rz <= region.bounds.maxZ - 1) {
-                candidateDestinations.push([rx, rz]);
-                if (candidateDestinations.length >= 2) break;
-              }
-            }
-          }
-
           if (completedBuildings.length > 0) {
             for (const b of completedBuildings) {
               if (!b.gridPosition) continue;
@@ -699,7 +744,7 @@ export class BotAISystem {
                 const tx = bx + ox;
                 const tz = bz + oz;
                 const dist = Math.hypot(tx - curX, tz - curZ);
-                if (dist >= 5 && dist <= 16 && tx >= region.bounds.minX + 1 && tx <= region.bounds.maxX - 1 && tz >= region.bounds.minZ + 1 && tz <= region.bounds.maxZ - 1 && grid.isWalkable(tx, tz)) {
+                if (dist >= 3 && dist <= 12 && tx >= region.bounds.minX + 2 && tx <= region.bounds.maxX - 2 && tz >= region.bounds.minZ + 2 && tz <= region.bounds.maxZ - 2 && grid.isWalkable(tx, tz)) {
                   candidateDestinations.push([tx, tz]);
                   if (candidateDestinations.length >= 3) break;
                 }
@@ -709,12 +754,12 @@ export class BotAISystem {
           }
 
           if (candidateDestinations.length === 0) {
-            for (let attempt = 0; attempt < 5; attempt++) {
+            for (let attempt = 0; attempt < 6; attempt++) {
               const angle = Math.random() * Math.PI * 2;
-              const dist = 6 + Math.random() * 8;
+              const dist = 3 + Math.random() * 6;
               const candX = Math.round(curX + Math.cos(angle) * dist);
               const candZ = Math.round(curZ + Math.sin(angle) * dist);
-              if (candX >= region.bounds.minX + 1 && candX <= region.bounds.maxX - 1 && candZ >= region.bounds.minZ + 1 && candZ <= region.bounds.maxZ - 1 && grid.isWalkable(candX, candZ)) {
+              if (candX >= region.bounds.minX + 2 && candX <= region.bounds.maxX - 2 && candZ >= region.bounds.minZ + 2 && candZ <= region.bounds.maxZ - 2 && grid.isWalkable(candX, candZ)) {
                 candidateDestinations.push([candX, candZ]);
                 break;
               }
@@ -763,22 +808,7 @@ export class BotAISystem {
             const curZ = botLord.gridPosition[1];
             const candidateDestinations: [number, number][] = [];
 
-            if (grid.roadCoords && grid.roadCoords.size > 0) {
-              const gWidth = grid.width;
-              let sampleCount = 0;
-              for (const code of grid.roadCoords) {
-                if (++sampleCount > 30) break;
-                const rx = Math.floor(code / gWidth);
-                const rz = code % gWidth;
-                const dist = Math.hypot(rx - curX, rz - curZ);
-                if (dist >= 6 && dist <= 20 && rx >= region.bounds.minX + 1 && rx <= region.bounds.maxX - 1 && rz >= region.bounds.minZ + 1 && rz <= region.bounds.maxZ - 1) {
-                  candidateDestinations.push([rx, rz]);
-                  if (candidateDestinations.length >= 2) break;
-                }
-              }
-            }
-
-            if (candidateDestinations.length === 0 && incompleteBuildings.length > 0) {
+            if (incompleteBuildings.length > 0) {
               const b = incompleteBuildings[0];
               if (b.gridPosition) {
                 const bx = b.gridPosition[0] + Math.floor((b.buildingWidth || 2) / 2);
@@ -786,21 +816,36 @@ export class BotAISystem {
                 for (const [ox, oz] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
                   const tx = bx + ox;
                   const tz = bz + oz;
-                  if (grid.isWalkable(tx, tz) && tx >= region.bounds.minX + 1 && tx <= region.bounds.maxX - 1 && tz >= region.bounds.minZ + 1 && tz <= region.bounds.maxZ - 1) {
+                  if (grid.isWalkable(tx, tz) && tx >= region.bounds.minX + 2 && tx <= region.bounds.maxX - 2 && tz >= region.bounds.minZ + 2 && tz <= region.bounds.maxZ - 2) {
                     candidateDestinations.push([tx, tz]);
                     break;
                   }
                 }
               }
+            } else if (completedBuildings.length > 0) {
+              for (const b of completedBuildings) {
+                if (!b.gridPosition) continue;
+                const bx = b.gridPosition[0] + Math.floor((b.buildingWidth || 2) / 2);
+                const bz = b.gridPosition[1] + Math.floor((b.buildingHeight || 2) / 2);
+                for (const [ox, oz] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
+                  const tx = bx + ox;
+                  const tz = bz + oz;
+                  if (grid.isWalkable(tx, tz) && tx >= region.bounds.minX + 2 && tx <= region.bounds.maxX - 2 && tz >= region.bounds.minZ + 2 && tz <= region.bounds.maxZ - 2) {
+                    candidateDestinations.push([tx, tz]);
+                    if (candidateDestinations.length >= 2) break;
+                  }
+                }
+                if (candidateDestinations.length >= 2) break;
+              }
             }
 
             if (candidateDestinations.length === 0) {
-              for (let attempt = 0; attempt < 5; attempt++) {
+              for (let attempt = 0; attempt < 6; attempt++) {
                 const angle = Math.random() * Math.PI * 2;
-                const dist = 7 + Math.random() * 9;
+                const dist = 3 + Math.random() * 6;
                 const candX = Math.round(curX + Math.cos(angle) * dist);
                 const candZ = Math.round(curZ + Math.sin(angle) * dist);
-                if (candX >= region.bounds.minX + 1 && candX <= region.bounds.maxX - 1 && candZ >= region.bounds.minZ + 1 && candZ <= region.bounds.maxZ - 1 && grid.isWalkable(candX, candZ)) {
+                if (candX >= region.bounds.minX + 2 && candX <= region.bounds.maxX - 2 && candZ >= region.bounds.minZ + 2 && candZ <= region.bounds.maxZ - 2 && grid.isWalkable(candX, candZ)) {
                   candidateDestinations.push([candX, candZ]);
                   break;
                 }
@@ -840,8 +885,19 @@ export class BotAISystem {
 
       if (!isNightTime && incompleteBuildings.length > 0) {
         const targetB = incompleteBuildings[0];
+        let matsDelivered = true;
+        if (targetB.requiredMaterials) {
+          for (const [res, needed] of Object.entries(targetB.requiredMaterials)) {
+            const del = (targetB.deliveredMaterials && (targetB.deliveredMaterials as any)[res]) || 0;
+            if (del < (needed || 0)) {
+              matsDelivered = false;
+              break;
+            }
+          }
+        }
+
         const buildersCount = builderCounts.get(targetB.id) || 0;
-        if (buildersCount === 0 && targetB.gridPosition) {
+        if (matsDelivered && buildersCount === 0 && targetB.gridPosition) {
           const fallbackBuilder = peasants.find((p) =>
             (!p.currentJob || p.currentJob.type === 'idle' || p.currentJob.type === 'wander' || p.currentJob.type === 'work_at_building') &&
             p.currentJob?.type !== 'sleep' &&
@@ -876,7 +932,7 @@ export class BotAISystem {
           }
         }
 
-        if (currentTick % 20 === 0) {
+        if (matsDelivered && currentTick % 20 === 0) {
           targetB.constructionProgress = Math.min(100, (targetB.constructionProgress || 0) + 10);
           if (targetB.constructionProgress >= 100) {
             targetB.constructionProgress = 100;
@@ -1440,6 +1496,8 @@ export class BotAISystem {
                 rotationAngle: chosenRotation,
                 isCompleted: false,
                 constructionProgress: 0,
+                requiredMaterials: { ...(bBlueprint.cost || { wood: 5 }) },
+                deliveredMaterials: {},
                 gridPosition: [bx, bz],
                 position: [bx + bWidth / 2, buildingH, bz + bHeight / 2],
                 factionId: botFactionId,
@@ -1465,23 +1523,44 @@ export class BotAISystem {
                 : undefined;
 
               if (builderPeasant && builderPeasant.gridPosition) {
-                const buildPath = AStar.findPathToArea(grid, builderPeasant.gridPosition, bx, bz, bWidth, bHeight, region.bounds);
-                builderPeasant.currentJob = {
-                  id: `bot-build-${bId}-${Date.now()}`,
-                  type: 'build_structure',
-                  targetBuildingId: bId,
-                  targetPosition: [bx, bz],
-                  progress: 0,
-                  totalWork: 100,
-                };
-                if (buildPath && buildPath.length > 0) {
-                  builderPeasant.path = buildPath;
+                const hp = builderPeasant.hasMule ? null : HaulingJobHandler.findAvailableHitchingPost(builderPeasant, region.id);
+                if (builderPeasant.hasMule || hp) {
+                  builderPeasant.currentJob = {
+                    id: `bot-haul-const-${bId}-${Date.now()}`,
+                    type: 'haul_construction_mule',
+                    targetBuildingId: bId,
+                    progress: 0,
+                    totalWork: 30,
+                  };
+
+                  if (!builderPeasant.hasMule && hp) {
+                    builderPeasant.assignedMuleHutId = hp.id;
+                    const hpPos = hp.position || [hp.gridPosition ? hp.gridPosition[0] + 1.5 : bx, 0, hp.gridPosition ? hp.gridPosition[1] + 1.0 : bz];
+                    const path = AStar.findPathToArea(grid, builderPeasant.gridPosition, hp.gridPosition ? hp.gridPosition[0] : Math.floor(hpPos[0]), hp.gridPosition ? hp.gridPosition[1] : Math.floor(hpPos[2]), hp.buildingWidth || 3, hp.buildingHeight || 2);
+                    if (path && path.length > 0) {
+                      builderPeasant.path = path;
+                    }
+                    builderPeasant.speechBubble = {
+                      text: "Іду по мула до прив'язі!",
+                      expiresAtTick: currentTick + 30,
+                      type: 'work',
+                    };
+                  } else {
+                    const storageHub = HaulingJobHandler.getSettlementStorageHub(region.id, botFactionId);
+                    if (storageHub) {
+                      const sPos = storageHub.position || [storageHub.gridPosition ? storageHub.gridPosition[0] + 1 : bx, 0, storageHub.gridPosition ? storageHub.gridPosition[1] + 1 : bz];
+                      const path = AStar.findPathToArea(grid, builderPeasant.gridPosition, storageHub.gridPosition ? storageHub.gridPosition[0] : Math.floor(sPos[0]), storageHub.gridPosition ? storageHub.gridPosition[1] : Math.floor(sPos[2]), storageHub.buildingWidth || 2, storageHub.buildingHeight || 2);
+                      if (path && path.length > 0) {
+                        builderPeasant.path = path;
+                      }
+                      builderPeasant.speechBubble = {
+                        text: `Веду мула за матеріалами для ${bBlueprint.name}!`,
+                        expiresAtTick: currentTick + 30,
+                        type: 'work',
+                      };
+                    }
+                  }
                 }
-                builderPeasant.speechBubble = {
-                  text: `Розпочинаю будівництво ${bBlueprint.name}!`,
-                  expiresAtTick: currentTick + 30,
-                  type: 'work',
-                };
               }
 
               addChronicleEvent({

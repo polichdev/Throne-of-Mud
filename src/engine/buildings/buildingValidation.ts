@@ -196,13 +196,6 @@ export function validateRotatedBuildingPlacement(
         reason: 'Місце вже зайняте іншою спорудою!',
       };
     }
-
-    if (!tile.isPassable) {
-      return {
-        allowed: false,
-        reason: 'Місце непрохідне або заблоковане!',
-      };
-    }
   }
 
   const allowedOverlapMap: Partial<Record<BuildingType, string>> = {

@@ -323,7 +323,7 @@ export class GridMap {
     for (let dx = 0; dx < width; dx++) {
       for (let dz = 0; dz < height; dz++) {
         const tile = this.getTile(x + dx, z + dz);
-        if (!tile || !tile.isPassable || tile.buildingId || tile.terrain === 'water' || tile.terrain === 'road') {
+        if (!tile || tile.buildingId || tile.terrain === 'water' || tile.terrain === 'road') {
           return false;
         }
       }
@@ -368,7 +368,7 @@ export class GridMap {
     }
     if (maxH === -Infinity) maxH = 0.05;
 
-    const clearPad = 1;
+    const clearPad = 2;
     for (let tx = x - clearPad; tx < x + width + clearPad; tx++) {
       for (let tz = z - clearPad; tz < z + height + clearPad; tz++) {
         const tile = this.getTile(tx, tz);
@@ -376,6 +376,10 @@ export class GridMap {
           tile.foliageType = undefined;
           tile.foliageAngle = undefined;
           tile.foliageTreeType = undefined;
+          if (tile.terrain !== 'water' && !tile.buildingId) {
+            tile.isPassable = true;
+            tile.movementCost = 1.0;
+          }
           if (tx >= x && tx < x + width && tz >= z && tz < z + height) {
             tile.height = maxH;
           }
@@ -415,7 +419,7 @@ export class GridMap {
     }
     if (maxH === -Infinity) maxH = 0.05;
 
-    const clearPad = 1;
+    const clearPad = 2;
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const [tx, tz] of tiles) {
       minX = Math.min(minX, tx);
@@ -432,6 +436,10 @@ export class GridMap {
             tile.foliageType = undefined;
             tile.foliageAngle = undefined;
             tile.foliageTreeType = undefined;
+            if (tile.terrain !== 'water' && !tile.buildingId) {
+              tile.isPassable = true;
+              tile.movementCost = 1.0;
+            }
           }
         }
       }
