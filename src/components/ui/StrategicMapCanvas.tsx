@@ -30,15 +30,13 @@ export function StrategicMapCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const {
-    regions,
-    playerRegionId,
-    setCameraFocusTarget,
-    cameraFocusTarget,
-    buildingVersion,
-    foliageVersion,
-    terrainVersion,
-  } = useGameStore();
+  const regions = useGameStore((s) => s.regions);
+  const playerRegionId = useGameStore((s) => s.playerRegionId);
+  const setCameraFocusTarget = useGameStore((s) => s.setCameraFocusTarget);
+  const cameraFocusTarget = useGameStore((s) => s.cameraFocusTarget);
+  const buildingVersion = useGameStore((s) => s.buildingVersion);
+  const foliageVersion = useGameStore((s) => s.foliageVersion);
+  const terrainVersion = useGameStore((s) => s.terrainVersion);
 
   const activeRegionId = mode === 'setup' ? (propSelectedRegionId ?? 0) : playerRegionId;
 

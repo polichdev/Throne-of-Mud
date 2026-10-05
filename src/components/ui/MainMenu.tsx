@@ -30,7 +30,9 @@ interface MainMenuProps {
 }
 
 export function MainMenu({ grid }: MainMenuProps) {
-  const { setGameMode, resetWorld, setSaveNotification } = useGameStore();
+  const setGameMode = useGameStore((s) => s.setGameMode);
+  const resetWorld = useGameStore((s) => s.resetWorld);
+  const setSaveNotification = useGameStore((s) => s.setSaveNotification);
   const { t, dict, language } = useTranslation();
 
   const [saveMeta, setSaveMeta] = useState<SaveMetadata | null>(null);

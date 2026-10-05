@@ -18,13 +18,11 @@ interface StrategicMapModalProps {
 }
 
 export function StrategicMapModal({ grid }: StrategicMapModalProps) {
-  const {
-    regions,
-    playerRegionId,
-    isStrategicMapOpen,
-    setIsStrategicMapOpen,
-    focusOnRegion
-  } = useGameStore();
+  const regions = useGameStore((s) => s.regions);
+  const playerRegionId = useGameStore((s) => s.playerRegionId);
+  const isStrategicMapOpen = useGameStore((s) => s.isStrategicMapOpen);
+  const setIsStrategicMapOpen = useGameStore((s) => s.setIsStrategicMapOpen);
+  const focusOnRegion = useGameStore((s) => s.focusOnRegion);
 
   const { dict, language } = useTranslation();
   const [inspectedRegionId, setInspectedRegionId] = useState<number>(playerRegionId);

@@ -95,7 +95,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
         }
       }
 
-      if (now - lastUpdateRef.current >= 120) {
+      if (now - lastUpdateRef.current >= 200) {
         lastUpdateRef.current = now;
         const frames = frameTimesRef.current;
         if (frames.length > 0) {

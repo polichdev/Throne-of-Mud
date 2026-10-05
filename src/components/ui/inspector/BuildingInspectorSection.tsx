@@ -37,20 +37,18 @@ export function BuildingInspectorSection({
   lords,
 }: BuildingInspectorSectionProps) {
   const { dict, language } = useTranslation();
-  const {
-    resources,
-    addResource,
-    consumeResource,
-    assignWorkerToBuilding,
-    removeWorkerFromBuilding,
-    assignLordToBuilding,
-    setBuildingWage,
-    pendingJobs,
-    addPendingJob,
-    removePendingJob,
-    addChronicleEvent,
-    incrementBuildingVersion,
-  } = useGameStore();
+  const resources = useGameStore((s) => s.resources);
+  const addResource = useGameStore((s) => s.addResource);
+  const consumeResource = useGameStore((s) => s.consumeResource);
+  const assignWorkerToBuilding = useGameStore((s) => s.assignWorkerToBuilding);
+  const removeWorkerFromBuilding = useGameStore((s) => s.removeWorkerFromBuilding);
+  const assignLordToBuilding = useGameStore((s) => s.assignLordToBuilding);
+  const setBuildingWage = useGameStore((s) => s.setBuildingWage);
+  const pendingJobs = useGameStore((s) => s.pendingJobs);
+  const addPendingJob = useGameStore((s) => s.addPendingJob);
+  const removePendingJob = useGameStore((s) => s.removePendingJob);
+  const addChronicleEvent = useGameStore((s) => s.addChronicleEvent);
+  const incrementBuildingVersion = useGameStore((s) => s.incrementBuildingVersion);
 
   const bType = entity.buildingType;
   if (!bType) return null;

@@ -647,13 +647,19 @@ export function findBuildingContainingPos(
     if (b.position) {
       const cx = b.position[0];
       const cz = b.position[2];
-      const rot = b.rotationAngle || 0;
       const dx = worldX - cx;
       const dz = worldZ - cz;
-      const cos = Math.cos(rot);
-      const sin = Math.sin(rot);
-      const lx = dx * cos - dz * sin;
-      const lz = dx * sin + dz * cos;
+      const maxHalfDim = (defW > defH ? defW : defH) * 0.75;
+      if (Math.abs(dx) > maxHalfDim || Math.abs(dz) > maxHalfDim) continue;
+      const rot = b.rotationAngle || 0;
+      let lx = dx;
+      let lz = dz;
+      if (Math.abs(rot) > 0.001) {
+        const cos = Math.cos(rot);
+        const sin = Math.sin(rot);
+        lx = dx * cos - dz * sin;
+        lz = dx * sin + dz * cos;
+      }
       if (Math.abs(lx) < defW / 2 - 0.15 && Math.abs(lz) < defH / 2 - 0.15) {
         return b;
       }

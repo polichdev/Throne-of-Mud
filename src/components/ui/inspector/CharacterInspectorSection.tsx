@@ -30,12 +30,10 @@ export function CharacterInspectorSection({
   isCommandingLevies,
 }: CharacterInspectorSectionProps) {
   const { dict, language } = useTranslation();
-  const {
-    callLevyMilitia,
-    lordPreach,
-    addChronicleEvent,
-    triggerAnimation,
-  } = useGameStore();
+  const callLevyMilitia = useGameStore((s) => s.callLevyMilitia);
+  const lordPreach = useGameStore((s) => s.lordPreach);
+  const addChronicleEvent = useGameStore((s) => s.addChronicleEvent);
+  const triggerAnimation = useGameStore((s) => s.triggerAnimation);
 
   return (
     <div className="flex flex-col gap-3">
