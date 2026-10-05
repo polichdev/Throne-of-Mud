@@ -2,6 +2,7 @@ import { createNoise2D } from 'simplex-noise';
 import type { TileData, TerrainType, SpawnPointData, ResourceDeposit } from '../../types/game';
 import { getPresetSpawnPoints } from '../../constants/world';
 import { isRoadOverlappingDeposit } from '../buildings/buildingValidation';
+import { AStar } from '../pathfinding/AStar';
 
 function mulberry32(a: number) {
   return function() {
@@ -20,6 +21,14 @@ export class GridMap {
   public roadCoords: Set<number> = new Set<number>();
   public dirtyTerrainCoords: number[] = [];
   public isFullTerrainDirty: boolean = true;
+  public dirtyFoliageBuckets: Set<number> = new Set<number>();
+
+  public markFoliageBucketDirty(x: number, z: number): void {
+    const cols = Math.ceil(this.width / 16);
+    const bx = Math.min(cols - 1, Math.max(0, Math.floor(x / 16)));
+    const bz = Math.min(Math.ceil(this.height / 16) - 1, Math.max(0, Math.floor(z / 16)));
+    this.dirtyFoliageBuckets.add(bz * cols + bx);
+  }
 
   public static getHighwayX(z: number): number {
     return 127.5 + Math.sin((z - 128) * 0.042) * 7.5 + Math.sin((z - 128) * 0.095) * 3.5;
@@ -376,6 +385,7 @@ export class GridMap {
           tile.foliageType = undefined;
           tile.foliageAngle = undefined;
           tile.foliageTreeType = undefined;
+          this.markFoliageBucketDirty(tx, tz);
           if (tile.terrain !== 'water' && !tile.buildingId) {
             tile.isPassable = true;
             tile.movementCost = 1.0;
@@ -406,6 +416,7 @@ export class GridMap {
     }
 
     this.removeFoliageFromCoords(x - clearPad, x + width + clearPad - 1, z - clearPad, z + height + clearPad - 1);
+    AStar.clearUnreachableCache();
     return maxH;
   }
 
@@ -436,6 +447,7 @@ export class GridMap {
             tile.foliageType = undefined;
             tile.foliageAngle = undefined;
             tile.foliageTreeType = undefined;
+            this.markFoliageBucketDirty(nx, nz);
             if (tile.terrain !== 'water' && !tile.buildingId) {
               tile.isPassable = true;
               tile.movementCost = 1.0;
@@ -463,6 +475,7 @@ export class GridMap {
     if (minX !== Infinity) {
       this.removeFoliageFromCoords(minX - clearPad, maxX + clearPad, minZ - clearPad, maxZ + clearPad);
     }
+    AStar.clearUnreachableCache();
     return maxH;
   }
 
@@ -475,6 +488,7 @@ export class GridMap {
         tile.movementCost = tile.terrain === 'water' ? Infinity : 1.0;
       }
     }
+    AStar.clearUnreachableCache();
   }
 
   public clearBuilding(x: number, z: number, width: number, height: number): void {
@@ -490,6 +504,7 @@ export class GridMap {
         }
       }
     }
+    AStar.clearUnreachableCache();
   }
 
   public setFoliage(
@@ -514,6 +529,7 @@ export class GridMap {
         tile.isPassable = true;
         tile.movementCost = 1.2;
       }
+      this.markFoliageBucketDirty(x, z);
     }
   }
 
@@ -526,6 +542,7 @@ export class GridMap {
       tile.isPassable = tile.terrain !== 'water';
       tile.movementCost = 1.0;
       this.removeFoliageFromCoords(x, x, z, z);
+      this.markFoliageBucketDirty(x, z);
     }
   }
 
@@ -545,6 +562,7 @@ export class GridMap {
       tile.foliageAngle = undefined;
       tile.foliageTreeType = undefined;
       this.removeFoliageFromCoords(x, x, z, z);
+      this.markFoliageBucketDirty(x, z);
     }
 
     tile.terrain = 'road';
@@ -552,6 +570,7 @@ export class GridMap {
     tile.isPassable = true;
     tile.movementCost = 0.55;
     this.dirtyTerrainCoords.push(x, z);
+    AStar.clearUnreachableCache();
     return true;
   }
 
@@ -562,6 +581,7 @@ export class GridMap {
     this.roadCoords.delete(x * this.width + z);
     tile.movementCost = 1.0;
     this.dirtyTerrainCoords.push(x, z);
+    AStar.clearUnreachableCache();
     return true;
   }
 
@@ -569,6 +589,7 @@ export class GridMap {
     this.roadCoords.clear();
     this.dirtyTerrainCoords = [];
     this.isFullTerrainDirty = true;
+    AStar.clearUnreachableCache();
   }
 
   public getNeighbors(x: number, z: number): TileData[] {

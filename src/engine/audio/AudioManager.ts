@@ -245,49 +245,54 @@ class AudioManager {
   }
 
   private preloadAudioAssets() {
-    const batches: string[][] = [
-      [
-        '/audio/sfx/step_0.ogg',
-        '/audio/sfx/step_1.ogg',
-        '/audio/sfx/step_2.ogg',
-        '/audio/sfx/step_3.ogg',
-        '/audio/sfx/building_place.ogg',
-        '/audio/sfx/woodchop.ogg',
-      ],
-      [
-        '/audio/sfx/step_4.ogg',
-        '/audio/sfx/step_5.ogg',
-        '/audio/sfx/step_6.ogg',
-        '/audio/sfx/step_7.ogg',
-        '/audio/sfx/tree_fall.ogg',
-        '/audio/sfx/mining.ogg',
-      ],
-      [
-        '/audio/voices/hello.ogg',
-        '/audio/voices/good_day.ogg',
-        '/audio/voices/good_morning.ogg',
-        '/audio/voices/morning.ogg',
-        '/audio/voices/welcome.ogg',
-        '/audio/voices/yes.ogg',
-      ],
-      [
-        '/audio/voices/right.ogg',
-        '/audio/voices/work.ogg',
-        '/audio/voices/good.ogg',
-        '/audio/ambience/birds1.ogg',
-        '/audio/ambience/birds2.ogg',
-        '/audio/ambience/birds3.ogg',
-        '/audio/ambience/morning.ogg',
-        '/audio/ambience/night.ogg',
-        '/audio/ambience/campfire.ogg',
-      ],
+    const assets = [
+      '/audio/sfx/step_0.ogg',
+      '/audio/sfx/step_1.ogg',
+      '/audio/sfx/step_2.ogg',
+      '/audio/sfx/step_3.ogg',
+      '/audio/sfx/step_4.ogg',
+      '/audio/sfx/step_5.ogg',
+      '/audio/sfx/step_6.ogg',
+      '/audio/sfx/step_7.ogg',
+      '/audio/sfx/building_place.ogg',
+      '/audio/sfx/woodchop.ogg',
+      '/audio/sfx/tree_fall.ogg',
+      '/audio/sfx/mining.ogg',
+      '/audio/voices/hello.ogg',
+      '/audio/voices/good_day.ogg',
+      '/audio/voices/good_morning.ogg',
+      '/audio/voices/morning.ogg',
+      '/audio/voices/welcome.ogg',
+      '/audio/voices/yes.ogg',
+      '/audio/voices/right.ogg',
+      '/audio/voices/work.ogg',
+      '/audio/voices/good.ogg',
+      '/audio/ambience/birds1.ogg',
+      '/audio/ambience/birds2.ogg',
+      '/audio/ambience/birds3.ogg',
+      '/audio/ambience/morning.ogg',
+      '/audio/ambience/night.ogg',
+      '/audio/ambience/campfire.ogg',
     ];
 
-    batches.forEach((batch, i) => {
-      window.setTimeout(() => {
-        batch.forEach((url) => this.loadBuffer(url));
-      }, i * 1000);
-    });
+    let idx = 0;
+    const loadNext = () => {
+      if (idx >= assets.length) return;
+      const url = assets[idx++];
+      this.loadBuffer(url).finally(() => {
+        if (typeof requestIdleCallback !== 'undefined') {
+          requestIdleCallback(() => loadNext(), { timeout: 1000 });
+        } else {
+          window.setTimeout(loadNext, 120);
+        }
+      });
+    };
+
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(() => loadNext(), { timeout: 1000 });
+    } else {
+      window.setTimeout(loadNext, 500);
+    }
   }
 
   private cleanupOnEnd(

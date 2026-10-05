@@ -312,22 +312,31 @@ export class BanditAISystem {
       const mz = member.position[2];
       const distToSpot = distance2D(mx, mz, targetX, targetZ);
 
-      if (distToSpot > 6.0) {
-        if (!member.path || member.path.length === 0 || currentTick % 25 === 0) {
+      if (distToSpot > 10.0) {
+        if ((!member.path || member.path.length === 0) && i === currentTick % Math.max(1, this.squad.memberIds.length)) {
+          const searchBounds = {
+            minX: Math.max(0, Math.min(Math.floor(mx), Math.floor(targetX)) - 10),
+            maxX: Math.min(grid.width - 1, Math.max(Math.floor(mx), Math.floor(targetX)) + 10),
+            minZ: Math.max(0, Math.min(Math.floor(mz), Math.floor(targetZ)) - 10),
+            maxZ: Math.min(grid.height - 1, Math.max(Math.floor(mz), Math.floor(targetZ)) + 10),
+          };
           const p = AStar.findPath(
             grid,
             [Math.floor(mx), Math.floor(mz)],
             [Math.floor(targetX), Math.floor(targetZ)],
-            true
+            true,
+            searchBounds
           );
           if (p && p.length > 0) {
             member.path = p;
+          } else {
+            member.path = [[Math.floor(targetX), Math.floor(targetZ)]];
           }
         }
         member.moveSpeed = 1.45;
       } else if (distToSpot > 1.2) {
         member.path = [[Math.floor(targetX), Math.floor(targetZ)]];
-        member.moveSpeed = distToSpot > 3.0 ? 1.40 : 1.30;
+        member.moveSpeed = distToSpot > 4.0 ? 1.40 : 1.30;
       } else {
         member.path = [];
         member.moveSpeed = 1.25;

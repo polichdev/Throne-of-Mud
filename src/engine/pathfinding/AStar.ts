@@ -103,9 +103,11 @@ class FastIndexMinHeap {
 }
 
 const sharedHeap = new FastIndexMinHeap();
+const unreachablePairs = new Set<number>();
 
 export class AStar {
   public static clearUnreachableCache(): void {
+    unreachablePairs.clear();
   }
 
   public static findPathToArea(
@@ -220,6 +222,11 @@ export class AStar {
       return [[sx, sz]];
     }
 
+    const pairKey = ((sx & 0xff) | ((sz & 0xff) << 8) | ((tx & 0xff) << 16) | ((tz & 0xff) << 24)) >>> 0;
+    if (unreachablePairs.has(pairKey)) {
+      return null;
+    }
+
     currentRunId++;
     if (currentRunId >= 2147483640) {
       currentRunId = 1;
@@ -304,6 +311,9 @@ export class AStar {
       }
     }
 
+    if (unreachablePairs.size < 4000) {
+      unreachablePairs.add(pairKey);
+    }
     return null;
   }
 

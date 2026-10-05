@@ -33,6 +33,8 @@ function isNearBuilding(uX: number, uZ: number, b: GameEntity, maxDist = 2.4): b
 }
 
 const unreachableLogCooldowns = new Map<string, number>();
+const _takenLogPositions = new Set<number>();
+const _candidateLogs: Array<{ pos: [number, number]; dist: number }> = [];
 
 export class HaulingJobHandler {
   private static findPathToLog(
@@ -633,7 +635,6 @@ export class HaulingJobHandler {
             }
           }
           unit.inventory = {};
-          useGameStore.getState().incrementBuildingVersion();
 
           unit.speechBubble = {
             text: 'Матеріали для будівництва доставлено мулом!',
@@ -843,12 +844,12 @@ export class HaulingJobHandler {
       }
     }
 
-    const minX = Math.max(0, cx - 75);
-    const maxX = Math.min(grid.width - 1, cx + 75);
-    const minZ = Math.max(0, cz - 75);
-    const maxZ = Math.min(grid.height - 1, cz + 75);
+    const minX = Math.max(0, cx - 38);
+    const maxX = Math.min(grid.width - 1, cx + 38);
+    const minZ = Math.max(0, cz - 38);
+    const maxZ = Math.min(grid.height - 1, cz + 38);
 
-    const takenLogPositions = new Set<number>();
+    _takenLogPositions.clear();
     for (const c of characterEntities) {
       if (c.id === unit.id || !c.currentJob) continue;
       const oj = c.currentJob;
@@ -856,29 +857,29 @@ export class HaulingJobHandler {
         (oj.type === 'haul_log_with_mule' || oj.type === 'chop_fallen_log') &&
         oj.targetPosition
       ) {
-        takenLogPositions.add((Math.floor(oj.targetPosition[1]) << 16) | Math.floor(oj.targetPosition[0]));
+        _takenLogPositions.add((Math.floor(oj.targetPosition[1]) << 16) | Math.floor(oj.targetPosition[0]));
       }
     }
 
-    const candidateLogs: Array<{ pos: [number, number]; dist: number }> = [];
+    _candidateLogs.length = 0;
 
     for (let x = minX; x <= maxX; x++) {
       for (let z = minZ; z <= maxZ; z++) {
         const key = (z << 16) | x;
-        if (takenLogPositions.has(key)) continue;
+        if (_takenLogPositions.has(key)) continue;
         const coolUntil = unreachableLogCooldowns.get(`${unit.id}:${x},${z}`);
         if (coolUntil && currentTick < coolUntil) continue;
 
         const tile = grid.tiles[x]?.[z];
         if (tile && !tile.buildingId && (tile.foliageType === 'fallen_tree' || (tile.itemOnGround?.type === 'wood' && (tile.itemOnGround.amount || 0) > 0))) {
           const dist = distance2D(uX, uZ, x, z);
-          candidateLogs.push({ pos: [x, z], dist });
+          _candidateLogs.push({ pos: [x, z], dist });
         }
       }
     }
 
-    if (candidateLogs.length > 0) {
-      candidateLogs.sort((a, b) => a.dist - b.dist);
+    if (_candidateLogs.length > 0) {
+      _candidateLogs.sort((a, b) => a.dist - b.dist);
 
       let chosenLog: { pos: [number, number]; dist: number } | null = null;
       let logPath: [number, number][] | null = null;
@@ -886,7 +887,9 @@ export class HaulingJobHandler {
       const availableHp = unit.hasMule ? null : this.findAvailableHitchingPost(unit, targetRegionId);
       if (unit.hasMule || availableHp) {
         if (unit.hasMule) {
-          for (const cand of candidateLogs.slice(0, 8)) {
+          const maxCheck = Math.min(8, _candidateLogs.length);
+          for (let i = 0; i < maxCheck; i++) {
+            const cand = _candidateLogs[i];
             const p = this.findPathToLog(grid, [Math.floor(uX), Math.floor(uZ)], cand.pos);
             if (p && p.length > 0) {
               chosenLog = cand;
@@ -897,7 +900,7 @@ export class HaulingJobHandler {
             }
           }
         } else {
-          chosenLog = candidateLogs[0];
+          chosenLog = _candidateLogs[0];
         }
 
         if (chosenLog) {
@@ -933,7 +936,7 @@ export class HaulingJobHandler {
       }
     }
 
-    if (unit.hasMule && candidateLogs.length === 0) {
+    if (unit.hasMule && _candidateLogs.length === 0) {
       if (hp) {
         unit.currentJob = {
           id: `return-mule-${Date.now()}`,

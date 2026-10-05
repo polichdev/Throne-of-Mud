@@ -10,6 +10,15 @@ import { useGameStore } from '../../../../store/useGameStore';
 import { HaulingJobHandler } from './HaulingJobHandler';
 import { AStar } from '../../../pathfinding/AStar';
 
+const _activeBuildersCount = new Map<string, number>();
+const _takenJobIds = new Set<string>();
+const _takenPositions = new Set<number>();
+const _buildingMap = new Map<string, GameEntity>();
+const _candidateJobs: Job[] = [];
+const _viableJobs: Job[] = [];
+const _playerBuildings: GameEntity[] = [];
+const _occupiedCoords = new Set<number>();
+
 export class ManualJobHandler {
   public static assignPendingJob(
     unit: GameEntity,
@@ -37,62 +46,54 @@ export class ManualJobHandler {
     const nextCheck = (unit as any).nextPendingJobCheckTick || 0;
     if (currentTick < nextCheck) return false;
 
-    const activeBuildersCount = new Map<string, number>();
-    const takenJobIds = new Set<string>();
-    const takenPositions = new Set<number>();
+    _activeBuildersCount.clear();
+    _takenJobIds.clear();
+    _takenPositions.clear();
 
     for (const c of characterEntities) {
       if (c.id === unit.id || !c.currentJob) continue;
       const job = c.currentJob;
 
       if ((job.type === 'build_structure' || job.type === 'demolish_structure') && job.targetBuildingId) {
-        const count = activeBuildersCount.get(job.targetBuildingId) || 0;
-        activeBuildersCount.set(job.targetBuildingId, count + 1);
+        const count = _activeBuildersCount.get(job.targetBuildingId) || 0;
+        _activeBuildersCount.set(job.targetBuildingId, count + 1);
       } else {
-        takenJobIds.add(job.id);
+        _takenJobIds.add(job.id);
         if (job.targetPosition) {
-          takenPositions.add((Math.floor(job.targetPosition[1]) << 16) | Math.floor(job.targetPosition[0]));
+          _takenPositions.add((Math.floor(job.targetPosition[1]) << 16) | Math.floor(job.targetPosition[0]));
         }
       }
     }
 
-    const buildingMap = new Map<string, GameEntity>();
+    _buildingMap.clear();
     for (const b of buildingEntities) {
-      buildingMap.set(b.id, b);
+      _buildingMap.set(b.id, b);
     }
 
-    const candidateJobs = pendingJobs.filter((j) => {
+    _candidateJobs.length = 0;
+    for (const j of pendingJobs) {
       if (j.type === 'build_structure' || j.type === 'demolish_structure') {
-        const count = j.targetBuildingId ? (activeBuildersCount.get(j.targetBuildingId) || 0) : 0;
-        return count < 4;
-      }
-
-      if (j.assignedUnitId && j.assignedUnitId !== unit.id) {
-        return false;
-      }
-
-      if (takenJobIds.has(j.id)) {
-        return false;
-      }
-
-      if (j.targetPosition) {
-        const posKey = (Math.floor(j.targetPosition[1]) << 16) | Math.floor(j.targetPosition[0]);
-        if (takenPositions.has(posKey)) {
-          return false;
+        const count = j.targetBuildingId ? (_activeBuildersCount.get(j.targetBuildingId) || 0) : 0;
+        if (count >= 4) continue;
+      } else {
+        if (j.assignedUnitId && j.assignedUnitId !== unit.id) continue;
+        if (_takenJobIds.has(j.id)) continue;
+        if (j.targetPosition) {
+          const posKey = (Math.floor(j.targetPosition[1]) << 16) | Math.floor(j.targetPosition[0]);
+          if (_takenPositions.has(posKey)) continue;
         }
       }
-
-      return true;
-    });
+      _candidateJobs.push(j);
+    }
 
     const unitGx = unit.gridPosition[0];
     const unitGz = unit.gridPosition[1];
     const uX = unit.position ? unit.position[0] : unitGx + 0.5;
     const uZ = unit.position ? unit.position[2] : unitGz + 0.5;
 
-    for (const job of candidateJobs) {
+    for (const job of _candidateJobs) {
       if (job.type === 'build_structure' && job.targetBuildingId) {
-        const b = buildingMap.get(job.targetBuildingId);
+        const b = _buildingMap.get(job.targetBuildingId);
         if (b && !b.isCompleted && b.requiredMaterials) {
           let hasMissing = false;
           for (const [res, needed] of Object.entries(b.requiredMaterials)) {
@@ -104,12 +105,17 @@ export class ManualJobHandler {
           }
 
           if (hasMissing) {
-            const isHaulerAssigned = [...characterEntities].some(
-              (c: GameEntity) =>
+            let isHaulerAssigned = false;
+            for (const c of characterEntities) {
+              if (
                 c.id !== unit.id &&
                 c.currentJob?.type === 'haul_construction_mule' &&
                 c.currentJob?.targetBuildingId === b.id
-            );
+              ) {
+                isHaulerAssigned = true;
+                break;
+              }
+            }
 
             if (!isHaulerAssigned) {
               const hp = unit.hasMule ? null : HaulingJobHandler.findAvailableHitchingPost(unit, b.regionId);
@@ -157,31 +163,35 @@ export class ManualJobHandler {
       }
     }
 
-    const viableJobs = candidateJobs.filter((j) => {
+    _viableJobs.length = 0;
+    for (const j of _candidateJobs) {
       if (j.type === 'build_structure' && j.targetBuildingId) {
-        const b = buildingMap.get(j.targetBuildingId);
+        const b = _buildingMap.get(j.targetBuildingId);
         if (b && !b.isCompleted && b.requiredMaterials) {
+          let missingAny = false;
           for (const [res, needed] of Object.entries(b.requiredMaterials)) {
             const del = (b.deliveredMaterials && (b.deliveredMaterials as any)[res]) || 0;
             if (del < (needed || 0)) {
-              return false;
+              missingAny = true;
+              break;
             }
           }
+          if (missingAny) continue;
         }
       }
-      return true;
-    });
+      _viableJobs.push(j);
+    }
 
-    if (viableJobs.length === 0) {
+    if (_viableJobs.length === 0) {
       (unit as any).nextPendingJobCheckTick = currentTick + 4;
       return false;
     }
 
-    const sortedJobs = [...viableJobs].sort((a, b) => {
+    _viableJobs.sort((a, b) => {
       let ax = a.targetPosition ? a.targetPosition[0] : unitGx;
       let az = a.targetPosition ? a.targetPosition[1] : unitGz;
       if (a.targetBuildingId) {
-        const bEnt = buildingMap.get(a.targetBuildingId);
+        const bEnt = _buildingMap.get(a.targetBuildingId);
         if (bEnt && bEnt.gridPosition) {
           ax = bEnt.gridPosition[0] + (bEnt.buildingWidth || 2) / 2;
           az = bEnt.gridPosition[1] + (bEnt.buildingHeight || 2) / 2;
@@ -191,7 +201,7 @@ export class ManualJobHandler {
       let bx = b.targetPosition ? b.targetPosition[0] : unitGx;
       let bz = b.targetPosition ? b.targetPosition[1] : unitGz;
       if (b.targetBuildingId) {
-        const bEnt = buildingMap.get(b.targetBuildingId);
+        const bEnt = _buildingMap.get(b.targetBuildingId);
         if (bEnt && bEnt.gridPosition) {
           bx = bEnt.gridPosition[0] + (bEnt.buildingWidth || 2) / 2;
           bz = bEnt.gridPosition[1] + (bEnt.buildingHeight || 2) / 2;
@@ -203,11 +213,13 @@ export class ManualJobHandler {
       return distA - distB;
     });
 
-    for (const job of sortedJobs.slice(0, 4)) {
+    const maxTest = Math.min(4, _viableJobs.length);
+    for (let i = 0; i < maxTest; i++) {
+      const job = _viableJobs[i];
       let path: [number, number][] | null = null;
 
       if (job.type === 'build_structure' || job.type === 'demolish_structure') {
-        const b = job.targetBuildingId ? buildingMap.get(job.targetBuildingId) : undefined;
+        const b = job.targetBuildingId ? _buildingMap.get(job.targetBuildingId) : undefined;
         if (b && b.gridPosition) {
           const bx = b.gridPosition[0];
           const bz = b.gridPosition[1];
@@ -289,15 +301,15 @@ export class ManualJobHandler {
     if (!unit.path || unit.path.length === 0) {
       const tick = currentTick ?? (useGameStore.getState().time.tick || 0);
       const idleCooldown = (unit as any).idleCooldownTicks ?? 0;
-      if (tick >= idleCooldown && Math.random() < 0.08 && unit.gridPosition) {
+      if (tick >= idleCooldown && Math.random() < 0.12 && unit.gridPosition) {
         const minX = uBounds ? uBounds.minX + 2 : 2;
         const maxX = uBounds ? uBounds.maxX - 2 : grid.width - 3;
         const minZ = uBounds ? uBounds.minZ + 2 : 2;
         const maxZ = uBounds ? uBounds.maxZ - 2 : grid.height - 3;
         const [unitX, unitZ] = unit.gridPosition;
-        const minimumWanderDistance = 3;
+        const minimumWanderDistance = 4;
 
-        const playerBuildings: GameEntity[] = [];
+        _playerBuildings.length = 0;
         for (const b of buildingEntities) {
           if (
             (b.factionId === 'player' || b.factionId === undefined) &&
@@ -311,75 +323,111 @@ export class ManualJobHandler {
                 continue;
               }
             }
-            playerBuildings.push(b);
+            _playerBuildings.push(b);
           }
         }
 
-        let anchorX = cx;
-        let anchorZ = cz;
-        let wanderRange = 8;
-
-        if (playerBuildings.length > 0 && Math.random() < 0.88) {
-          const randomB = playerBuildings[Math.floor(Math.random() * playerBuildings.length)];
-          if (randomB.gridPosition) {
-            anchorX = randomB.gridPosition[0] + Math.floor((randomB.buildingWidth || 2) / 2);
-            anchorZ = randomB.gridPosition[1] + Math.floor((randomB.buildingHeight || 2) / 2);
-            wanderRange = 4;
-          }
-        }
-
-        let rx = Math.max(minX, Math.min(maxX, anchorX + Math.floor(Math.random() * (wanderRange * 2 + 1) - wanderRange)));
-        let rz = Math.max(minZ, Math.min(maxZ, anchorZ + Math.floor(Math.random() * (wanderRange * 2 + 1) - wanderRange)));
-
-        const occupiedCoords = new Set<number>();
+        _occupiedCoords.clear();
         for (const c of characterEntities) {
           if (c.id !== unit.id && c.gridPosition) {
-            occupiedCoords.add((c.gridPosition[1] << 16) | (c.gridPosition[0] & 0xffff));
+            _occupiedCoords.add((c.gridPosition[1] << 16) | (c.gridPosition[0] & 0xffff));
           }
         }
 
-        for (let attempt = 0; attempt < 8; attempt++) {
-          const candX = Math.max(minX, Math.min(maxX, anchorX + Math.floor(Math.random() * (wanderRange * 2 + 1) - wanderRange)));
-          const candZ = Math.max(minZ, Math.min(maxZ, anchorZ + Math.floor(Math.random() * (wanderRange * 2 + 1) - wanderRange)));
-          const key = (candZ << 16) | (candX & 0xffff);
+        let targetX = unitX;
+        let targetZ = unitZ;
+        let foundTarget = false;
 
-          if (
-            !occupiedCoords.has(key) &&
-            Math.hypot(candX - unitX, candZ - unitZ) >= minimumWanderDistance &&
-            grid.isWalkable(candX, candZ)
-          ) {
-            rx = candX;
-            rz = candZ;
-            break;
+        const wanderRoll = Math.random();
+
+        if (wanderRoll < 0.40 && _playerBuildings.length > 0) {
+          const b = _playerBuildings[Math.floor(Math.random() * _playerBuildings.length)];
+          if (b.gridPosition) {
+            const bw = b.buildingWidth || 2;
+            const bh = b.buildingHeight || 2;
+            const bx = b.gridPosition[0];
+            const bz = b.gridPosition[1];
+            const frontCandidates: [number, number][] = [
+              [bx + Math.floor(bw / 2), bz + bh + 1],
+              [bx + Math.floor(bw / 2), bz - 1],
+              [bx - 1, bz + Math.floor(bh / 2)],
+              [bx + bw + 1, bz + Math.floor(bh / 2)],
+            ];
+            for (const [fx, fz] of frontCandidates) {
+              const cxTile = Math.max(minX, Math.min(maxX, fx));
+              const czTile = Math.max(minZ, Math.min(maxZ, fz));
+              const key = (czTile << 16) | (cxTile & 0xffff);
+              if (!_occupiedCoords.has(key) && grid.isWalkable(cxTile, czTile) && Math.hypot(cxTile - unitX, czTile - unitZ) >= minimumWanderDistance) {
+                targetX = cxTile;
+                targetZ = czTile;
+                foundTarget = true;
+                break;
+              }
+            }
+          }
+        } else if (wanderRoll < 0.70) {
+          for (let attempt = 0; attempt < 12; attempt++) {
+            const rx = Math.max(minX, Math.min(maxX, unitX + Math.floor(Math.random() * 41 - 20)));
+            const rz = Math.max(minZ, Math.min(maxZ, unitZ + Math.floor(Math.random() * 41 - 20)));
+            const t = grid.getTile(rx, rz);
+            const key = (rz << 16) | (rx & 0xffff);
+            if (t && t.terrain === 'road' && !_occupiedCoords.has(key) && grid.isWalkable(rx, rz) && Math.hypot(rx - unitX, rz - unitZ) >= minimumWanderDistance) {
+              targetX = rx;
+              targetZ = rz;
+              foundTarget = true;
+              break;
+            }
+          }
+        } else if (wanderRoll < 0.90) {
+          for (let attempt = 0; attempt < 10; attempt++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 12 + Math.random() * 22;
+            const rx = Math.max(minX, Math.min(maxX, Math.floor(cx + Math.cos(angle) * dist)));
+            const rz = Math.max(minZ, Math.min(maxZ, Math.floor(cz + Math.sin(angle) * dist)));
+            const key = (rz << 16) | (rx & 0xffff);
+            if (!_occupiedCoords.has(key) && grid.isWalkable(rx, rz) && Math.hypot(rx - unitX, rz - unitZ) >= minimumWanderDistance) {
+              targetX = rx;
+              targetZ = rz;
+              foundTarget = true;
+              break;
+            }
+          }
+        } else {
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const rx = Math.max(minX, Math.min(maxX, cx + Math.floor(Math.random() * 11 - 5)));
+            const rz = Math.max(minZ, Math.min(maxZ, cz + Math.floor(Math.random() * 11 - 5)));
+            const key = (rz << 16) | (rx & 0xffff);
+            if (!_occupiedCoords.has(key) && grid.isWalkable(rx, rz) && Math.hypot(rx - unitX, rz - unitZ) >= minimumWanderDistance) {
+              targetX = rx;
+              targetZ = rz;
+              foundTarget = true;
+              break;
+            }
           }
         }
 
-        const isRealDestination =
-          Math.hypot(rx - unitX, rz - unitZ) >= minimumWanderDistance &&
-          grid.isWalkable(rx, rz);
-
-        if (isRealDestination) {
+        if (foundTarget) {
           const wanderPath = createPathSafely(
             grid,
             unit.position,
             unit.gridPosition,
-            [rx, rz],
+            [targetX, targetZ],
             buildingEntities,
             false,
             uBounds
           );
 
-          const movementPath = wanderPath?.filter(([x, z]) => x !== unitX || z !== unitZ) ?? [];
-          if (movementPath.length > 0) {
-            unit.path = movementPath;
+          if (wanderPath && wanderPath.length > 0) {
+            unit.path = wanderPath;
             unit.currentJob = {
               id: `wander-${Date.now()}`,
               type: 'wander',
               progress: 0,
-              totalWork: 12,
+              totalWork: 15,
             };
+            (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * 45 + 30);
 
-            if (Math.random() < 0.25) {
+            if (Math.random() < 0.07) {
               const isLord = isNoble(unit);
               let text = '';
               if (isLord) {
@@ -388,7 +436,6 @@ export class ManualJobHandler {
                   'Село зростає на очах',
                   'Свіже повітря піде на користь',
                   'Усе йде за планом',
-                  'Потрібно перевірити межі земель',
                   'Вітаю, жителі моїх земель!',
                 ];
                 text = lordPhrases[Math.floor(Math.random() * lordPhrases.length)];
@@ -398,23 +445,21 @@ export class ManualJobHandler {
                   'Піду гляну, як там справи',
                   'Гарна нині погода',
                   'Час перепочити',
-                  'Піду погріюся біля вогню',
                   'Наше поселення гарнішає',
                 ];
                 text = peasantPhrases[Math.floor(Math.random() * peasantPhrases.length)];
               }
               unit.speechBubble = {
                 text,
-                expiresAtTick: (useGameStore.getState().time.tick || 0) + 35,
+                expiresAtTick: (useGameStore.getState().time.tick || 0) + 30,
                 type: 'mood',
               };
             }
-          } else if (currentTick !== undefined) {
-            (unit as any).idleCooldownTicks = currentTick + 20;
+            return;
           }
-        } else if (currentTick !== undefined) {
-          (unit as any).idleCooldownTicks = currentTick + 20;
         }
+
+        (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * 30 + 15);
       }
     }
   }

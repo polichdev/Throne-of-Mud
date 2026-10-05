@@ -38,8 +38,17 @@ export function useAutoSave(grid: GridMap) {
 
     const interval = setInterval(() => {
       if (!useGameStore.getState().time.isPaused) {
-        saveGameToIndexedDB(grid);
-        lastSaveTime.current = Date.now();
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+          (window as any).requestIdleCallback(() => {
+            saveGameToIndexedDB(grid);
+            lastSaveTime.current = Date.now();
+          }, { timeout: 3000 });
+        } else {
+          setTimeout(() => {
+            saveGameToIndexedDB(grid);
+            lastSaveTime.current = Date.now();
+          }, 0);
+        }
       }
     }, AUTO_SAVE_INTERVAL_MS);
 

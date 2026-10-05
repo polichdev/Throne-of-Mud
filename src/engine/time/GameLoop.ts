@@ -17,7 +17,6 @@ export class GameLoop {
   private readonly TICK_RATE = 10;
   private readonly TICK_TIME = 1.0 / this.TICK_RATE;
   private animFrameId: number | null = null;
-  private lastSimulationReportAt = 0;
 
   constructor(grid: GridMap) {
     this.grid = grid;
@@ -69,6 +68,9 @@ export class GameLoop {
 
         if (!isFast || currentTick % 3 === 0) {
           BotAISystem.update(this.grid, currentTick);
+        }
+
+        if (!isFast || currentTick % 3 === 1) {
           BanditAISystem.update(this.grid, currentTick);
         }
 
@@ -99,10 +101,8 @@ export class GameLoop {
   }
 
   private reportSimulationTime(startedAt: number): void {
-    const now = performance.now();
-    if (now - this.lastSimulationReportAt < 500) return;
-    this.lastSimulationReportAt = now;
-    (window as any).__simulationMs = now - startedAt;
+    const elapsed = performance.now() - startedAt;
+    (window as any).__simulationMs = elapsed;
   }
 
   private loop = (currentTime: number): void => {

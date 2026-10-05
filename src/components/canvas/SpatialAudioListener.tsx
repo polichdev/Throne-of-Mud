@@ -1,8 +1,10 @@
 import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { buildingEntities, characterEntities } from '../../engine/ecs/world';
+import { buildingEntities, characterEntities, type GameEntity } from '../../engine/ecs/world';
 import { audioManager } from '../../engine/audio/AudioManager';
+
+const _nearbyChars: GameEntity[] = [];
 
 export function SpatialAudioListener() {
   const { camera } = useThree();
@@ -60,25 +62,34 @@ export function SpatialAudioListener() {
       : 0.0;
 
     if (now - lastChatterRef.current > 7500 && currentZoom >= 36.0) {
-      const charArr = Array.from(characterEntities);
-      let found = false;
-      for (let i = 0; i < charArr.length && !found; i++) {
-        const c1 = charArr[i];
-        if (!c1.position) continue;
-        const dx1 = c1.position[0] - camX;
-        const dz1 = c1.position[2] - camZ;
-        if (dx1 * dx1 + dz1 * dz1 > 22 * 22) continue;
+      lastChatterRef.current = now + 5000 + Math.random() * 4000;
+      _nearbyChars.length = 0;
+      for (const c of characterEntities) {
+        if (!c.position) continue;
+        const dx = c.position[0] - camX;
+        const dz = c.position[2] - camZ;
+        if (dx * dx + dz * dz <= 22 * 22) {
+          _nearbyChars.push(c);
+          if (_nearbyChars.length >= 12) break;
+        }
+      }
 
-        for (let j = i + 1; j < charArr.length; j++) {
-          const c2 = charArr[j];
-          if (!c2.position) continue;
-          const distBetween = Math.hypot(c1.position[0] - c2.position[0], c1.position[2] - c2.position[2]);
-          if (distBetween < 3.2) {
-            audioManager.playPeasantVocal(c1.position[0], c1.position[2], 'greet');
-            lastChatterRef.current = now + Math.random() * 4500;
-            found = true;
-            break;
+      if (_nearbyChars.length >= 2) {
+        for (let i = 0; i < _nearbyChars.length; i++) {
+          const c1 = _nearbyChars[i];
+          let greeted = false;
+          for (let j = i + 1; j < _nearbyChars.length; j++) {
+            const c2 = _nearbyChars[j];
+            if (c1.position && c2.position) {
+              const distSq = (c1.position[0] - c2.position[0]) ** 2 + (c1.position[2] - c2.position[2]) ** 2;
+              if (distSq <= 3.2 * 3.2) {
+                audioManager.playPeasantVocal(c1.position[0], c1.position[2], 'greet');
+                greeted = true;
+                break;
+              }
+            }
           }
+          if (greeted) break;
         }
       }
     }

@@ -37,6 +37,27 @@ export function getEntityRegionId(entity: GameEntity, regions: RegionData[], def
 }
 
 const _failedRestCooldowns = new Map<string, number>();
+const _completedBuildings: GameEntity[] = [];
+const _buildingOccupiedBeds = new Map<string, Set<number>>();
+const _campfireOccupiedSeats = new Map<string, Set<number>>();
+const _cachedSets: Set<number>[] = [];
+
+function getReusableSet(): Set<number> {
+  const s = _cachedSets.pop() || new Set<number>();
+  s.clear();
+  return s;
+}
+
+function releaseOccupiedMaps() {
+  for (const set of _buildingOccupiedBeds.values()) {
+    _cachedSets.push(set);
+  }
+  _buildingOccupiedBeds.clear();
+  for (const set of _campfireOccupiedSeats.values()) {
+    _cachedSets.push(set);
+  }
+  _campfireOccupiedSeats.clear();
+}
 
 function findBuilding(id: string, buildingMap?: Map<string, GameEntity>): GameEntity | undefined {
   if (buildingMap) return buildingMap.get(id);
@@ -86,17 +107,19 @@ export class RestJobHandler {
       }
     }
 
-    setEntitySpeech(
-      unit,
-      isNoble
-        ? 'Новий день у королівстві!'
-        : wasSleeping
-        ? 'Доброго ранку! До праці!'
-        : 'Нарешті ранок... Всю ніч мерз біля вогню.',
-      'mood',
-      currentTick,
-      DEFAULT_SPEECH_DURATION_TICKS
-    );
+    if (Math.random() < 0.05) {
+      setEntitySpeech(
+        unit,
+        isNoble
+          ? 'Новий день у королівстві!'
+          : wasSleeping
+          ? 'Доброго ранку! До праці!'
+          : 'Нарешті ранок... Всю ніч мерз біля вогню.',
+        'mood',
+        currentTick,
+        DEFAULT_SPEECH_DURATION_TICKS
+      );
+    }
 
     if (prevSleepingBuildingId && wasSleeping) {
       const b = findBuilding(prevSleepingBuildingId, buildingMap);
@@ -315,18 +338,17 @@ export class RestJobHandler {
       return isAlreadySleeping || isAlreadySitting;
     }
 
-    const completedBuildings: GameEntity[] = [];
+    _completedBuildings.length = 0;
     for (const b of buildingEntities) {
       if (!b.isCompleted) continue;
       const bRegId = getEntityRegionId(b, regions, playerRegionId ?? 0);
       if (bRegId !== uRegionId) continue;
       if (isPlayerUnit && b.factionId && b.factionId !== 'player') continue;
       if (!isPlayerUnit && b.factionId === 'player') continue;
-      completedBuildings.push(b);
+      _completedBuildings.push(b);
     }
 
-    const buildingOccupiedBeds = new Map<string, Set<number>>();
-    const campfireOccupiedSeats = new Map<string, Set<number>>();
+    releaseOccupiedMaps();
 
     for (const other of characterEntities) {
       const otherEnt = other as GameEntity;
@@ -334,17 +356,17 @@ export class RestJobHandler {
       const bId = otherEnt.currentJob.targetBuildingId;
       if (!bId) continue;
       if (otherEnt.currentJob.type === 'sleep') {
-        let set = buildingOccupiedBeds.get(bId);
+        let set = _buildingOccupiedBeds.get(bId);
         if (!set) {
-          set = new Set<number>();
-          buildingOccupiedBeds.set(bId, set);
+          set = getReusableSet();
+          _buildingOccupiedBeds.set(bId, set);
         }
         set.add(otherEnt.currentJob.bedIndex ?? 0);
       } else if (otherEnt.currentJob.type === 'sit_by_fire') {
-        let set = campfireOccupiedSeats.get(bId);
+        let set = _campfireOccupiedSeats.get(bId);
         if (!set) {
-          set = new Set<number>();
-          campfireOccupiedSeats.set(bId, set);
+          set = getReusableSet();
+          _campfireOccupiedSeats.set(bId, set);
         }
         set.add(otherEnt.currentJob.seatIndex ?? 0);
       }
@@ -354,38 +376,57 @@ export class RestJobHandler {
     let chosenBedIndex = 0;
 
     if (isNoble) {
-      const manors = completedBuildings.filter((b: GameEntity) => b.buildingType === 'manor');
-      for (const manor of manors) {
-        const occupied = buildingOccupiedBeds.get(manor.id) || new Set<number>();
-        for (let i = 0; i < 4; i++) {
-          if (!occupied.has(i)) {
-            chosenBuilding = manor;
-            chosenBedIndex = i;
-            break;
+      for (const b of _completedBuildings) {
+        if (b.buildingType === 'manor') {
+          const occupied = _buildingOccupiedBeds.get(b.id);
+          for (let i = 0; i < 4; i++) {
+            if (!occupied || !occupied.has(i)) {
+              chosenBuilding = b;
+              chosenBedIndex = i;
+              break;
+            }
           }
-        }
-        if (chosenBuilding) break;
-      }
-
-      if (!chosenBuilding) {
-        const tents = completedBuildings.filter((b: GameEntity) => b.buildingType === 'tent');
-        for (const t of tents) {
-          const occupied = buildingOccupiedBeds.get(t.id) || new Set<number>();
-          if (!occupied.has(0)) {
-            chosenBuilding = t;
-            chosenBedIndex = 0;
-            break;
-          }
+          if (chosenBuilding) break;
         }
       }
 
       if (!chosenBuilding) {
-        const houses = completedBuildings.filter((b: GameEntity) => b.buildingType === 'peasant_house');
-        for (const h of houses) {
-          const occupied = buildingOccupiedBeds.get(h.id) || new Set<number>();
+        for (const b of _completedBuildings) {
+          if (b.buildingType === 'tent') {
+            const occupied = _buildingOccupiedBeds.get(b.id);
+            if (!occupied || !occupied.has(0)) {
+              chosenBuilding = b;
+              chosenBedIndex = 0;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!chosenBuilding) {
+        for (const b of _completedBuildings) {
+          if (b.buildingType === 'peasant_house') {
+            const occupied = _buildingOccupiedBeds.get(b.id);
+            for (let i = 0; i < 2; i++) {
+              if (!occupied || !occupied.has(i)) {
+                chosenBuilding = b;
+                chosenBedIndex = i;
+                break;
+              }
+            }
+            if (chosenBuilding) break;
+          }
+        }
+      }
+    }
+
+    if (!chosenBuilding && unit.characterClass === 'warrior') {
+      for (const b of _completedBuildings) {
+        if (b.buildingType === 'barracks') {
+          const occupied = _buildingOccupiedBeds.get(b.id);
           for (let i = 0; i < 2; i++) {
-            if (!occupied.has(i)) {
-              chosenBuilding = h;
+            if (!occupied || !occupied.has(i)) {
+              chosenBuilding = b;
               chosenBedIndex = i;
               break;
             }
@@ -395,43 +436,30 @@ export class RestJobHandler {
       }
     }
 
-    if (!chosenBuilding && unit.characterClass === 'warrior') {
-      const barracks = completedBuildings.filter((b: GameEntity) => b.buildingType === 'barracks');
-      for (const b of barracks) {
-        const occupied = buildingOccupiedBeds.get(b.id) || new Set<number>();
-        for (let i = 0; i < 2; i++) {
-          if (!occupied.has(i)) {
-            chosenBuilding = b;
-            chosenBedIndex = i;
-            break;
-          }
-        }
-        if (chosenBuilding) break;
-      }
-    }
-
     if (!chosenBuilding && !isNoble) {
-      const houses = completedBuildings.filter((b: GameEntity) => b.buildingType === 'peasant_house');
-      for (const h of houses) {
-        const occupied = buildingOccupiedBeds.get(h.id) || new Set<number>();
-        for (let i = 0; i < 2; i++) {
-          if (!occupied.has(i)) {
-            chosenBuilding = h;
-            chosenBedIndex = i;
-            break;
+      for (const b of _completedBuildings) {
+        if (b.buildingType === 'peasant_house') {
+          const occupied = _buildingOccupiedBeds.get(b.id);
+          for (let i = 0; i < 2; i++) {
+            if (!occupied || !occupied.has(i)) {
+              chosenBuilding = b;
+              chosenBedIndex = i;
+              break;
+            }
           }
+          if (chosenBuilding) break;
         }
-        if (chosenBuilding) break;
       }
 
       if (!chosenBuilding) {
-        const tents = completedBuildings.filter((b: GameEntity) => b.buildingType === 'tent');
-        for (const t of tents) {
-          const occupied = buildingOccupiedBeds.get(t.id) || new Set<number>();
-          if (!occupied.has(0)) {
-            chosenBuilding = t;
-            chosenBedIndex = 0;
-            break;
+        for (const b of _completedBuildings) {
+          if (b.buildingType === 'tent') {
+            const occupied = _buildingOccupiedBeds.get(b.id);
+            if (!occupied || !occupied.has(0)) {
+              chosenBuilding = b;
+              chosenBedIndex = 0;
+              break;
+            }
           }
         }
       }
@@ -467,27 +495,29 @@ export class RestJobHandler {
         unit.path = sleepPath;
       }
 
-      setEntitySpeech(
-        unit,
-        isNoble ? 'Час відпочити у покоях...' : 'Йду спати у теплий дім...',
-        'mood',
-        currentTick,
-        DEFAULT_SPEECH_DURATION_TICKS
-      );
+      if (Math.random() < 0.06) {
+        setEntitySpeech(
+          unit,
+          isNoble ? 'Час відпочити у покоях...' : 'Йду спати у теплий дім...',
+          'mood',
+          currentTick,
+          DEFAULT_SPEECH_DURATION_TICKS
+        );
+      }
       return true;
     }
 
-    const campfires = completedBuildings.filter((b: GameEntity) => b.buildingType === 'campfire');
-    if (campfires.length > 0) {
-      let chosenCampfire = campfires[0];
-      let chosenSeatIndex = 0;
-      let foundSeat = false;
+    let chosenCampfire: GameEntity | null = null;
+    let chosenSeatIndex = 0;
+    let foundSeat = false;
 
-      for (const campfire of campfires) {
-        const occupied = campfireOccupiedSeats.get(campfire.id) || new Set<number>();
+    for (const b of _completedBuildings) {
+      if (b.buildingType === 'campfire') {
+        if (!chosenCampfire) chosenCampfire = b;
+        const occupied = _campfireOccupiedSeats.get(b.id);
         for (let seat = 0; seat < 32; seat++) {
-          if (!occupied.has(seat)) {
-            chosenCampfire = campfire;
+          if (!occupied || !occupied.has(seat)) {
+            chosenCampfire = b;
             chosenSeatIndex = seat;
             foundSeat = true;
             break;
@@ -495,16 +525,18 @@ export class RestJobHandler {
         }
         if (foundSeat) break;
       }
+    }
 
+    if (chosenCampfire) {
       if (!foundSeat) {
-        const occupied = campfireOccupiedSeats.get(chosenCampfire.id) || new Set<number>();
-        chosenSeatIndex = occupied.size;
+        const occupied = _campfireOccupiedSeats.get(chosenCampfire.id);
+        chosenSeatIndex = occupied ? occupied.size : 0;
       }
 
-      let occupiedSet = campfireOccupiedSeats.get(chosenCampfire.id);
+      let occupiedSet = _campfireOccupiedSeats.get(chosenCampfire.id);
       if (!occupiedSet) {
-        occupiedSet = new Set<number>();
-        campfireOccupiedSeats.set(chosenCampfire.id, occupiedSet);
+        occupiedSet = getReusableSet();
+        _campfireOccupiedSeats.set(chosenCampfire.id, occupiedSet);
       }
       occupiedSet.add(chosenSeatIndex);
 
@@ -538,15 +570,17 @@ export class RestJobHandler {
         unit.path = sitPath;
       }
 
-      setEntitySpeech(
-        unit,
-        isNoble
-          ? 'Ніч біля вогнища... Королівству потрібні хороми.'
-          : 'Немає ліжка, грітимуся біля вогнища...',
-        'alert',
-        currentTick,
-        DEFAULT_SPEECH_DURATION_TICKS
-      );
+      if (Math.random() < 0.06) {
+        setEntitySpeech(
+          unit,
+          isNoble
+            ? 'Ніч біля вогнища... Королівству потрібні хороми.'
+            : 'Немає ліжка, грітимуся біля вогнища...',
+          'alert',
+          currentTick,
+          DEFAULT_SPEECH_DURATION_TICKS
+        );
+      }
       return true;
     }
 

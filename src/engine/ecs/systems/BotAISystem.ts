@@ -1039,7 +1039,6 @@ export class BotAISystem {
                   memory.gold -= 50;
                 }
                 hp.mulesCount = curM + 1;
-                incrementBuildingVersion();
                 const speaker = botLord || peasants[0];
                 if (speaker && !isRegionOffscreen) {
                   speaker.speechBubble = {
