@@ -1,7 +1,7 @@
 import { useRef, memo, useState, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { buildingEntities, characterEntities } from '../../engine/ecs/world';
+import { buildingEntities } from '../../engine/ecs/world';
 import type { GameEntity } from '../../engine/ecs/world';
 import { BUILDING_BLUEPRINTS } from '../../engine/buildings/blueprints';
 import { useGameStore } from '../../store/useGameStore';
@@ -43,44 +43,15 @@ import {
 } from './buildings/models';
 import { InstancedWallsRenderer } from './buildings/InstancedWallsRenderer';
 
-const _occupiedBuildingIds = new Set<string>();
-const _sleeperBuildingIds = new Set<string>();
-let _lastOccupancyCheck = 0;
-
-function updateOccupancyCache(t: number): void {
-  if (t - _lastOccupancyCheck < 0.5) return;
-  _lastOccupancyCheck = t;
-
-  _occupiedBuildingIds.clear();
-  _sleeperBuildingIds.clear();
-
-  const hour = useGameStore.getState().time.hour ?? 12;
-  const isNight = hour >= 20 || hour < 6;
-
-  for (const u of characterEntities) {
-    if (!u.position) continue;
-    const job = u.currentJob;
-    if (!job) continue;
-    if (job.type === 'sleep' && job.targetBuildingId) {
-      _occupiedBuildingIds.add(job.targetBuildingId);
-      if (isNight) _sleeperBuildingIds.add(job.targetBuildingId);
-    }
-  }
-}
+const UNIT_BOX_GEO = new THREE.BoxGeometry(1, 1, 1);
+const SELECT_RING_GEO = new THREE.RingGeometry(0.52, 0.6, 32);
+const SELECT_RING_MAT = new THREE.MeshBasicMaterial({ color: '#fbbf24', transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+const INVISIBLE_MAT = new THREE.MeshBasicMaterial({ visible: false });
 
 interface BuildingFrameState {
   groupRef: React.RefObject<THREE.Group | null>;
-  roofRef: React.RefObject<THREE.Group | null>;
-  interiorRef: React.RefObject<THREE.Group | null>;
   centerX: number;
   centerZ: number;
-  buildingId: string;
-  isSelected: boolean;
-  lastRoofCheck: number;
-  currentLightOn: boolean;
-  currentNight: boolean;
-  setIsLightOn: (v: boolean) => void;
-  setIsNight: (v: boolean) => void;
 }
 const _buildingFrameStates = new Map<string, BuildingFrameState>();
 
@@ -114,51 +85,14 @@ export function BuildingsRenderer() {
       standardBuildings: standard,
     };
   }, [buildingVersion, selectedEntityId]);
-  const frameCounter = useRef(0);
-  const lastHeavyCheck = useRef(0);
-  const lastNight = useRef(false);
 
   const statesArrayRef = useRef<BuildingFrameState[]>([]);
   const lastStatesSize = useRef(0);
 
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    frameCounter.current++;
-
-    if (t - lastHeavyCheck.current > 0.5) {
-      lastHeavyCheck.current = t;
-      updateOccupancyCache(t);
-
-      const hour = useGameStore.getState().time.hour ?? 12;
-      const night = hour >= 20 || hour < 6;
-
-      if (night !== lastNight.current) {
-        lastNight.current = night;
-        for (const s of _buildingFrameStates.values()) {
-          if (s.currentNight !== night) {
-            s.currentNight = night;
-            s.setIsNight(night);
-          }
-          const shouldLight = night && _sleeperBuildingIds.has(s.buildingId);
-          if (s.currentLightOn !== shouldLight) {
-            s.currentLightOn = shouldLight;
-            s.setIsLightOn(shouldLight);
-          }
-        }
-      } else {
-        for (const s of _buildingFrameStates.values()) {
-          const shouldLight = night && _sleeperBuildingIds.has(s.buildingId);
-          if (s.currentLightOn !== shouldLight) {
-            s.currentLightOn = shouldLight;
-            s.setIsLightOn(shouldLight);
-          }
-        }
-      }
-    }
-
+  useFrame(() => {
     const camTarget = (window as any).__lastCameraTarget;
     const zoom = (window as any).__lastCameraZoom || 38;
-    const maxDist = Math.max(34, Math.min(48, (1000 / zoom) + 8));
+    const maxDist = Math.max(38, Math.min(50, (1200 / zoom) + 12));
     const maxDistSq = maxDist * maxDist;
 
     if (_buildingFrameStates.size !== lastStatesSize.current) {
@@ -178,7 +112,6 @@ export function BuildingsRenderer() {
         if (s.groupRef.current.visible !== isVisible) {
           s.groupRef.current.visible = isVisible;
         }
-        if (!isVisible) continue;
       }
     }
   });
@@ -224,11 +157,11 @@ function Building3D({
   const progressTextRef = useRef<HTMLSpanElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
 
-  const [isLightOn, setIsLightOn] = useState(false);
-  const [isNight, setIsNight] = useState(() => {
-    const h = useGameStore.getState().time?.hour ?? 12;
+  const isNight = useGameStore((state) => {
+    const h = state.time?.hour ?? 12;
     return h >= 20 || h < 6;
   });
+  const isLightOn = isNight && completed;
   const isWorking = !isNight && completed;
 
   const [centerX, centerZ] = useMemo(() => {
@@ -239,33 +172,17 @@ function Building3D({
     return [bx + bWidth / 2, bz + bHeight / 2];
   }, [building.gridPosition, pos, width, height, building.buildingWidth, building.buildingHeight]);
 
-  const setIsLightOnRef = useRef(setIsLightOn);
-  const setIsNightRef = useRef(setIsNight);
-  setIsLightOnRef.current = setIsLightOn;
-  setIsNightRef.current = setIsNight;
-
   const frameStateRef = useRef<BuildingFrameState | null>(null);
   if (!frameStateRef.current) {
     frameStateRef.current = {
       groupRef,
-      roofRef,
-      interiorRef,
       centerX,
       centerZ,
-      buildingId: building.id,
-      isSelected,
-      lastRoofCheck: 0,
-      currentLightOn: false,
-      currentNight: isNight,
-      setIsLightOn: (v) => setIsLightOnRef.current(v),
-      setIsNight: (v) => setIsNightRef.current(v),
     };
     _buildingFrameStates.set(building.id, frameStateRef.current);
   }
   frameStateRef.current.centerX = centerX;
   frameStateRef.current.centerZ = centerZ;
-  frameStateRef.current.buildingId = building.id;
-  frameStateRef.current.isSelected = isSelected;
 
   useEffect(() => {
     _buildingFrameStates.set(building.id, frameStateRef.current!);
@@ -408,37 +325,40 @@ function Building3D({
         )}
       </group>
 
-      <mesh
-        position={[0, Math.max(1.0, baseH * 0.35), 0]}
-        onPointerDown={(e) => {
-          if (e.button === 0) {
+        <mesh
+          position={[0, Math.max(1.0, baseH * 0.35), 0]}
+          geometry={UNIT_BOX_GEO}
+          material={INVISIBLE_MAT}
+          scale={[baseW * 0.98, Math.max(2.4, baseH * 0.8), baseH * 0.98]}
+          onPointerDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation();
+              onSelect(building.id);
+            }
+          }}
+          onClick={(e) => {
             e.stopPropagation();
             onSelect(building.id);
-          }
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSelect(building.id);
-        }}
-      >
-        <boxGeometry args={[baseW * 0.98, Math.max(2.4, baseH * 0.8), baseH * 0.98]} />
-        <meshBasicMaterial visible={false} />
-      </mesh>
-
-      {completed && building.isDemolishing && (
-        <DemolitionHUD
-          demolitionProgress={building.demolitionProgress || 0}
-          progressTextRef={progressTextRef}
-          progressBarRef={progressBarRef}
+          }}
         />
-      )}
 
-      {isSelected && (
-        <mesh position={[0, 0.008, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[Math.min(width, height) * 0.52, Math.min(width, height) * 0.6, 32]} />
-          <meshBasicMaterial color="#fbbf24" transparent opacity={0.8} side={THREE.DoubleSide} />
-        </mesh>
-      )}
+        {completed && building.isDemolishing && (
+          <DemolitionHUD
+            demolitionProgress={building.demolitionProgress || 0}
+            progressTextRef={progressTextRef}
+            progressBarRef={progressBarRef}
+          />
+        )}
+
+        {isSelected && (
+          <mesh
+            position={[0, 0.008, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            geometry={SELECT_RING_GEO}
+            material={SELECT_RING_MAT}
+            scale={[Math.min(width, height), Math.min(width, height), 1]}
+          />
+        )}
     </group>
   );
 }

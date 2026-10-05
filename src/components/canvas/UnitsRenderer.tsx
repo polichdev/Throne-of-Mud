@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, memo, useMemo } from 'react';
+import { useRef, useState, memo, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -23,6 +23,8 @@ const SHARED_STATIC_MATS = {
   muleHoof: new THREE.MeshStandardMaterial({ color: '#1c1917', roughness: 0.9, flatShading: true }),
   timberDark: new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.8, flatShading: true }),
   darkIron: new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.45, metalness: 0.65, flatShading: true }),
+  invisibleMat: new THREE.MeshBasicMaterial({ visible: false }),
+  selectionRingMat: new THREE.MeshBasicMaterial({ color: '#38bdf8', side: THREE.DoubleSide }),
 };
 
 const SHARED_GEOS = {
@@ -81,24 +83,19 @@ const SHARED_GEOS = {
   swordGuard: new THREE.BoxGeometry(0.12, 0.03, 0.04),
   scepterHandle: new THREE.CylinderGeometry(0.02, 0.02, 0.35, 4),
   scepterHead: new THREE.DodecahedronGeometry(0.05, 0),
+  unitCollider: new THREE.CylinderGeometry(0.35, 0.35, 1.3, 6),
 };
 
 export function UnitsRenderer({ grid }: { grid?: GridMap }) {
   const selectedEntityId = useGameStore((state) => state.selectedEntityId);
   const setSelectedEntityId = useGameStore((state) => state.setSelectedEntityId);
   const previewAnimation = useGameStore((state) => state.previewAnimation);
-  const buildingVersion = useGameStore((state) => state.buildingVersion);
   const isGamePaused = useGameStore((state) => state.time.isPaused || state.time.speedMultiplier === 0);
 
   const isStrategicView = useGameStore((state) => state.isStrategicView);
 
   const [units, setUnits] = useState<GameEntity[]>(() => Array.from(characterEntities));
   const lastUnitCountRef = useRef<number>(characterEntities.size);
-
-  useEffect(() => {
-    lastUnitCountRef.current = characterEntities.size;
-    setUnits(Array.from(characterEntities));
-  }, [buildingVersion]);
 
   useFrame(() => {
     if (characterEntities.size !== lastUnitCountRef.current) {
@@ -120,33 +117,97 @@ export function UnitsRenderer({ grid }: { grid?: GridMap }) {
           onSelect={() => setSelectedEntityId(unit.id)}
         />
       ))}
+      <ActiveSpeechBubblesRenderer />
     </group>
   );
 }
 
-function UnitSpeechBubble({ unit, isBanditLeader }: { unit: GameEntity; isBanditLeader: boolean }) {
-  const currentTick = useGameStore((s) => s.time.tick);
+function ActiveSpeechBubblesRenderer() {
   const isStrategicView = useGameStore((s) => s.isStrategicView);
-  const bubble = unit.speechBubble;
+  const [bubbles, setBubbles] = useState<Array<{ id: string; unit: GameEntity; text: string; isBanditLeader: boolean }>>([]);
+  const lastKeyRef = useRef('');
 
-  if (isStrategicView || !bubble || !bubble.text || currentTick >= (bubble.expiresAtTick || 0)) {
-    return null;
-  }
+  useFrame(() => {
+    if (isStrategicView) {
+      if (bubbles.length > 0) {
+        lastKeyRef.current = '';
+        setBubbles([]);
+      }
+      return;
+    }
+
+    const { time } = useGameStore.getState();
+    const curTick = time?.tick ?? 0;
+    const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
+    const zoom = (window as any).__lastCameraZoom ?? 38;
+    const maxDist = Math.max(38, (1200 / zoom) + 12);
+    const maxDistSq = maxDist * maxDist;
+
+    let key = '';
+    const active: Array<{ id: string; unit: GameEntity; text: string; isBanditLeader: boolean }> = [];
+
+    for (const unit of characterEntities) {
+      const bubble = unit.speechBubble;
+      if (bubble && bubble.text && curTick < (bubble.expiresAtTick || 0) && unit.position) {
+        const ux = unit.position[0];
+        const uz = unit.position[2];
+
+        if (camTarget) {
+          const distSq = (ux - camTarget[0]) ** 2 + (uz - camTarget[1]) ** 2;
+          if (distSq > maxDistSq) continue;
+        }
+
+        const isBandit = unit.characterClass === 'bandit' || unit.factionId === 'bandit' || unit.id.startsWith('bandit-');
+        const isBanditLeader = isBandit && (unit.id.includes('leader') || unit.title === 'Ватажок розбійників' || unit.title === 'Ватажок');
+        active.push({ id: unit.id, unit, text: bubble.text, isBanditLeader });
+        key += `${unit.id}:${bubble.text};`;
+        if (active.length >= 4) break;
+      }
+    }
+
+    if (key !== lastKeyRef.current) {
+      lastKeyRef.current = key;
+      setBubbles(active);
+    }
+  });
+
+  if (isStrategicView || bubbles.length === 0) return null;
 
   return (
-    <Html
-      position={[0, isBanditLeader ? 1.9 : 1.35, 0]}
-      center
-      zIndexRange={[10, 0]}
-      style={{ pointerEvents: 'none', userSelect: 'none' }}
-    >
-      <div className="flex flex-col items-center pointer-events-none select-none">
-        <div className="bg-stone-950/90 text-stone-100 text-[10px] font-medium px-2 py-0.5 rounded-lg border border-amber-500/60 shadow-[0_2px_8px_rgba(0,0,0,0.85)] flex items-center gap-1 whitespace-nowrap backdrop-blur-[1px]">
-          <span>{bubble.text}</span>
+    <>
+      {bubbles.map(({ id, unit, text, isBanditLeader }) => (
+        <ActiveBubbleItem key={id} unit={unit} text={text} isBanditLeader={isBanditLeader} />
+      ))}
+    </>
+  );
+}
+
+function ActiveBubbleItem({ unit, text, isBanditLeader }: { unit: GameEntity; text: string; isBanditLeader: boolean }) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame(() => {
+    if (!groupRef.current || !unit.position) return;
+    const [ux, uy, uz] = unit.position;
+    groupRef.current.position.set(ux, uy + (isBanditLeader ? 1.9 : 1.35), uz);
+  });
+
+  const [ux, uy, uz] = unit.position || [0, 0, 0];
+
+  return (
+    <group ref={groupRef} position={[ux, uy + (isBanditLeader ? 1.9 : 1.35), uz]}>
+      <Html
+        center
+        zIndexRange={[10, 0]}
+        style={{ pointerEvents: 'none', userSelect: 'none' }}
+      >
+        <div className="flex flex-col items-center pointer-events-none select-none">
+          <div className="bg-stone-950/90 text-stone-100 text-[10px] font-medium px-2 py-0.5 rounded-lg border border-amber-500/60 shadow-[0_2px_8px_rgba(0,0,0,0.85)] flex items-center gap-1 whitespace-nowrap backdrop-blur-[1px]">
+            <span>{text}</span>
+          </div>
+          <div className="w-1.5 h-1.5 bg-stone-950 border-r border-b border-amber-500/60 rotate-45 -mt-1 shadow-sm" />
         </div>
-        <div className="w-1.5 h-1.5 bg-stone-950 border-r border-b border-amber-500/60 rotate-45 -mt-1 shadow-sm" />
-      </div>
-    </Html>
+      </Html>
+    </group>
   );
 }
 
@@ -207,6 +268,11 @@ function Unit3D({
 
   const prevPhaseRef = useRef<number>(0);
   const prevFootstepRef = useRef<number>(0);
+  const [showBanditBadge, setShowBanditBadge] = useState(false);
+  const showBanditBadgeRef = useRef(false);
+  const banditFrameCountRef = useRef(0);
+  const prevJobIdRef = useRef<string | null>(null);
+  const targetBuildingTypeRef = useRef<string | undefined>(undefined);
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current || !unit.position) return;
@@ -215,14 +281,32 @@ function Unit3D({
 
     const camTarget = (window as any).__lastCameraTarget;
     const zoom = (window as any).__lastCameraZoom || 38;
+    let isVisible = true;
     if (camTarget) {
       const distSq = (ux - camTarget[0]) ** 2 + (uz - camTarget[1]) ** 2;
-      const maxDist = Math.max(24, (900 / zoom) + 8);
-      const isVisible = distSq < maxDist * maxDist;
+      const maxDist = Math.max(38, Math.min(50, (1200 / zoom) + 12));
+      isVisible = distSq < maxDist * maxDist;
       groupRef.current.visible = isVisible;
-      if (!isVisible) return;
+      if (!isVisible) {
+        if (showBanditBadgeRef.current) {
+          showBanditBadgeRef.current = false;
+          setShowBanditBadge(false);
+        }
+        return;
+      }
     } else {
       groupRef.current.visible = true;
+    }
+
+    if (isBandit && isBanditLeader) {
+      banditFrameCountRef.current++;
+      if (banditFrameCountRef.current % 12 === 0 || banditFrameCountRef.current === 1) {
+        const shouldShow = isVisible && zoom >= 16;
+        if (shouldShow !== showBanditBadgeRef.current) {
+          showBanditBadgeRef.current = shouldShow;
+          setShowBanditBadge(shouldShow);
+        }
+      }
     }
 
     const curPath = unit.path;
@@ -242,13 +326,6 @@ function Unit3D({
       detailsRef.current.visible = zoom >= 42;
     }
 
-    if (headMeshRef.current) {
-      const targetMat = (zoom >= 42 ? multiHeadMats : app.skinMat) as any;
-      if (headMeshRef.current.material !== targetMat) {
-        headMeshRef.current.material = targetMat;
-      }
-    }
-
     groupRef.current.position.set(ux, uy || 0, uz);
 
     const isActivelyWorkingNow = !isGamePaused && !isMovingNow && Boolean(curJobType && curJobType !== 'idle' && curJobType !== 'wander');
@@ -262,15 +339,19 @@ function Unit3D({
     const isSittingNow = !isMovingNow && curJobType === 'sit_by_fire';
 
     const targetBuildingId = curJob?.targetBuildingId || unit.workBuildingId;
-    let targetBuildingType: string | undefined = undefined;
-    if (targetBuildingId) {
-      for (const b of buildingEntities) {
-        if (b.id === targetBuildingId) {
-          targetBuildingType = b.buildingType;
-          break;
+    if (curJob?.id !== prevJobIdRef.current) {
+      prevJobIdRef.current = curJob?.id || null;
+      targetBuildingTypeRef.current = undefined;
+      if (targetBuildingId) {
+        for (const b of buildingEntities) {
+          if (b.id === targetBuildingId) {
+            targetBuildingTypeRef.current = b.buildingType;
+            break;
+          }
         }
       }
     }
+    const targetBuildingType = targetBuildingTypeRef.current;
 
     const isFarmingNow =
       isActivelyWorkingNow &&
@@ -949,7 +1030,9 @@ function Unit3D({
             </group>
           </group>
 
-          <MuleCompanion unit={unit} isGamePaused={isGamePaused} />
+          {Boolean(unit.hasMule || unit.muleTransition) && (
+            <MuleCompanion unit={unit} isGamePaused={isGamePaused} />
+          )}
         </group>
       </group>
 
@@ -959,18 +1042,15 @@ function Unit3D({
           e.stopPropagation();
           onSelect();
         }}
-      >
-        <cylinderGeometry args={[0.35, 0.35, 1.3, 6]} />
-        <meshBasicMaterial visible={false} />
-      </mesh>
+        geometry={SHARED_GEOS.unitCollider}
+        material={SHARED_STATIC_MATS.invisibleMat}
+      />
 
       {isSelected && (
-        <mesh position={[0, 0.008, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={SHARED_GEOS.selectionRing}>
-          <meshBasicMaterial color="#38bdf8" side={THREE.DoubleSide} />
-        </mesh>
+        <mesh position={[0, 0.008, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={SHARED_GEOS.selectionRing} material={SHARED_STATIC_MATS.selectionRingMat} />
       )}
 
-      {isBandit && isBanditLeader && (
+      {isBandit && isBanditLeader && showBanditBadge && (
         <Html
           position={[0, 1.45, 0]}
           center
@@ -1003,8 +1083,6 @@ function Unit3D({
           </div>
         </Html>
       )}
-
-      <UnitSpeechBubble unit={unit} isBanditLeader={isBandit && isBanditLeader} />
     </group>
   );
 }
@@ -1050,9 +1128,15 @@ function MuleCompanion({
 
     if (unit.muleTransition === 'taking' || unit.muleTransition === 'returning') {
       const p = Math.max(0, Math.min(1, unit.muleTransitionProgress || 0));
-      const hitch = unit.assignedMuleHutId
-        ? [...buildingEntities].find((building) => building.id === unit.assignedMuleHutId)
-        : undefined;
+      let hitch: GameEntity | undefined = undefined;
+      if (unit.assignedMuleHutId) {
+        for (const building of buildingEntities) {
+          if (building.id === unit.assignedMuleHutId) {
+            hitch = building;
+            break;
+          }
+        }
+      }
 
       if (hitch?.position && rootRef.current.parent) {
         hitchPosition.current.set(hitch.position[0], unit.position?.[1] || hitch.position[1], hitch.position[2] + 0.42);
@@ -1217,9 +1301,8 @@ const Unit3DMemo = memo(Unit3D, (prev, next) => {
     prev.previewAnimation === next.previewAnimation &&
     prev.unit.characterClass === next.unit.characterClass &&
     prev.unit.hasMule === next.unit.hasMule &&
+    prev.unit.muleTransition === next.unit.muleTransition &&
     prev.unit.isHaulingLog === next.unit.isHaulingLog &&
-    prev.unit.speechBubble?.text === next.unit.speechBubble?.text &&
-    prev.unit.speechBubble?.expiresAtTick === next.unit.speechBubble?.expiresAtTick &&
     prev.grid === next.grid
   );
 });

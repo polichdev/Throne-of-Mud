@@ -17,6 +17,7 @@ import { MapEdgeFog } from './MapEdgeFog';
 import { MenuAmbientWalkers } from './MenuAmbientWalkers';
 import { WeatherRenderer } from './WeatherRenderer';
 import { SpatialAudioListener } from './SpatialAudioListener';
+import { AmbientFaunaRenderer } from './fauna/AmbientFaunaRenderer';
 
 import { useGameStore } from '../../store/useGameStore';
 import {
@@ -113,6 +114,7 @@ export function GameCanvas({ grid }: Props) {
         <WeatherRenderer />
         <StrategicParchmentMapRenderer grid={grid} />
         <MenuAmbientWalkers grid={grid} />
+        <AmbientFaunaRenderer grid={grid} />
         <SpatialAudioListener />
         <RendererMetrics />
       </Canvas>

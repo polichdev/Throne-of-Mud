@@ -18,6 +18,14 @@ import {
 } from '../../engine/buildings/buildingValidation';
 import { BuildingPlacementGhost } from './buildings/BuildingPlacementGhost';
 
+const COVERED_TILE_GEO = new THREE.PlaneGeometry(0.96, 0.96);
+const SNAP_RING_GEO = new THREE.RingGeometry(0.42, 0.49, 24);
+const SNAP_CIRCLE_GEO = new THREE.CircleGeometry(0.42, 24);
+const SNAP_CYLINDER_GEO = new THREE.CylinderGeometry(0.04, 0.04, 0.24, 8);
+const SNAP_SPHERE_GEO = new THREE.SphereGeometry(0.08, 12, 12);
+const SNAP_TARGET_RING_GEO = new THREE.RingGeometry(0.44, 0.52, 24);
+const CURSOR_PLANE_GEO = new THREE.PlaneGeometry(1.0, 1.0);
+
 interface Props {
   grid: GridMap;
 }
@@ -497,7 +505,7 @@ export function TerrainRenderer({ grid }: Props) {
       gridTexture.needsUpdate = true;
       return;
     }
-  }, [terrainVersion, buildingVersion, grid, gridTexture]);
+  }, [terrainVersion, grid, gridTexture]);
 
   useEffect(() => {
     if (!gridTexture.image?.data) return;
@@ -1226,8 +1234,8 @@ export function TerrainRenderer({ grid }: Props) {
                 key={`cov-${tx}-${tz}`}
                 position={[tx + 0.5, tileH + 0.015, tz + 0.5]}
                 rotation={[-Math.PI / 2, 0, 0]}
+                geometry={COVERED_TILE_GEO}
               >
-                <planeGeometry args={[0.94, 0.94]} />
                 <meshBasicMaterial
                   color={buildPreviewData.allowed ? '#22c55e' : '#ef4444'}
                   transparent
@@ -1297,20 +1305,16 @@ export function TerrainRenderer({ grid }: Props) {
 
         return (
           <group key={node.id} position={[node.x + 0.5, 0.04, node.z + 0.5]} scale={[scale, scale, scale]}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[0.32, 0.44, 24]} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} geometry={SNAP_RING_GEO}>
               <meshBasicMaterial color={color} transparent opacity={isStart || isTarget ? 0.95 : 0.75} side={THREE.DoubleSide} />
             </mesh>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
-              <circleGeometry args={[0.22, 20]} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} geometry={SNAP_CIRCLE_GEO}>
               <meshBasicMaterial color={color} transparent opacity={isStart || isTarget ? 0.7 : 0.35} side={THREE.DoubleSide} />
             </mesh>
-            <mesh position={[0, 0.12, 0]} castShadow>
-              <cylinderGeometry args={[0.06, 0.08, 0.24, 6]} />
-              <meshStandardMaterial color={isStart ? '#15803d' : '#0369a1'} roughness={0.8} />
+            <mesh position={[0, 0.12, 0]} geometry={SNAP_CYLINDER_GEO}>
+              <meshLambertMaterial color={isStart ? '#15803d' : '#0369a1'} />
             </mesh>
-            <mesh position={[0, 0.24, 0]}>
-              <sphereGeometry args={[0.07, 8, 8]} />
+            <mesh position={[0, 0.24, 0]} geometry={SNAP_SPHERE_GEO}>
               <meshBasicMaterial color={color} />
             </mesh>
             {(isHovered || isTarget) && (
@@ -1327,12 +1331,10 @@ export function TerrainRenderer({ grid }: Props) {
 
       {!isStrategicView && activeTool === 'road' && !roadEraseMode && currentSnapTarget && currentSnapTarget.type !== 'building' && (
         <group position={[currentSnapTarget.x + 0.5, (grid.getTile(currentSnapTarget.x, currentSnapTarget.z)?.height || 0.05) + 0.028, currentSnapTarget.z + 0.5]}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.34, 0.46, 24]} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} geometry={SNAP_TARGET_RING_GEO}>
             <meshBasicMaterial color="#f59e0b" transparent opacity={0.95} side={THREE.DoubleSide} />
           </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
-            <circleGeometry args={[0.22, 20]} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]} geometry={SNAP_CIRCLE_GEO}>
             <meshBasicMaterial color="#fbbf24" transparent opacity={0.5} side={THREE.DoubleSide} />
           </mesh>
           <Html position={[0, 0.48, 0]} center zIndexRange={[12, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
@@ -1367,8 +1369,8 @@ function HoveredTileCursor({ roadEraseMode, currentSnapTarget }: { roadEraseMode
       position={[hoveredTile[0] + 0.5, 0.008, hoveredTile[1] + 0.5]}
       rotation={[-Math.PI / 2, 0, 0]}
       raycast={() => null}
+      geometry={CURSOR_PLANE_GEO}
     >
-      <planeGeometry args={[0.96, 0.96]} />
       <meshBasicMaterial
         color={
           activeTool === 'road' && roadEraseMode

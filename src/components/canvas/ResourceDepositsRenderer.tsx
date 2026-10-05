@@ -420,12 +420,12 @@ function DepositNode({
       const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
       const targetX = camTarget ? camTarget[0] : camera.position.x;
       const targetZ = camTarget ? camTarget[1] : camera.position.z;
-
       const distSq = (x - targetX) * (x - targetX) + (z - targetZ) * (z - targetZ);
-      const maxDist = Math.max(22, (800 / zoom) + 6);
-      const shouldBeInView = zoom >= 16 && distSq < maxDist * maxDist;
+
+      const maxDist = Math.max(50, (1800 / zoom) + 16);
+      const shouldBeInView = distSq < maxDist * maxDist;
       inViewRef.current = shouldBeInView;
-      const shouldShowBadge = isSelected || (shouldBeInView && zoom >= 32 && distSq < 16 * 16);
+      const shouldShowBadge = isSelected || (shouldBeInView && zoom >= 18 && distSq < 36 * 36);
       if (shouldShowBadge !== showBadgeRef.current) {
         showBadgeRef.current = shouldShowBadge;
         setShowBadge(shouldShowBadge);

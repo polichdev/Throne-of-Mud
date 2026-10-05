@@ -145,100 +145,134 @@ export function DayNightLighting() {
     scratchHemiGnd: new THREE.Color(),
   }), []);
 
+  const lastTimeRef = useRef({
+    hour: -1,
+    minute: -1,
+    season: '',
+    rain: -1,
+    storm: -1,
+    snow: -1,
+    lightning: -1,
+  });
+
   useFrame(() => {
     const { time } = useGameStore.getState();
     const currentHour = (time.hour + time.minute / 60) % 24;
 
-    let k0 = timeline[0];
-    let k1 = timeline[timeline.length - 1];
+    const timeChanged =
+      time.hour !== lastTimeRef.current.hour ||
+      Math.abs(time.minute - lastTimeRef.current.minute) >= 0.05 ||
+      time.season !== lastTimeRef.current.season ||
+      time.rainIntensity !== lastTimeRef.current.rain ||
+      time.stormIntensity !== lastTimeRef.current.storm ||
+      time.snowIntensity !== lastTimeRef.current.snow ||
+      (time.lightningFlash || 0) !== lastTimeRef.current.lightning;
 
-    for (let i = 0; i < timeline.length - 1; i++) {
-      if (currentHour >= timeline[i].hour && currentHour <= timeline[i + 1].hour) {
-        k0 = timeline[i];
-        k1 = timeline[i + 1];
-        break;
-      }
-    }
+    if (timeChanged) {
+      lastTimeRef.current = {
+        hour: time.hour,
+        minute: time.minute,
+        season: time.season,
+        rain: time.rainIntensity || 0,
+        storm: time.stormIntensity || 0,
+        snow: time.snowIntensity || 0,
+        lightning: time.lightningFlash || 0,
+      };
 
-    const span = k1.hour - k0.hour;
-    const progress = span > 0 ? (currentHour - k0.hour) / span : 0;
-    const smoothT = progress * progress * (3 - 2 * progress);
+      let k0 = timeline[0];
+      let k1 = timeline[timeline.length - 1];
 
-    const sunCol = staticColors.scratchSun.copy(k0.sunColor).lerp(k1.sunColor, smoothT);
-    let sunInt = THREE.MathUtils.lerp(k0.sunIntensity, k1.sunIntensity, smoothT);
-
-    const ambCol = staticColors.scratchAmb.copy(k0.ambientColor).lerp(k1.ambientColor, smoothT);
-    let ambInt = THREE.MathUtils.lerp(k0.ambientIntensity, k1.ambientIntensity, smoothT);
-
-    const hemiSky = staticColors.scratchHemiSky.copy(k0.hemiSkyColor).lerp(k1.hemiSkyColor, smoothT);
-    const hemiGnd = staticColors.scratchHemiGnd.copy(k0.hemiGroundColor).lerp(k1.hemiGroundColor, smoothT);
-
-    const season = time.season;
-    if (season === 'Winter') {
-      sunCol.lerp(staticColors.winterSun, 0.18);
-      ambCol.lerp(staticColors.winterAmb, 0.20);
-      hemiGnd.lerp(staticColors.winterHemiGnd, 0.35);
-      sunInt *= 0.92;
-      ambInt *= 1.12;
-    } else if (season === 'Autumn') {
-      sunCol.lerp(staticColors.autumnSun, 0.15);
-      ambCol.lerp(staticColors.autumnAmb, 0.12);
-    } else if (season === 'Spring') {
-      sunCol.lerp(staticColors.springSun, 0.08);
-    }
-
-    const { rainIntensity = 0, stormIntensity = 0, snowIntensity = 0, lightningFlash = 0 } = time;
-
-    if (rainIntensity > 0.005) {
-      const rainWeight = rainIntensity * 0.40;
-      sunCol.lerp(staticColors.rainSun, rainWeight);
-      ambCol.lerp(staticColors.rainAmb, rainWeight * 0.85);
-      sunInt *= THREE.MathUtils.lerp(1.0, 0.65, rainIntensity);
-      ambInt *= THREE.MathUtils.lerp(1.0, 0.90, rainIntensity);
-    }
-
-    if (stormIntensity > 0.005) {
-      const stormWeight = stormIntensity * 0.50;
-      sunCol.lerp(staticColors.stormSun, stormWeight);
-      ambCol.lerp(staticColors.stormAmb, stormWeight * 0.85);
-      sunInt *= THREE.MathUtils.lerp(1.0, 0.45, stormIntensity);
-      ambInt *= THREE.MathUtils.lerp(1.0, 0.80, stormIntensity);
-
-      if (lightningFlash > 0.01) {
-        sunCol.lerp(staticColors.lightningSun, lightningFlash);
-        ambCol.lerp(staticColors.lightningAmb, lightningFlash);
-        sunInt += lightningFlash * 4.2;
-        ambInt += lightningFlash * 2.2;
-      }
-    }
-
-    if (snowIntensity > 0.005) {
-      const snowWeight = snowIntensity * 0.35;
-      sunCol.lerp(staticColors.snowSun, snowWeight);
-      ambCol.lerp(staticColors.snowAmb, snowWeight * 0.70);
-      hemiGnd.lerp(staticColors.snowHemiGnd, snowWeight * 0.80);
-      sunInt *= THREE.MathUtils.lerp(1.0, 0.75, snowIntensity);
-      ambInt *= THREE.MathUtils.lerp(1.0, 1.10, snowIntensity);
-    }
-
-    ambInt = Math.max(0.42, ambInt);
-    sunInt = Math.max(0.25, sunInt);
-
-    if (sunLightRef.current) {
-      sunLightRef.current.color.copy(sunCol);
-      sunLightRef.current.intensity = sunInt;
-
-      const camZoom = (window as any).__lastCameraZoom ?? 38;
-      const shouldCastShadow = camZoom > 18;
-      if (sunLightRef.current.castShadow !== shouldCastShadow) {
-        sunLightRef.current.castShadow = shouldCastShadow;
-        if (shouldCastShadow) {
-          gl.shadowMap.needsUpdate = true;
+      for (let i = 0; i < timeline.length - 1; i++) {
+        if (currentHour >= timeline[i].hour && currentHour <= timeline[i + 1].hour) {
+          k0 = timeline[i];
+          k1 = timeline[i + 1];
+          break;
         }
       }
 
+      const span = k1.hour - k0.hour;
+      const progress = span > 0 ? (currentHour - k0.hour) / span : 0;
+      const smoothT = progress * progress * (3 - 2 * progress);
+
+      const sunCol = staticColors.scratchSun.copy(k0.sunColor).lerp(k1.sunColor, smoothT);
+      let sunInt = THREE.MathUtils.lerp(k0.sunIntensity, k1.sunIntensity, smoothT);
+
+      const ambCol = staticColors.scratchAmb.copy(k0.ambientColor).lerp(k1.ambientColor, smoothT);
+      let ambInt = THREE.MathUtils.lerp(k0.ambientIntensity, k1.ambientIntensity, smoothT);
+
+      const hemiSky = staticColors.scratchHemiSky.copy(k0.hemiSkyColor).lerp(k1.hemiSkyColor, smoothT);
+      const hemiGnd = staticColors.scratchHemiGnd.copy(k0.hemiGroundColor).lerp(k1.hemiGroundColor, smoothT);
+
+      const season = time.season;
+      if (season === 'Winter') {
+        sunCol.lerp(staticColors.winterSun, 0.18);
+        ambCol.lerp(staticColors.winterAmb, 0.20);
+        hemiGnd.lerp(staticColors.winterHemiGnd, 0.35);
+        sunInt *= 0.92;
+        ambInt *= 1.12;
+      } else if (season === 'Autumn') {
+        sunCol.lerp(staticColors.autumnSun, 0.15);
+        ambCol.lerp(staticColors.autumnAmb, 0.12);
+      } else if (season === 'Spring') {
+        sunCol.lerp(staticColors.springSun, 0.08);
+      }
+
+      const { rainIntensity = 0, stormIntensity = 0, snowIntensity = 0, lightningFlash = 0 } = time;
+
+      if (rainIntensity > 0.005) {
+        const rainWeight = rainIntensity * 0.40;
+        sunCol.lerp(staticColors.rainSun, rainWeight);
+        ambCol.lerp(staticColors.rainAmb, rainWeight * 0.85);
+        sunInt *= THREE.MathUtils.lerp(1.0, 0.65, rainIntensity);
+        ambInt *= THREE.MathUtils.lerp(1.0, 0.90, rainIntensity);
+      }
+
+      if (stormIntensity > 0.005) {
+        const stormWeight = stormIntensity * 0.50;
+        sunCol.lerp(staticColors.stormSun, stormWeight);
+        ambCol.lerp(staticColors.stormAmb, stormWeight * 0.85);
+        sunInt *= THREE.MathUtils.lerp(1.0, 0.45, stormIntensity);
+        ambInt *= THREE.MathUtils.lerp(1.0, 0.80, stormIntensity);
+
+        if (lightningFlash > 0.01) {
+          sunCol.lerp(staticColors.lightningSun, lightningFlash);
+          ambCol.lerp(staticColors.lightningAmb, lightningFlash);
+          sunInt += lightningFlash * 4.2;
+          ambInt += lightningFlash * 2.2;
+        }
+      }
+
+      if (snowIntensity > 0.005) {
+        const snowWeight = snowIntensity * 0.35;
+        sunCol.lerp(staticColors.snowSun, snowWeight);
+        ambCol.lerp(staticColors.snowAmb, snowWeight * 0.70);
+        hemiGnd.lerp(staticColors.snowHemiGnd, snowWeight * 0.80);
+        sunInt *= THREE.MathUtils.lerp(1.0, 0.75, snowIntensity);
+        ambInt *= THREE.MathUtils.lerp(1.0, 1.10, snowIntensity);
+      }
+
+      ambInt = Math.max(0.42, ambInt);
+      sunInt = Math.max(0.25, sunInt);
+
+      if (sunLightRef.current) {
+        sunLightRef.current.color.copy(sunCol);
+        sunLightRef.current.intensity = sunInt;
+      }
+
+      if (ambientLightRef.current) {
+        ambientLightRef.current.color.copy(ambCol);
+        ambientLightRef.current.intensity = ambInt;
+      }
+
+      if (hemiLightRef.current) {
+        hemiLightRef.current.color.copy(hemiSky);
+        hemiLightRef.current.groundColor.copy(hemiGnd);
+      }
+    }
+
+    if (sunLightRef.current) {
       const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
-      if (camTarget && shouldCastShadow) {
+      if (camTarget) {
         const dx = camTarget[0] - lastLightPosRef.current[0];
         const dz = camTarget[1] - lastLightPosRef.current[1];
         if (dx * dx + dz * dz >= SHADOW_RECENTER_DISTANCE * SHADOW_RECENTER_DISTANCE) {
@@ -248,16 +282,6 @@ export function DayNightLighting() {
           gl.shadowMap.needsUpdate = true;
         }
       }
-    }
-
-    if (ambientLightRef.current) {
-      ambientLightRef.current.color.copy(ambCol);
-      ambientLightRef.current.intensity = ambInt;
-    }
-
-    if (hemiLightRef.current) {
-      hemiLightRef.current.color.copy(hemiSky);
-      hemiLightRef.current.groundColor.copy(hemiGnd);
     }
   });
 

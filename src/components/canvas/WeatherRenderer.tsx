@@ -3,14 +3,11 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 
-const MAP_MIN = -10;
-const MAP_MAX = 266;
-const MAP_SPAN = MAP_MAX - MAP_MIN;
-
-const RAIN_COUNT = 15000;
+const LOCAL_SPAN = 56;
+const RAIN_COUNT = 2200;
 const RAIN_HEIGHT = 11.5;
 
-const SNOW_COUNT = 3800;
+const SNOW_COUNT = 1000;
 const SNOW_HEIGHT = 10.0;
 
 export function WeatherRenderer() {
@@ -21,9 +18,9 @@ export function WeatherRenderer() {
     const randomSeeds = new Float32Array(RAIN_COUNT * 2);
 
     for (let i = 0; i < RAIN_COUNT; i++) {
-      const rx = MAP_MIN + Math.random() * MAP_SPAN;
+      const rx = (Math.random() - 0.5) * LOCAL_SPAN;
       const ry = Math.random() * RAIN_HEIGHT;
-      const rz = MAP_MIN + Math.random() * MAP_SPAN;
+      const rz = (Math.random() - 0.5) * LOCAL_SPAN;
       const len = 0.35 + Math.random() * 0.25;
       const spd = 22 + Math.random() * 8;
       const seed = Math.random() * 100;
@@ -117,9 +114,9 @@ export function WeatherRenderer() {
     const seeds = new Float32Array(SNOW_COUNT);
 
     for (let i = 0; i < SNOW_COUNT; i++) {
-      positions[i * 3] = MAP_MIN + Math.random() * MAP_SPAN;
+      positions[i * 3] = (Math.random() - 0.5) * LOCAL_SPAN;
       positions[i * 3 + 1] = Math.random() * SNOW_HEIGHT;
-      positions[i * 3 + 2] = MAP_MIN + Math.random() * MAP_SPAN;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * LOCAL_SPAN;
       scales[i] = 0.8 + Math.random() * 1.3;
       seeds[i] = Math.random() * 200.0;
     }
@@ -190,6 +187,7 @@ export function WeatherRenderer() {
     };
   }, [rainGeometry, rainMaterial, snowGeometry, snowMaterial]);
 
+  const groupRef = useRef<THREE.Group>(null);
   const rainMeshRef = useRef<THREE.LineSegments>(null);
   const snowMeshRef = useRef<THREE.Points>(null);
   const isStrategicView = useGameStore((state) => state.isStrategicView);
@@ -202,6 +200,11 @@ export function WeatherRenderer() {
       if (rainMeshRef.current) rainMeshRef.current.visible = false;
       if (snowMeshRef.current) snowMeshRef.current.visible = false;
       return;
+    }
+
+    const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
+    if (groupRef.current && camTarget) {
+      groupRef.current.position.set(camTarget[0], 0, camTarget[1]);
     }
 
     const time = performance.now() / 1000;
@@ -230,7 +233,7 @@ export function WeatherRenderer() {
   });
 
   return (
-    <group position={[0, 0, 0]} visible={!isStrategicView}>
+    <group ref={groupRef} position={[0, 0, 0]} visible={!isStrategicView}>
       <lineSegments
         ref={rainMeshRef}
         geometry={rainGeometry}

@@ -1099,12 +1099,19 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     };
   }, [mapTexture]);
 
+  const isDirtyRef = useRef(true);
+
   useEffect(() => {
+    isDirtyRef.current = true;
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
-      if (canvasRef.current && textureRef.current) {
-        drawParchmentToCanvas(canvasRef.current);
-        textureRef.current.needsUpdate = true;
+      const zoom = (window as any).__lastCameraZoom ?? 38;
+      if (zoom < 22 || useGameStore.getState().isStrategicView) {
+        if (canvasRef.current && textureRef.current) {
+          drawParchmentToCanvas(canvasRef.current);
+          textureRef.current.needsUpdate = true;
+          isDirtyRef.current = false;
+        }
       }
     }, 600);
 
@@ -1116,6 +1123,14 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
   useFrame(({ camera }) => {
     const orthoCam = camera as THREE.OrthographicCamera;
     const zoom = orthoCam.zoom || 38;
+
+    if (zoom < 22 && isDirtyRef.current) {
+      if (canvasRef.current && textureRef.current) {
+        drawParchmentToCanvas(canvasRef.current);
+        textureRef.current.needsUpdate = true;
+        isDirtyRef.current = false;
+      }
+    }
 
     const t = THREE.MathUtils.clamp((18.5 - zoom) / (18.5 - 16.5), 0, 1);
 

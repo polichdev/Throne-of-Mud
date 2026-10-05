@@ -31,6 +31,9 @@ const WOOD_COLORS = [
   new THREE.Color('#fef08a'),
 ];
 
+const SHARED_WOOD_CHIP_GEO = new THREE.BoxGeometry(0.045, 0.035, 0.075);
+const SHARED_WOOD_CHIP_MAT = new THREE.MeshLambertMaterial();
+
 export function WoodChipsRenderer() {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -93,7 +96,7 @@ export function WoodChipsRenderer() {
     const particles = particlesRef.current;
     const dummy = dummyRef.current;
 
-    const alive: Particle[] = [];
+    let aliveCount = 0;
 
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
@@ -116,13 +119,14 @@ export function WoodChipsRenderer() {
         p.rotY += p.vRotY * dt;
         p.rotZ += p.vRotZ * dt;
 
-        alive.push(p);
+        particles[aliveCount] = p;
+        aliveCount++;
       }
     }
 
-    particlesRef.current = alive;
+    particles.length = aliveCount;
 
-    if (alive.length === 0) {
+    if (aliveCount === 0) {
       if (meshRef.current.count !== 0) {
         meshRef.current.count = 0;
         meshRef.current.visible = false;
@@ -131,10 +135,10 @@ export function WoodChipsRenderer() {
     }
 
     meshRef.current.visible = true;
-    meshRef.current.count = Math.min(alive.length, MAX_PARTICLES);
+    meshRef.current.count = Math.min(aliveCount, MAX_PARTICLES);
 
     for (let i = 0; i < meshRef.current.count; i++) {
-      const p = alive[i];
+      const p = particles[i];
       const age = now - p.birthTime;
       const lifeProgress = age / p.lifeSpan;
       const currentScale = p.scale * (1.0 - Math.pow(lifeProgress, 2.5));
@@ -158,12 +162,9 @@ export function WoodChipsRenderer() {
     <group visible={!isStrategicView}>
       <instancedMesh
         ref={meshRef}
-        args={[undefined, undefined, MAX_PARTICLES]}
+        args={[SHARED_WOOD_CHIP_GEO, SHARED_WOOD_CHIP_MAT, MAX_PARTICLES]}
         frustumCulled={false}
-      >
-        <boxGeometry args={[0.045, 0.035, 0.075]} />
-        <meshStandardMaterial roughness={0.8} flatShading />
-      </instancedMesh>
+      />
     </group>
   );
 }

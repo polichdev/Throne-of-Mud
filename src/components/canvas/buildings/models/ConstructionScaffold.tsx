@@ -166,8 +166,8 @@ function ConstructionHUD({
       if (camTarget && groupRef.current) {
         groupRef.current.getWorldPosition(_tempVec);
         const distSq = (_tempVec.x - camTarget[0]) ** 2 + (_tempVec.z - camTarget[1]) ** 2;
-        const maxDist = Math.max(22, (800 / zoom) + 8);
-        const shouldBeInView = zoom >= 16 && distSq < maxDist * maxDist;
+        const maxDist = Math.max(50, (1800 / zoom) + 16);
+        const shouldBeInView = zoom >= 12 && distSq < maxDist * maxDist;
         if (shouldBeInView !== inViewRef.current) {
           inViewRef.current = shouldBeInView;
           setInView(shouldBeInView);
@@ -233,8 +233,8 @@ export function DemolitionHUD({
       if (camTarget && groupRef.current) {
         groupRef.current.getWorldPosition(_tempVec);
         const distSq = (_tempVec.x - camTarget[0]) ** 2 + (_tempVec.z - camTarget[1]) ** 2;
-        const maxDist = Math.max(22, (800 / zoom) + 8);
-        const shouldBeInView = zoom >= 16 && distSq < maxDist * maxDist;
+        const maxDist = Math.max(50, (1800 / zoom) + 16);
+        const shouldBeInView = zoom >= 12 && distSq < maxDist * maxDist;
         if (shouldBeInView !== inViewRef.current) {
           inViewRef.current = shouldBeInView;
           setInView(shouldBeInView);

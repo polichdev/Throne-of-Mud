@@ -127,14 +127,19 @@ export const BuildingPlacementGhost: React.FC<BuildingPlacementGhostProps> = Rea
 
   const color = allowed ? '#22c55e' : '#ef4444';
 
+  const { planeGeo, edgesGeo } = useMemo(() => {
+    const p = new THREE.PlaneGeometry(width * 0.98, height * 0.98);
+    const e = new THREE.EdgesGeometry(p);
+    return { planeGeo: p, edgesGeo: e };
+  }, [width, height]);
+
   return (
     <group>
       <group>
         {renderModel()}
       </group>
 
-      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[width * 0.98, height * 0.98]} />
+      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={planeGeo}>
         <meshBasicMaterial
           color={color}
           transparent
@@ -143,8 +148,7 @@ export const BuildingPlacementGhost: React.FC<BuildingPlacementGhostProps> = Rea
         />
       </mesh>
 
-      <lineSegments position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <edgesGeometry args={[new THREE.PlaneGeometry(width * 0.98, height * 0.98)]} />
+      <lineSegments position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={edgesGeo}>
         <lineBasicMaterial color={allowed ? '#4ade80' : '#f87171'} linewidth={2} />
       </lineSegments>
 

@@ -113,10 +113,11 @@ export function MedievalDoor({
   const cachedPos = useRef<[number, number] | null>(null);
   const frameCount = useRef(0);
   const isNearRef = useRef(false);
+  const doorHash = useMemo(() => Math.abs(Math.round((position[0] * 11 + position[2] * 19) % 30)), [position]);
 
   useFrame((_, delta) => {
     if (!rootRef.current || !leftHingeRef.current) return;
-    if (!isObjectEffectivelyVisible(rootRef.current)) return;
+    if (!rootRef.current.visible) return;
     const currentZoom = (window as any).__lastCameraZoom ?? 38;
     if (currentZoom < 42) {
       if (leftHingeRef.current.rotation.y !== 0) leftHingeRef.current.rotation.y = 0;
@@ -126,7 +127,7 @@ export function MedievalDoor({
     }
 
     frameCount.current++;
-    if (frameCount.current % 60 === 0) {
+    if ((frameCount.current + doorHash) % 30 === 0) {
       const camTarget = (window as any).__lastCameraTarget;
       if (!cachedPos.current) {
         rootRef.current.getWorldPosition(worldPos);
@@ -135,7 +136,7 @@ export function MedievalDoor({
       const dx = cachedPos.current[0];
       const dz = cachedPos.current[1];
 
-      if (camTarget && (dx - camTarget[0]) ** 2 + (dz - camTarget[1]) ** 2 > 40 * 40) {
+      if (camTarget && (dx - camTarget[0]) ** 2 + (dz - camTarget[1]) ** 2 > 30 * 30) {
         isNearRef.current = false;
       } else {
         let isNear = false;
@@ -448,8 +449,6 @@ export function ChimneySmoke({
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
-    if (!isObjectEffectivelyVisible(groupRef.current)) return;
-
     const currentZoom = (window as any).__lastCameraZoom ?? 38;
     const isStrat = useGameStore.getState().isStrategicView;
     if (isStrat || currentZoom <= 18.5) {
@@ -695,15 +694,16 @@ export function GothicPortal({
   const cachedPos = useRef<[number, number] | null>(null);
   const frameCount = useRef(0);
   const isNearRef = useRef(false);
+  const doorHash = useMemo(() => Math.abs(Math.round((position[0] * 13 + position[2] * 23) % 30)), [position]);
 
   useFrame((_, delta) => {
     if (!rootRef.current || !leftHingeRef.current || !rightHingeRef.current) return;
-    if (!isObjectEffectivelyVisible(rootRef.current)) return;
+    if (!rootRef.current.visible) return;
     const currentZoom = (window as any).__lastCameraZoom ?? 38;
     if (currentZoom < 26) return;
 
     frameCount.current++;
-    if (frameCount.current % 30 === 0) {
+    if ((frameCount.current + doorHash) % 30 === 0) {
       const camTarget = (window as any).__lastCameraTarget;
       if (!cachedPos.current) {
         rootRef.current.getWorldPosition(worldPos);
@@ -712,7 +712,7 @@ export function GothicPortal({
       const dx = cachedPos.current[0];
       const dz = cachedPos.current[1];
 
-      if (camTarget && (dx - camTarget[0]) ** 2 + (dz - camTarget[1]) ** 2 > 60 * 60) {
+      if (camTarget && (dx - camTarget[0]) ** 2 + (dz - camTarget[1]) ** 2 > 35 * 35) {
         isNearRef.current = false;
       } else {
         let isNear = false;
