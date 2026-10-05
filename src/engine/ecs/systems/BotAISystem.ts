@@ -1026,6 +1026,33 @@ export class BotAISystem {
       if (incompleteBuildings.length < 2 && currentTick - memory.lastActionTick >= botDecisionInterval) {
         memory.lastActionTick = currentTick;
 
+        const completedHitchingPosts = completedBuildings.filter((b) => b.buildingType === 'hitching_post');
+        for (const hp of completedHitchingPosts) {
+          const curM = hp.mulesCount ?? 1;
+          const maxM = hp.maxMules ?? 3;
+          if (curM < maxM) {
+            const needsSecondMule = curM === 1 && (peasants.length >= 6 || incompleteBuildings.length > 0);
+            const needsThirdMule = curM === 2 && (peasants.length >= 10 || incompleteBuildings.length > 1);
+            if (needsSecondMule || needsThirdMule) {
+              if (memory.gold >= 40 || currentTick % 120 === 0) {
+                if (memory.gold >= 50) {
+                  memory.gold -= 50;
+                }
+                hp.mulesCount = curM + 1;
+                incrementBuildingVersion();
+                const speaker = botLord || peasants[0];
+                if (speaker && !isRegionOffscreen) {
+                  speaker.speechBubble = {
+                    text: `Купили додаткового мула (${hp.mulesCount}/${maxM}) для розбудови!`,
+                    expiresAtTick: currentTick + 35,
+                    type: 'work',
+                  };
+                }
+              }
+            }
+          }
+        }
+
         const bCounts: Partial<Record<BuildingType, number>> = {};
         for (const b of botBuildings) {
           if (b.buildingType) {
@@ -1073,10 +1100,14 @@ export class BotAISystem {
 
         let candidateGoal: { type: BuildingType; targetDeposit?: ResourceDeposit } | null = null;
 
-        if (canAttempt('stockpile') && areStockpilesNearFull && count('stockpile') < 8) {
+        if (canAttempt('hitching_post') && count('hitching_post') === 0) {
+          candidateGoal = { type: 'hitching_post' };
+        } else if (canAttempt('stockpile') && areStockpilesNearFull && count('stockpile') < 8) {
           candidateGoal = { type: 'stockpile' };
         } else if (canAttempt('peasant_house') && needsHousing) {
           candidateGoal = { type: 'peasant_house' };
+        } else if (canAttempt('hitching_post') && count('hitching_post') < 2 && peasants.length >= 14) {
+          candidateGoal = { type: 'hitching_post' };
         } else if (canAttempt('lumberjack_hut') && count('lumberjack_hut') === 0) {
           candidateGoal = { type: 'lumberjack_hut' };
         } else if (canAttempt('peasant_house') && count('peasant_house') === 0) {

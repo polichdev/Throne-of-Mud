@@ -43,7 +43,7 @@ export class NeedsSystem {
     let aleConsumed = 0;
 
     for (const unit of characterEntities) {
-      if (!unit.needs) continue;
+      if (!unit.needs || unit.factionId === 'bandit') continue;
 
       unit.needs.hunger = Math.max(MIN_HUNGER, unit.needs.hunger - HUNGER_DECAY_RATE);
 

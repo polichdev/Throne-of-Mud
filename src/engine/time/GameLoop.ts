@@ -7,6 +7,7 @@ import { ProductionSystem } from '../ecs/systems/ProductionSystem';
 import { EconomySystem } from '../ecs/systems/EconomySystem';
 import { ImmigrationSystem } from '../ecs/systems/ImmigrationSystem';
 import { BotAISystem } from '../ecs/systems/BotAISystem';
+import { BanditAISystem } from '../ecs/systems/BanditAISystem';
 
 export class GameLoop {
   private grid: GridMap;
@@ -68,6 +69,7 @@ export class GameLoop {
 
         if (!isFast || currentTick % 3 === 0) {
           BotAISystem.update(this.grid, currentTick);
+          BanditAISystem.update(this.grid, currentTick);
         }
 
         if (!isFast || currentTick % 4 === 0) {

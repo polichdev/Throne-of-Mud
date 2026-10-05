@@ -19,6 +19,7 @@ import {
 } from '../../engine/ecs/entityHelpers';
 import { initializeWorldEntities } from '../../engine/world/worldInitializer';
 import { BotAISystem } from '../../engine/ecs/systems/BotAISystem';
+import { BanditAISystem } from '../../engine/ecs/systems/BanditAISystem';
 import type { GameState, SettlementSlice } from '../types';
 
 export type { SettlementSlice };
@@ -459,6 +460,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
   isInitialized: false,
   initWorld: (grid: GridMap, config?: WorldSetupConfig) => {
     BotAISystem.reset();
+    BanditAISystem.reset();
     const result = initializeWorldEntities(grid, config, get().playerRegionId, get().botCount);
 
     set({
@@ -480,6 +482,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
 
   resetWorld: (grid: GridMap, config?: WorldSetupConfig) => {
     BotAISystem.reset();
+    BanditAISystem.reset();
     grid.clearAllRoads();
     grid.generate(Date.now() % 100000 + Math.random() * 500);
     grid.isFullTerrainDirty = true;

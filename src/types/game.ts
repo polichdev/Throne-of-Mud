@@ -67,7 +67,7 @@ export interface ResourceDeposit {
   harvestBuildingLabel: string;
 }
 
-export type CharacterClass = 'king' | 'lord' | 'lady' | 'peasant' | 'warrior' | 'prisoner';
+export type CharacterClass = 'king' | 'lord' | 'lady' | 'peasant' | 'warrior' | 'prisoner' | 'bandit';
 
 export interface CharacterNeeds {
   hunger: number;

@@ -18,7 +18,7 @@ export interface UnitAppearance {
   hairMat: THREE.MeshStandardMaterial;
   hairColor: string;
   hairStyle: number;
-  headwearType: 'none' | 'straw_hat' | 'hood' | 'cap' | 'headscarf' | 'wimple' | 'bun' | 'braids';
+  headwearType: 'none' | 'straw_hat' | 'hood' | 'cap' | 'headscarf' | 'wimple' | 'bun' | 'braids' | 'helmet';
   hatMat?: THREE.MeshStandardMaterial;
   apronType: 'none' | 'leather_apron' | 'linen_apron' | 'vest';
   apronMat?: THREE.MeshStandardMaterial;
@@ -93,6 +93,8 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
+const BANDIT_TUNIC_PALETTES = ['#292524', '#3f3f46', '#44403c', '#334155', '#3b2219', '#374151', '#262626'];
+
 export function getUnitAppearance(unitId: string, characterClass = 'peasant'): UnitAppearance {
   const cacheKey = `${unitId}_${characterClass}`;
   const existing = unitAppearanceCache.get(cacheKey);
@@ -102,16 +104,20 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant'): U
   const isLord = characterClass === 'lord' || characterClass === 'king';
   const isLady = characterClass === 'lady';
   const isKnight = characterClass === 'warrior';
+  const isBandit = characterClass === 'bandit' || unitId.startsWith('bandit-');
 
   let gender: 'male' | 'female' = seed % 2 === 0 ? 'male' : 'female';
   if (isLady) gender = 'female';
-  if (isLord || isKnight) gender = 'male';
+  if (isLord || isKnight || isBandit) gender = 'male';
 
   const skinEntry = SKIN_PALETTES[(seed + 1) % SKIN_PALETTES.length];
   const hairColor = HAIR_PALETTES[(seed + 3) % HAIR_PALETTES.length];
 
   let beardType: 'none' | 'stubble' | 'mustache' | 'full_beard' | 'braid_beard' = 'none';
-  if (gender === 'male' && !isLord) {
+  if (isBandit) {
+    const bChoices: ('stubble' | 'full_beard' | 'braid_beard')[] = ['stubble', 'full_beard', 'braid_beard'];
+    beardType = bChoices[seed % bChoices.length];
+  } else if (gender === 'male' && !isLord) {
     const bChoices: ('none' | 'stubble' | 'mustache' | 'full_beard' | 'braid_beard')[] = [
       'none',
       'stubble',
@@ -126,8 +132,7 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant'): U
     beardType = 'mustache';
   }
 
-
-  const faceExpr = isLord ? 'determined' : seed % 3 === 0 ? 'smile' : 'calm';
+  const faceExpr = isLord || isBandit ? 'determined' : seed % 3 === 0 ? 'smile' : 'calm';
   const faceKey = `${skinEntry.tone}_${skinEntry.eyes}_${hairColor}_${beardType}_${faceExpr}`;
   let faceMat = faceMatCache.get(faceKey);
   if (!faceMat) {
@@ -168,6 +173,9 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant'): U
   } else if (isKnight) {
     tunicColor = '#475569';
     tunicPattern = 'plain';
+  } else if (isBandit) {
+    tunicColor = BANDIT_TUNIC_PALETTES[seed % BANDIT_TUNIC_PALETTES.length];
+    tunicPattern = seed % 2 === 0 ? 'plain' : 'weave';
   } else if (gender === 'female') {
     const entry = FEMALE_TUNIC_PALETTES[(seed >> 1) % FEMALE_TUNIC_PALETTES.length];
     tunicColor = entry.base;
@@ -226,9 +234,18 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant'): U
   }
 
   let hairStyle = (seed >> 3) % 6;
-  let headwearType: 'none' | 'straw_hat' | 'hood' | 'cap' | 'headscarf' | 'wimple' | 'bun' | 'braids' = 'none';
+  let headwearType: 'none' | 'straw_hat' | 'hood' | 'cap' | 'headscarf' | 'wimple' | 'bun' | 'braids' | 'helmet' = 'none';
 
-  if (gender === 'male' && !isLord && !isKnight) {
+  if (isBandit) {
+    const hwRoll = seed % 4;
+    if (hwRoll === 0 || hwRoll === 1) {
+      headwearType = 'helmet';
+    } else if (hwRoll === 2) {
+      headwearType = 'hood';
+    } else {
+      headwearType = 'cap';
+    }
+  } else if (gender === 'male' && !isLord && !isKnight) {
     const hwRoll = (seed >> 2) % 6;
     if (hwRoll === 0) {
       headwearType = 'straw_hat';
@@ -252,15 +269,17 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant'): U
 
   let hatMat: THREE.MeshStandardMaterial | undefined = undefined;
   if (headwearType !== 'none' && headwearType !== 'bun' && headwearType !== 'braids') {
-    const hatKey = `${headwearType}_${headwearType === 'hood' ? tunicColor : ''}`;
+    const hatKey = `${headwearType}_${headwearType === 'hood' ? tunicColor : ''}_${isBandit ? 'bandit' : 'normal'}`;
     hatMat = hatMatCache.get(hatKey);
     if (!hatMat) {
-      if (headwearType === 'straw_hat') {
+      if (headwearType === 'helmet') {
+        hatMat = new THREE.MeshStandardMaterial({ color: isBandit ? '#334155' : '#475569', roughness: 0.45, metalness: 0.65, flatShading: true });
+      } else if (headwearType === 'straw_hat') {
         hatMat = new THREE.MeshStandardMaterial({ color: '#fed46a', roughness: 0.85 });
       } else if (headwearType === 'hood') {
-        hatMat = new THREE.MeshStandardMaterial({ color: tunicColor, roughness: 0.8 });
+        hatMat = new THREE.MeshStandardMaterial({ color: isBandit ? '#1c1917' : tunicColor, roughness: 0.8 });
       } else if (headwearType === 'cap') {
-        hatMat = new THREE.MeshStandardMaterial({ color: '#634b3d', roughness: 0.8 });
+        hatMat = new THREE.MeshStandardMaterial({ color: isBandit ? '#292524' : '#634b3d', roughness: 0.8 });
       } else if (headwearType === 'headscarf') {
         hatMat = new THREE.MeshStandardMaterial({ color: '#fef3c7', roughness: 0.8 });
       } else if (headwearType === 'wimple') {
@@ -271,7 +290,9 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant'): U
   }
 
   let apronType: 'none' | 'leather_apron' | 'linen_apron' | 'vest' = 'none';
-  if (!isLord && !isLady && !isKnight) {
+  if (isBandit) {
+    apronType = seed % 2 === 0 ? 'vest' : 'leather_apron';
+  } else if (!isLord && !isLady && !isKnight) {
     const apRoll = (seed >> 4) % 5;
     if (apRoll === 0) {
       apronType = 'leather_apron';
@@ -284,32 +305,34 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant'): U
 
   let apronMat: THREE.MeshStandardMaterial | undefined = undefined;
   if (apronType !== 'none') {
-    apronMat = apronMatCache.get(apronType);
+    const apronKey = `${apronType}_${isBandit ? 'bandit' : 'normal'}`;
+    apronMat = apronMatCache.get(apronKey);
     if (!apronMat) {
       if (apronType === 'leather_apron') {
-        apronMat = new THREE.MeshStandardMaterial({ color: '#664227', roughness: 0.85 });
+        apronMat = new THREE.MeshStandardMaterial({ color: isBandit ? '#292524' : '#664227', roughness: 0.85 });
       } else if (apronType === 'linen_apron') {
         apronMat = new THREE.MeshStandardMaterial({ color: '#faf5ea', roughness: 0.85 });
       } else if (apronType === 'vest') {
-        apronMat = new THREE.MeshStandardMaterial({ color: '#4f321e', roughness: 0.85 });
+        apronMat = new THREE.MeshStandardMaterial({ color: isBandit ? '#1c1917' : '#4f321e', roughness: 0.85 });
       }
-      if (apronMat) apronMatCache.set(apronType, apronMat);
+      if (apronMat) apronMatCache.set(apronKey, apronMat);
     }
   }
 
   let shieldMat: THREE.MeshStandardMaterial | undefined = undefined;
-  if (isKnight) {
-    const emblems: ('cross' | 'lion' | 'chevron' | 'tree')[] = ['cross', 'lion', 'chevron', 'tree'];
-    const emblem = emblems[seed % emblems.length];
-    shieldMat = shieldMatCache.get(emblem);
+  if (isKnight || isBandit) {
+    const emblem = isBandit ? 'skull' : (['cross', 'lion', 'chevron', 'tree'] as const)[seed % 4];
+    const shieldBg = isBandit ? '#1c1917' : '#1e40af';
+    const shieldKey = `${shieldBg}_${emblem}`;
+    shieldMat = shieldMatCache.get(shieldKey);
     if (!shieldMat) {
-      const shieldCanvas = createShieldCanvas('#1e40af', emblem);
+      const shieldCanvas = createShieldCanvas(shieldBg, emblem);
       const shieldTex = makeTextureFromCanvas(shieldCanvas, 1, 1);
       shieldMat = new THREE.MeshStandardMaterial({
         map: shieldTex,
         roughness: 0.65,
       });
-      shieldMatCache.set(emblem, shieldMat);
+      shieldMatCache.set(shieldKey, shieldMat);
     }
   }
 

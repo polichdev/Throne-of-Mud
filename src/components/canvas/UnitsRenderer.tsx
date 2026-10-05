@@ -22,6 +22,7 @@ const SHARED_STATIC_MATS = {
   muleHarness: new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.7, flatShading: true }),
   muleHoof: new THREE.MeshStandardMaterial({ color: '#1c1917', roughness: 0.9, flatShading: true }),
   timberDark: new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.8, flatShading: true }),
+  darkIron: new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.45, metalness: 0.65, flatShading: true }),
 };
 
 const SHARED_GEOS = {
@@ -50,6 +51,9 @@ const SHARED_GEOS = {
   goldTrimPin: new THREE.CylinderGeometry(0.01, 0.01, 0.14, 4),
   knightHelm: new THREE.BoxGeometry(0.26, 0.26, 0.26),
   knightVisor: new THREE.BoxGeometry(0.18, 0.06, 0.03),
+  banditHelm: new THREE.CylinderGeometry(0.13, 0.155, 0.18, 8),
+  banditNasal: new THREE.BoxGeometry(0.03, 0.13, 0.04),
+  banditBrim: new THREE.CylinderGeometry(0.18, 0.21, 0.035, 8),
   strawBrim: new THREE.CylinderGeometry(0.25, 0.27, 0.03, 8),
   strawCone: new THREE.ConeGeometry(0.15, 0.13, 8),
   hoodBox: new THREE.BoxGeometry(0.25, 0.22, 0.18),
@@ -116,84 +120,33 @@ export function UnitsRenderer({ grid }: { grid?: GridMap }) {
           onSelect={() => setSelectedEntityId(unit.id)}
         />
       ))}
-      {!isStrategicView && <ActiveSpeechBubblesRenderer />}
     </group>
   );
 }
 
-function ActiveSpeechBubblesRenderer() {
-  const [activeBubbles, setActiveBubbles] = useState<Array<{ id: string; text: string; x: number; y: number; z: number }>>([]);
-  const lastCheckTick = useRef(0);
+function UnitSpeechBubble({ unit, isBanditLeader }: { unit: GameEntity; isBanditLeader: boolean }) {
+  const currentTick = useGameStore((s) => s.time.tick);
   const isStrategicView = useGameStore((s) => s.isStrategicView);
+  const bubble = unit.speechBubble;
 
-  useFrame(() => {
-    const currentZoom = (window as any).__lastCameraZoom ?? 38;
-    if (isStrategicView || currentZoom <= 22) {
-      if (activeBubbles.length > 0) setActiveBubbles([]);
-      return;
-    }
-
-    const currentTick = useGameStore.getState().time.tick || 0;
-    if (currentTick === lastCheckTick.current) return;
-    lastCheckTick.current = currentTick;
-
-    const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
-    const selectedId = useGameStore.getState().selectedEntityId;
-
-    const candidateList: Array<{ id: string; text: string; x: number; y: number; z: number; distSq: number; isSelected: boolean }> = [];
-    for (const u of characterEntities) {
-      if (u.speechBubble && u.position && currentTick < u.speechBubble.expiresAtTick) {
-        const isSelected = u.id === selectedId;
-        const distSq = camTarget
-          ? (u.position[0] - camTarget[0]) ** 2 + (u.position[2] - camTarget[1]) ** 2
-          : 0;
-        if (!isSelected && distSq > 24 * 24) continue;
-
-        candidateList.push({
-          id: u.id,
-          text: u.speechBubble.text,
-          x: u.position[0],
-          y: (u.position[1] || 0) + 1.2,
-          z: u.position[2],
-          distSq,
-          isSelected,
-        });
-      }
-    }
-
-    candidateList.sort((a, b) => {
-      if (a.isSelected && !b.isSelected) return -1;
-      if (!a.isSelected && b.isSelected) return 1;
-      return a.distSq - b.distSq;
-    });
-
-    const list = candidateList.slice(0, 2).map((c) => ({
-      id: c.id,
-      text: c.text,
-      x: c.x,
-      y: c.y,
-      z: c.z,
-    }));
-
-    if (list.length !== activeBubbles.length || list.some((b, i) => b.id !== activeBubbles[i]?.id || b.text !== activeBubbles[i]?.text)) {
-      setActiveBubbles(list);
-    }
-  });
-
-  if (isStrategicView || activeBubbles.length === 0) return null;
+  if (isStrategicView || !bubble || !bubble.text || currentTick >= (bubble.expiresAtTick || 0)) {
+    return null;
+  }
 
   return (
-    <group>
-      {activeBubbles.map((bubble) => (
-        <group key={bubble.id} position={[bubble.x, bubble.y, bubble.z]}>
-          <Html center zIndexRange={[10, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-            <div className="bg-slate-950/95 text-slate-100 text-[11px] px-2.5 py-1 rounded-full border border-amber-500/80 shadow-2xl font-medium flex items-center gap-1 whitespace-nowrap animate-bounce pointer-events-none">
-              <span>{bubble.text}</span>
-            </div>
-          </Html>
-        </group>
-      ))}
-    </group>
+    <Html
+      position={[0, isBanditLeader ? 1.9 : 1.35, 0]}
+      center
+      zIndexRange={[10, 0]}
+      style={{ pointerEvents: 'none', userSelect: 'none' }}
+    >
+      <div className="flex flex-col items-center pointer-events-none select-none">
+        <div className="bg-stone-950/90 text-stone-100 text-[10px] font-medium px-2 py-0.5 rounded-lg border border-amber-500/60 shadow-[0_2px_8px_rgba(0,0,0,0.85)] flex items-center gap-1 whitespace-nowrap backdrop-blur-[1px]">
+          <span>{bubble.text}</span>
+        </div>
+        <div className="w-1.5 h-1.5 bg-stone-950 border-r border-b border-amber-500/60 rotate-45 -mt-1 shadow-sm" />
+      </div>
+    </Html>
   );
 }
 
@@ -237,7 +190,9 @@ function Unit3D({
   const isLord = characterClass === 'lord' || characterClass === 'king';
   const isLady = characterClass === 'lady';
   const isKnight = characterClass === 'warrior';
-  const isPeasant = !isLord && !isLady && !isKnight;
+  const isBandit = characterClass === 'bandit' || unit.factionId === 'bandit' || unit.id.startsWith('bandit-');
+  const isBanditLeader = isBandit && (unit.id.includes('leader') || unit.title === 'Ватажок розбійників' || unit.title === 'Ватажок');
+  const isPeasant = !isLord && !isLady && !isKnight && !isBandit;
 
   const app = useMemo(() => getUnitAppearance(unit.id, characterClass), [unit.id, characterClass]);
   const multiHeadMats = useMemo(() => [
@@ -346,7 +301,7 @@ function Unit3D({
     if (standardArmsRef.current) standardArmsRef.current.visible = !isActivelyChoppingNow;
     if (hammerRef.current) hammerRef.current.visible = isActivelyBuildingNow;
     if (pickaxeRef.current) pickaxeRef.current.visible = isActivelyMiningNow;
-    if (swordRef.current) swordRef.current.visible = isActivelyFightingNow;
+    if (swordRef.current) swordRef.current.visible = isActivelyFightingNow || (isBandit && !isSleepingNow && !isSittingNow);
     if (scepterRef.current) scepterRef.current.visible = isLord && !isMovingNow && !isSleepingNow && !isSittingNow;
     if (shadowDiscRef.current) shadowDiscRef.current.visible = !isSleepingNow;
 
@@ -835,7 +790,15 @@ function Unit3D({
             </group>
           )}
 
-          {isPeasant && app.headwearType === 'straw_hat' && app.hatMat && (
+          {app.headwearType === 'helmet' && !isKnight && (
+            <group position={[0, 0.74, 0]}>
+              <mesh material={staticMats.darkIron} geometry={SHARED_GEOS.banditHelm} />
+              <mesh material={staticMats.darkIron} position={[0, -0.05, 0]} geometry={SHARED_GEOS.banditBrim} />
+              <mesh material={staticMats.ironSteel} position={[0, -0.02, 0.14]} geometry={SHARED_GEOS.banditNasal} />
+            </group>
+          )}
+
+          {app.headwearType === 'straw_hat' && app.hatMat && (
             <group position={[0, 0.72, 0]}>
               <mesh material={app.hairMat} position={[0, 0.02, -0.10]} geometry={SHARED_GEOS.hairBackShort} />
               <group position={[0, 0.12, 0]}>
@@ -845,14 +808,14 @@ function Unit3D({
             </group>
           )}
 
-          {isPeasant && app.headwearType === 'hood' && app.hatMat && (
+          {app.headwearType === 'hood' && app.hatMat && (
             <group position={[0, 0.77, -0.04]}>
               <mesh material={app.hatMat} geometry={SHARED_GEOS.hoodBox} />
               <mesh material={app.hatMat} position={[0, -0.08, -0.08]} geometry={SHARED_GEOS.hoodCone} />
             </group>
           )}
 
-          {isPeasant && app.headwearType === 'cap' && app.hatMat && (
+          {app.headwearType === 'cap' && app.hatMat && (
             <group position={[0, 0.72, 0]}>
               <mesh material={app.hairMat} position={[0, 0.02, -0.10]} geometry={SHARED_GEOS.hairBackShort} />
               <group position={[0, 0.12, 0]}>
@@ -862,20 +825,20 @@ function Unit3D({
             </group>
           )}
 
-          {isPeasant && app.headwearType === 'headscarf' && app.hatMat && (
+          {app.headwearType === 'headscarf' && app.hatMat && (
             <group position={[0, 0.80, -0.04]}>
               <mesh material={app.hatMat} geometry={SHARED_GEOS.headscarfBox} />
               <mesh material={app.hatMat} position={[0, -0.06, -0.10]} geometry={SHARED_GEOS.headscarfKnot} />
             </group>
           )}
 
-          {isPeasant && app.headwearType === 'wimple' && app.hatMat && (
+          {app.headwearType === 'wimple' && app.hatMat && (
             <group position={[0, 0.76, -0.04]}>
               <mesh material={app.hatMat} geometry={SHARED_GEOS.wimpleBox} />
             </group>
           )}
 
-          {isPeasant && app.headwearType === 'bun' && (
+          {app.headwearType === 'bun' && (
             <group position={[0, 0.72, 0]}>
               <mesh material={app.hairMat} position={[0, 0.115, -0.02]} geometry={SHARED_GEOS.hairTop} />
               <mesh material={app.hairMat} position={[0, 0.02, -0.105]} geometry={SHARED_GEOS.hairBackMed} />
@@ -883,7 +846,7 @@ function Unit3D({
             </group>
           )}
 
-          {isPeasant && app.headwearType === 'braids' && (
+          {app.headwearType === 'braids' && (
             <group position={[0, 0.72, 0]}>
               <mesh material={app.hairMat} position={[0, 0.115, -0.02]} geometry={SHARED_GEOS.hairTop} />
               <mesh material={app.hairMat} position={[0, 0.02, -0.105]} geometry={SHARED_GEOS.hairBackMed} />
@@ -892,7 +855,7 @@ function Unit3D({
             </group>
           )}
 
-          {isPeasant && app.headwearType === 'none' && (
+          {app.headwearType === 'none' && !isKnight && !isLord && !isLady && (
             <group position={[0, 0.72, 0]}>
               {app.hairStyle % 3 === 0 ? (
                 <group>
@@ -951,7 +914,7 @@ function Unit3D({
             <group ref={leftArmRef} position={[-0.22, 0.52, 0]}>
               <mesh material={app.tunicMat} position={[0, -0.06, 0]} geometry={SHARED_GEOS.armSleeveStandard} />
               <mesh material={app.skinMat} position={[0, -0.18, 0]} geometry={SHARED_GEOS.armHandStandard} />
-              {isKnight && app.shieldMat && (
+              {(isKnight || isBandit) && app.shieldMat && (
                 <mesh material={app.shieldMat} position={[-0.08, -0.12, 0.08]} rotation={[0, 0.3, 0]}>
                   <boxGeometry args={[0.04, 0.38, 0.26]} />
                 </mesh>
@@ -1006,6 +969,42 @@ function Unit3D({
           <meshBasicMaterial color="#38bdf8" side={THREE.DoubleSide} />
         </mesh>
       )}
+
+      {isBandit && isBanditLeader && (
+        <Html
+          position={[0, 1.45, 0]}
+          center
+          zIndexRange={[10, 0]}
+          style={{
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect();
+            }}
+            className={`group flex flex-col items-center select-none pointer-events-auto cursor-pointer ${
+              isSelected ? 'scale-110 -translate-y-1' : 'opacity-95'
+            }`}
+            title="Загін розбійників"
+          >
+            <div
+              className={`w-9 h-9 rounded-full flex items-center justify-center relative transition shadow-[0_3px_10px_rgba(0,0,0,0.85)] ${
+                isSelected
+                  ? 'bg-rose-950 border-2 border-rose-400 shadow-[0_0_14px_rgba(244,63,94,0.8)] scale-110'
+                  : 'bg-[#181614] border-2 border-stone-400/90 hover:border-rose-400'
+              }`}
+            >
+              <div className="absolute inset-[2px] rounded-full border border-white/20 pointer-events-none" />
+              <span className="text-xl leading-none drop-shadow-md select-none">💀</span>
+            </div>
+          </div>
+        </Html>
+      )}
+
+      <UnitSpeechBubble unit={unit} isBanditLeader={isBandit && isBanditLeader} />
     </group>
   );
 }
@@ -1219,6 +1218,8 @@ const Unit3DMemo = memo(Unit3D, (prev, next) => {
     prev.unit.characterClass === next.unit.characterClass &&
     prev.unit.hasMule === next.unit.hasMule &&
     prev.unit.isHaulingLog === next.unit.isHaulingLog &&
+    prev.unit.speechBubble?.text === next.unit.speechBubble?.text &&
+    prev.unit.speechBubble?.expiresAtTick === next.unit.speechBubble?.expiresAtTick &&
     prev.grid === next.grid
   );
 });

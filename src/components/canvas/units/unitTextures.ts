@@ -295,7 +295,7 @@ export function createLeatherCanvas(color = '#452a16'): HTMLCanvasElement {
   return canvas;
 }
 
-export function createShieldCanvas(bg: string, emblem: 'lion' | 'cross' | 'chevron' | 'tree' = 'cross'): HTMLCanvasElement {
+export function createShieldCanvas(bg: string, emblem: 'lion' | 'cross' | 'chevron' | 'tree' | 'skull' | 'bandit' = 'cross'): HTMLCanvasElement {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -306,13 +306,31 @@ export function createShieldCanvas(bg: string, emblem: 'lion' | 'cross' | 'chevr
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, size, size);
 
-  ctx.strokeStyle = '#f59e0b';
+  ctx.strokeStyle = (emblem === 'skull' || emblem === 'bandit') ? '#334155' : '#f59e0b';
   ctx.lineWidth = 10;
   ctx.strokeRect(10, 10, size - 20, size - 20);
 
-  ctx.fillStyle = '#fde047';
+  ctx.fillStyle = (emblem === 'skull' || emblem === 'bandit') ? '#cbd5e1' : '#fde047';
 
-  if (emblem === 'cross') {
+  if (emblem === 'skull' || emblem === 'bandit') {
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2 - 20, 36, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillRect(size / 2 - 22, size / 2 + 10, 44, 28);
+
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(size / 2 - 14, size / 2 - 18, 9, 0, Math.PI * 2);
+    ctx.arc(size / 2 + 14, size / 2 - 18, 9, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillRect(size / 2 - 3, size / 2 - 4, 6, 12);
+
+    for (let t = -16; t <= 16; t += 8) {
+      ctx.fillRect(size / 2 + t, size / 2 + 24, 4, 14);
+    }
+  } else if (emblem === 'cross') {
     ctx.fillRect(size / 2 - 16, 24, 32, size - 48);
     ctx.fillRect(24, size / 3, size - 48, 32);
   } else if (emblem === 'chevron') {

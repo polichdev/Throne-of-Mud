@@ -53,6 +53,7 @@ export class JobSystem {
     }
 
     for (const unit of characterEntities) {
+      if (unit.factionId === 'bandit') continue;
       const isPlayerUnit = unit.factionId === 'player' || unit.factionId === undefined;
       const isNoble = isNobleEntity(unit);
 

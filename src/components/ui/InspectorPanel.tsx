@@ -8,6 +8,7 @@ import {
   TownCenterIcon,
   ShieldIcon,
   StoneIcon,
+  WeaponsIcon,
 } from './MedievalIcons';
 import { useTranslation } from '../../i18n';
 import { BuildingInspectorSection } from './inspector/BuildingInspectorSection';
@@ -60,7 +61,8 @@ export function InspectorPanel() {
     selectedEntity.characterClass === 'warrior' ||
     selectedEntity.characterClass === 'lord';
 
-  const isForeign = Boolean(
+  const isBandit = selectedEntity.factionId === 'bandit' || selectedEntity.characterClass === 'bandit';
+  const isForeign = !isBandit && Boolean(
     (selectedEntity.factionId && selectedEntity.factionId !== 'player') ||
     (selectedEntity.regionId !== undefined && selectedEntity.regionId !== playerRegionId)
   );
@@ -85,6 +87,8 @@ export function InspectorPanel() {
             className={`w-9 h-9 rounded-xl flex items-center justify-center border shadow-md ${
               isNoble
                 ? 'bg-amber-950/80 border-amber-600/70 text-amber-300'
+                : isBandit
+                ? 'bg-rose-950/80 border-rose-700/60 text-rose-300'
                 : isBuilding
                 ? 'bg-stone-900 border-stone-700 text-stone-200'
                 : isResourceDeposit
@@ -94,6 +98,8 @@ export function InspectorPanel() {
           >
             {isNoble ? (
               <CrownIcon className="w-5 h-5" />
+            ) : isBandit ? (
+              <WeaponsIcon className="w-5 h-5 text-rose-400" />
             ) : isBuilding ? (
               <TownCenterIcon className="w-5 h-5 text-amber-400" />
             ) : isResourceDeposit ? (
@@ -109,6 +115,8 @@ export function InspectorPanel() {
             <span className="text-[11px] text-stone-400 uppercase tracking-wider font-mono font-medium">
               {isNoble
                 ? dict.inspector.lordTitle
+                : isBandit
+                ? (language === 'uk' ? 'Мандрівні розбійники' : 'Roaming Bandits')
                 : isBuilding
                 ? selectedEntity.buildingType
                   ? dict.buildings.items[selectedEntity.buildingType]?.name || selectedEntity.buildingType
@@ -128,6 +136,20 @@ export function InspectorPanel() {
           <CrossCloseIcon size={16} />
         </button>
       </div>
+
+      {isBandit && (
+        <div className="bg-rose-950/40 border border-rose-800/50 p-2.5 rounded-xl text-xs flex flex-col gap-1">
+          <span className="font-bold text-rose-200 flex items-center gap-1.5">
+            <WeaponsIcon className="w-3.5 h-3.5 text-rose-400" />
+            {language === 'uk' ? 'Загін лісових розбійників' : 'Bandit Outlaw Warband'}
+          </span>
+          <span className="text-slate-300 text-[11px] leading-relaxed">
+            {language === 'uk'
+              ? 'Мандрівна ватага озброєних грабіжників. Блукають хащами та дикими стежками, вишукуючи приховані місця для табору.'
+              : 'A wandering band of armed outlaws roaming across forests and borders.'}
+          </span>
+        </div>
+      )}
 
       {isForeign && (
         <div className="bg-amber-950/30 border border-amber-700/50 p-2.5 rounded-xl text-xs flex flex-col gap-1">
