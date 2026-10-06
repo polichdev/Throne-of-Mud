@@ -71,6 +71,7 @@ export function initializeWorldEntities(
           tile.foliageType = undefined;
           tile.foliageAngle = undefined;
           tile.foliageTreeType = undefined;
+          grid.markFoliageBucketDirty(px, pz);
         }
       }
     }
@@ -80,7 +81,8 @@ export function initializeWorldEntities(
 
   const pCampH = clearCampArea(cx, cz);
 
-  const campfireId = 'building-campfire-player';
+  const sessionSalt = Math.floor(Math.random() * 1000000).toString(36);
+  const campfireId = `building-campfire-player-${sessionSalt}`;
   grid.occupyForBuilding(cx, cz, 2, 2, campfireId);
   world.add({
     id: campfireId,
@@ -99,7 +101,7 @@ export function initializeWorldEntities(
     regionId: playerRegionId,
   });
 
-  const tentId = 'building-tent-player';
+  const tentId = `building-tent-player-${sessionSalt}`;
   grid.occupyForBuilding(cx - 4, cz - 1, 3, 2, tentId);
   world.add({
     id: tentId,
@@ -118,7 +120,7 @@ export function initializeWorldEntities(
     regionId: playerRegionId,
   });
 
-  const hitchingPostId = 'building-hitching-post-player';
+  const hitchingPostId = `building-hitching-post-player-${sessionSalt}`;
   grid.occupyForBuilding(cx + 3, cz - 1, 3, 2, hitchingPostId);
   world.add({
     id: hitchingPostId,
@@ -210,7 +212,7 @@ export function initializeWorldEntities(
     });
   }
 
-  const otherRegionIds = [0, 1, 2, 3].filter((id) => id !== playerRegionId);
+  const otherRegionIds = [0, 1, 2, 3, 4].filter((id) => id !== playerRegionId);
   let activeBotIndex = 0;
 
   for (let i = 0; i < otherRegionIds.length; i++) {
@@ -229,7 +231,7 @@ export function initializeWorldEntities(
       botReg.wealth = 40 + activeBotIndex * 10;
       botReg.buildingsCount = 3;
 
-      const bSpawn = (botReg.spawnPoints && botReg.spawnPoints[0]) ? botReg.spawnPoints[0].position : botReg.center;
+      const bSpawn = botReg.campPosition || ((botReg.spawnPoints && botReg.spawnPoints[0]) ? botReg.spawnPoints[0].position : botReg.center);
       const bx = bSpawn[0];
       const bz = bSpawn[1];
       botReg.campPosition = [bx, bz];
@@ -237,8 +239,9 @@ export function initializeWorldEntities(
       const bCampH = clearCampArea(bx, bz);
 
       const botFactionId = `bot-${regId}`;
+      const bSessionSalt = Math.floor(Math.random() * 1000000).toString(36);
 
-      const bCampfireId = `building-campfire-${botFactionId}`;
+      const bCampfireId = `building-campfire-${botFactionId}-${bSessionSalt}`;
       grid.occupyForBuilding(bx, bz, 2, 2, bCampfireId);
       world.add({
         id: bCampfireId,
@@ -257,7 +260,7 @@ export function initializeWorldEntities(
         regionId: regId,
       });
 
-      const bTentId = `building-tent-${botFactionId}`;
+      const bTentId = `building-tent-${botFactionId}-${bSessionSalt}`;
       grid.occupyForBuilding(bx - 4, bz - 1, 3, 2, bTentId);
       world.add({
         id: bTentId,
@@ -276,7 +279,7 @@ export function initializeWorldEntities(
         regionId: regId,
       });
 
-      const bHitchingPostId = `building-hitching-post-${botFactionId}`;
+      const bHitchingPostId = `building-hitching-post-${botFactionId}-${bSessionSalt}`;
       grid.occupyForBuilding(bx + 3, bz - 1, 3, 2, bHitchingPostId);
       world.add({
         id: bHitchingPostId,
@@ -296,29 +299,6 @@ export function initializeWorldEntities(
         factionId: botFactionId,
         regionId: regId,
       });
-
-      const hwX = GridMap.getHighwayX(bz);
-      const hwZ = GridMap.getHighwayZ(bx);
-      const distNS = Math.abs(bx - hwX);
-      const distEW = Math.abs(bz - hwZ);
-      const distPlaza = Math.hypot(bx - 127.5, bz - 127.5);
-
-      let targetX = Math.round(hwX);
-      let targetZ = bz;
-      if (distEW < distNS && distEW < distPlaza) {
-        targetX = bx;
-        targetZ = Math.round(hwZ);
-      } else if (distPlaza < distNS && distPlaza < distEW) {
-        targetX = 128;
-        targetZ = 128;
-      }
-
-      const botHighwayRoad = getSmartRoadPath(grid, targetX, targetZ, bx + 2, bz);
-      if (isRoadPathValid(grid, botHighwayRoad)) {
-        for (const [px, pz] of botHighwayRoad) {
-          grid.paveRoad(px, pz);
-        }
-      }
 
       const botCampInternalRoad = getSmartRoadPath(grid, bx + 2, bz, bx - 1, bz);
       if (isRoadPathValid(grid, botCampInternalRoad)) {
@@ -382,6 +362,43 @@ export function initializeWorldEntities(
     }
   }
 
+  for (const rId of [4, 5]) {
+    if (rId !== playerRegionId) {
+      const unclaimReg = updatedRegions[rId];
+      if (unclaimReg) {
+        unclaimReg.owner = 'unclaimed';
+        unclaimReg.population = 0;
+        unclaimReg.buildingsCount = 0;
+      }
+    }
+  }
+
+  if (playerRegionId !== 4) {
+    for (let x = 132; x <= 252; x++) {
+      for (let z = 0; z <= 175; z++) {
+        const t = grid.getTile(x, z);
+        if (t && t.terrain === 'road' && !GridMap.isTradeHighwayTile(x, z)) {
+          t.terrain = 'grass';
+          t.movementCost = 1.0;
+          grid.roadCoords.delete(x * grid.width + z);
+        }
+      }
+    }
+  }
+
+  if (playerRegionId !== 5) {
+    for (let x = 0; x < grid.width; x++) {
+      for (let z = 184; z <= 231; z++) {
+        const t = grid.getTile(x, z);
+        if (t && t.terrain === 'road' && !GridMap.isTradeHighwayTile(x, z)) {
+          t.terrain = 'grass';
+          t.movementCost = 1.0;
+          grid.roadCoords.delete(x * grid.width + z);
+        }
+      }
+    }
+  }
+
   const deposits = initResourceDeposits(grid);
 
   return {
@@ -394,4 +411,3 @@ export function initializeWorldEntities(
     resourceDeposits: deposits,
   };
 }
-

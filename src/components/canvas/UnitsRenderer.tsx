@@ -21,6 +21,8 @@ const SHARED_STATIC_MATS = {
   muleMuzzle: new THREE.MeshStandardMaterial({ color: '#d6d3d1', roughness: 0.9, flatShading: true }),
   muleHarness: new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.7, flatShading: true }),
   muleHoof: new THREE.MeshStandardMaterial({ color: '#1c1917', roughness: 0.9, flatShading: true }),
+  horseCoat: new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.75, flatShading: true }),
+  clothSack: new THREE.MeshStandardMaterial({ color: '#d6d3d1', roughness: 0.95, flatShading: true }),
   timberDark: new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.8, flatShading: true }),
   darkIron: new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.45, metalness: 0.65, flatShading: true }),
   invisibleMat: new THREE.MeshBasicMaterial({ visible: false }),
@@ -311,8 +313,6 @@ function Unit3D({
 
     const curPath = unit.path;
 
-
-
     const movedSincePreviousFrame = Math.hypot(
       ux - prevPos.current[0],
       uz - prevPos.current[1],
@@ -359,6 +359,12 @@ function Unit3D({
         curJobType === 'harvest_wheat' ||
         (curJobType === 'work_at_building' && targetBuildingType === 'wheat_farm') ||
         unit.title === 'Хлібороб');
+
+    if (isFarmingNow && (unit.hasMule || unit.muleTransition)) {
+      unit.hasMule = false;
+      unit.muleTransition = undefined;
+      unit.assignedMuleHutId = undefined;
+    }
 
     const isCounterWorker =
       targetBuildingType === 'market' ||
@@ -1030,9 +1036,8 @@ function Unit3D({
             </group>
           </group>
 
-          {Boolean(unit.hasMule || unit.muleTransition) && (
-            <MuleCompanion unit={unit} isGamePaused={isGamePaused} />
-          )}
+          <MuleCompanion unit={unit} isGamePaused={isGamePaused} />
+          <HorseCartCompanion unit={unit} isGamePaused={isGamePaused} />
         </group>
       </group>
 
@@ -1114,7 +1119,8 @@ function MuleCompanion({
 
   useFrame(({ clock }, delta) => {
     if (!rootRef.current) return;
-    const isVisible = Boolean(unit.hasMule || unit.muleTransition);
+    const isWorkingOnBuilding = unit.currentJob?.type === 'work_at_building' || unit.currentJob?.type === 'harvest_wheat';
+    const isVisible = Boolean(unit.hasMule || unit.muleTransition) && !isWorkingOnBuilding;
     rootRef.current.visible = isVisible;
     if (!isVisible) return;
 
@@ -1293,6 +1299,193 @@ function MuleCompanion({
   );
 }
 
+function HorseCartCompanion({
+  unit,
+  isGamePaused,
+}: {
+  unit: GameEntity;
+  isGamePaused: boolean;
+}) {
+  const rootRef = useRef<THREE.Group>(null);
+  const horseHeadRef = useRef<THREE.Group>(null);
+  const horseLegFLRef = useRef<THREE.Group>(null);
+  const horseLegFRRef = useRef<THREE.Group>(null);
+  const horseLegBLRef = useRef<THREE.Group>(null);
+  const horseLegBRRef = useRef<THREE.Group>(null);
+  const cartWheelLRef = useRef<THREE.Group>(null);
+  const cartWheelRRef = useRef<THREE.Group>(null);
+
+  const prevUnitPos = useRef<[number, number]>([unit.position?.[0] || 0, unit.position?.[2] || 0]);
+  const localOffsetX = useRef<number>(-0.65);
+  const localOffsetZ = useRef<number>(-0.45);
+  const wheelAngle = useRef<number>(0);
+
+  useFrame(({ clock }, delta) => {
+    if (!rootRef.current) return;
+    const isVisible = Boolean(unit.hasHorseCart || unit.isMerchant);
+    rootRef.current.visible = isVisible;
+    if (!isVisible) return;
+
+    const uX = unit.position?.[0] || 0;
+    const uZ = unit.position?.[2] || 0;
+    const distMoved = Math.hypot(uX - prevUnitPos.current[0], uZ - prevUnitPos.current[1]);
+    prevUnitPos.current = [uX, uZ];
+
+    const t = clock.getElapsedTime();
+    const isMoving = !isGamePaused && Boolean(unit.path && unit.path.length > 0) && distMoved > 0.0005;
+
+    const targetX = -0.65;
+    const targetZ = isMoving ? -0.55 : -0.35;
+    const lerpRate = Math.min(1.0, delta * (isMoving ? 5.5 : 3.5));
+    localOffsetX.current += (targetX - localOffsetX.current) * lerpRate;
+    localOffsetZ.current += (targetZ - localOffsetZ.current) * lerpRate;
+    rootRef.current.position.set(localOffsetX.current, 0, localOffsetZ.current);
+
+    const swing = isMoving ? Math.sin(t * 7.5) * 0.48 : Math.sin(t * 1.5) * 0.03;
+    const bob = isMoving ? Math.sin(t * 15.0) * 0.035 : Math.sin(t * 1.5) * 0.02;
+
+    if (horseLegFLRef.current) horseLegFLRef.current.rotation.x = swing;
+    if (horseLegFRRef.current) horseLegFRRef.current.rotation.x = -swing;
+    if (horseLegBLRef.current) horseLegBLRef.current.rotation.x = -swing;
+    if (horseLegBRRef.current) horseLegBRRef.current.rotation.x = swing;
+    if (horseHeadRef.current) horseHeadRef.current.position.y = 0.42 + bob;
+
+    if (isMoving) {
+      wheelAngle.current -= distMoved * 7.0;
+      if (cartWheelLRef.current) cartWheelLRef.current.rotation.x = wheelAngle.current;
+      if (cartWheelRRef.current) cartWheelRRef.current.rotation.x = wheelAngle.current;
+    }
+  });
+
+  return (
+    <group ref={rootRef} position={[-0.65, 0, -0.45]} visible={false}>
+      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.1, 1.8, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} raycast={() => null}>
+        <meshBasicMaterial color="#0f172a" transparent opacity={0.35} />
+      </mesh>
+
+      <mesh position={[0, 0.015, -1.05]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.4, 1.6, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} raycast={() => null}>
+        <meshBasicMaterial color="#0f172a" transparent opacity={0.35} />
+      </mesh>
+
+      <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0.52, 0]}>
+        <boxGeometry args={[0.36, 0.44, 0.85]} />
+      </mesh>
+
+      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0, 0.54, 0.02]}>
+        <boxGeometry args={[0.38, 0.3, 0.36]} />
+      </mesh>
+
+      <group position={[0, 0.60, 0.38]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0.22, 0.12]} rotation={[-0.45, 0, 0]}>
+          <boxGeometry args={[0.22, 0.42, 0.28]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.darkIron} position={[0, 0.32, 0.02]} rotation={[-0.45, 0, 0]}>
+          <boxGeometry args={[0.06, 0.36, 0.12]} />
+        </mesh>
+        <group ref={horseHeadRef} position={[0, 0.42, 0.22]}>
+          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0.12]}>
+            <boxGeometry args={[0.22, 0.24, 0.36]} />
+          </mesh>
+          <mesh material={SHARED_STATIC_MATS.muleMuzzle} position={[0, -0.06, 0.32]}>
+            <boxGeometry args={[0.18, 0.16, 0.16]} />
+          </mesh>
+          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[-0.09, 0.18, 0]} rotation={[0, 0, -0.2]}>
+            <boxGeometry args={[0.04, 0.18, 0.08]} />
+          </mesh>
+          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0.09, 0.18, 0]} rotation={[0, 0, 0.2]}>
+            <boxGeometry args={[0.04, 0.18, 0.08]} />
+          </mesh>
+        </group>
+      </group>
+
+      <group ref={horseLegFLRef} position={[-0.14, 0.22, 0.28]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]}>
+          <boxGeometry args={[0.10, 0.44, 0.10]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]}>
+          <boxGeometry args={[0.11, 0.07, 0.11]} />
+        </mesh>
+      </group>
+      <group ref={horseLegFRRef} position={[0.14, 0.22, 0.28]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]}>
+          <boxGeometry args={[0.10, 0.44, 0.10]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]}>
+          <boxGeometry args={[0.11, 0.07, 0.11]} />
+        </mesh>
+      </group>
+      <group ref={horseLegBLRef} position={[-0.14, 0.22, -0.28]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]}>
+          <boxGeometry args={[0.10, 0.44, 0.10]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]}>
+          <boxGeometry args={[0.11, 0.07, 0.11]} />
+        </mesh>
+      </group>
+      <group ref={horseLegBRRef} position={[0.14, 0.22, -0.28]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]}>
+          <boxGeometry args={[0.10, 0.44, 0.10]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]}>
+          <boxGeometry args={[0.11, 0.07, 0.11]} />
+        </mesh>
+      </group>
+
+      <mesh material={SHARED_STATIC_MATS.timberDark} position={[-0.24, 0.38, -0.55]} rotation={[0.08, 0, 0]}>
+        <boxGeometry args={[0.04, 0.04, 0.9]} />
+      </mesh>
+      <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.24, 0.38, -0.55]} rotation={[0.08, 0, 0]}>
+        <boxGeometry args={[0.04, 0.04, 0.9]} />
+      </mesh>
+
+      <group position={[0, 0.24, -1.05]}>
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[0, 0.16, 0]}>
+          <boxGeometry args={[0.82, 0.05, 0.95]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[-0.40, 0.32, 0]}>
+          <boxGeometry args={[0.04, 0.28, 0.95]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.40, 0.32, 0]}>
+          <boxGeometry args={[0.04, 0.28, 0.95]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0, 0.32, -0.46]}>
+          <boxGeometry args={[0.82, 0.28, 0.04]} />
+        </mesh>
+
+        <group ref={cartWheelLRef} position={[-0.45, 0.08, 0]}>
+          <mesh material={SHARED_STATIC_MATS.darkIron} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.28, 0.28, 0.04, 12]} />
+          </mesh>
+          <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.26, 0.26, 0.05, 8]} />
+          </mesh>
+        </group>
+        <group ref={cartWheelRRef} position={[0.45, 0.08, 0]}>
+          <mesh material={SHARED_STATIC_MATS.darkIron} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.28, 0.28, 0.04, 12]} />
+          </mesh>
+          <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.26, 0.26, 0.05, 8]} />
+          </mesh>
+        </group>
+
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[-0.18, 0.35, -0.15]}>
+          <boxGeometry args={[0.32, 0.32, 0.34]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.18, 0.32, -0.15]}>
+          <boxGeometry args={[0.30, 0.28, 0.32]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.clothSack} position={[0, 0.34, 0.24]} rotation={[0, 0.3, 0]}>
+          <sphereGeometry args={[0.18, 8, 8]} />
+        </mesh>
+        <mesh material={SHARED_STATIC_MATS.clothSack} position={[-0.16, 0.44, 0.16]} rotation={[0, -0.4, 0]}>
+          <sphereGeometry args={[0.15, 8, 8]} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
 const Unit3DMemo = memo(Unit3D, (prev, next) => {
   return (
     prev.unit === next.unit &&
@@ -1301,6 +1494,8 @@ const Unit3DMemo = memo(Unit3D, (prev, next) => {
     prev.previewAnimation === next.previewAnimation &&
     prev.unit.characterClass === next.unit.characterClass &&
     prev.unit.hasMule === next.unit.hasMule &&
+    prev.unit.hasHorseCart === next.unit.hasHorseCart &&
+    prev.unit.isMerchant === next.unit.isMerchant &&
     prev.unit.muleTransition === next.unit.muleTransition &&
     prev.unit.isHaulingLog === next.unit.isHaulingLog &&
     prev.grid === next.grid

@@ -49,6 +49,9 @@ export function BuildingInspectorSection({
   const removePendingJob = useGameStore((s) => s.removePendingJob);
   const addChronicleEvent = useGameStore((s) => s.addChronicleEvent);
   const incrementBuildingVersion = useGameStore((s) => s.incrementBuildingVersion);
+  const tradeRules = useGameStore((s) => s.tradeRules);
+  const caravanStatus = useGameStore((s) => s.caravanStatus);
+  const setActiveMenuTab = useGameStore((s) => s.setActiveMenuTab);
 
   const bType = entity.buildingType;
   if (!bType) return null;
@@ -441,6 +444,53 @@ export function BuildingInspectorSection({
         );
       })()}
 
+      {entity.isCompleted && !isForeign && bType === 'trading_post' && (() => {
+        const activeRules = Object.values(tradeRules).filter((r) => r.mode !== 'none');
+        return (
+          <div className="bg-slate-950/70 p-3 rounded-xl border border-amber-600/60 flex flex-col gap-2.5 shadow-lg">
+            <div className="flex items-center justify-between border-b border-amber-900/60 pb-2">
+              <span className="text-[12px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                <ScalesIcon className="w-4 h-4 text-amber-400" />
+                {dict.tradePost.title}
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-950/80 border border-amber-700/60 text-amber-200">
+                {caravanStatus.state === 'trading'
+                  ? (language === 'uk' ? '🪙 Угода' : '🪙 Deal')
+                  : caravanStatus.state === 'approaching'
+                  ? (language === 'uk' ? '🐴 В дорозі' : '🐴 En route')
+                  : (language === 'uk' ? '📜 Очікування' : '📜 Awaiting')}
+              </span>
+            </div>
+
+            <div className="text-[11px] text-slate-300 bg-black/40 p-2 rounded-lg border border-slate-800 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">{language === 'uk' ? 'Купець:' : 'Merchant:'}</span>
+                <span className="font-semibold text-amber-200">{caravanStatus.merchantName || 'Альбрехт'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">{language === 'uk' ? 'Графік прибуття:' : 'Schedule:'}</span>
+                <span className="font-mono text-emerald-400 font-bold">{caravanStatus.nextArrivalHour ?? 12}:{String(caravanStatus.nextArrivalMinute ?? 0).padStart(2, '0')}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">{language === 'uk' ? 'Активних угод:' : 'Active rules:'}</span>
+                <span className="font-mono text-amber-300 font-bold">{activeRules.length}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                audioManager.playUIPanelOpen();
+                setActiveMenuTab('trade');
+              }}
+              className="w-full py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white text-xs font-bold rounded-lg shadow-md flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-98"
+            >
+              <ScalesIcon className="w-4 h-4" />
+              <span>{dict.tradePost.openTradePost}</span>
+            </button>
+          </div>
+        );
+      })()}
+
       {entity.isCompleted && !isForeign && bType === 'hitching_post' && (
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
@@ -720,4 +770,3 @@ export function BuildingInspectorSection({
     </div>
   );
 }
-

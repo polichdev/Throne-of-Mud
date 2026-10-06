@@ -68,9 +68,9 @@ export class ImmigrationSystem {
     let totalBeds = 0;
     for (const b of buildingEntities) {
       if (b.isCompleted && (b.factionId === 'player' || b.factionId === undefined) && (b.regionId === playerRegionId || b.regionId === undefined)) {
-        if (b.buildingType === 'peasant_house') totalBeds += 2;
-        else if (b.buildingType === 'tent') totalBeds += 1;
-        else if (b.buildingType === 'manor') totalBeds += 4;
+        if (b.buildingType === 'peasant_house') totalBeds += 3;
+        else if (b.buildingType === 'tent') totalBeds += 3;
+        else if (b.buildingType === 'manor') totalBeds += 5;
       }
     }
 

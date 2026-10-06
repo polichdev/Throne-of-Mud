@@ -289,7 +289,7 @@ export class BotAISystem {
       approachPos[1],
       nearestRoad[0],
       nearestRoad[1],
-      (px, pz) => GridMap.isCoordInRegion(region.id, px, pz, 0),
+      (px, pz) => GridMap.canRegionConnectToHighwayAt(region.id, px, pz),
       resourceDeposits
     );
 
@@ -319,6 +319,7 @@ export class BotAISystem {
       time,
       regions,
       resourceDeposits = [],
+      incrementTerrainVersion,
       incrementBuildingVersion,
       incrementFoliageVersion,
       addChronicleEvent,
@@ -356,40 +357,32 @@ export class BotAISystem {
       }
 
       if (!memory.hasPavedHighwayRoad) {
-        memory.hasPavedHighwayRoad = true;
         const camp = region.campPosition || region.center;
-        const hwX = GridMap.getHighwayX(camp[1]);
-        const hwZ = GridMap.getHighwayZ(camp[0]);
-        const distNS = Math.abs(camp[0] - hwX);
-        const distEW = Math.abs(camp[1] - hwZ);
-        const distPlaza = Math.hypot(camp[0] - 127.5, camp[1] - 127.5);
-
-        let targetX = Math.round(hwX);
-        let targetZ = camp[1];
-        if (distEW < distNS && distEW < distPlaza) {
-          targetX = camp[0];
-          targetZ = Math.round(hwZ);
-        } else if (distPlaza < distNS && distPlaza < distEW) {
-          targetX = 128;
-          targetZ = 128;
-        }
+        const [targetX, targetZ] = GridMap.getClosestHighwayTileForRegion(camp[0], camp[1], region.id);
 
         const campRoadEntrance: [number, number] = [camp[0] + 2, camp[1]];
         const campRoadCourtyard: [number, number] = [camp[0] - 1, camp[1]];
 
+        const isHighwayConnAllowed = (px: number, pz: number) => GridMap.canRegionConnectToHighwayAt(region.id, px, pz);
+
         const hPath = getSmartRoadPath(
           grid,
-          targetX,
-          targetZ,
           campRoadEntrance[0],
           campRoadEntrance[1],
-          (px, pz) => GridMap.isCoordInRegion(region.id, px, pz, 0),
+          targetX,
+          targetZ,
+          isHighwayConnAllowed,
           resourceDeposits
         );
         let anyPaved = false;
-        if (isRoadPathValid(grid, hPath, resourceDeposits)) {
+        if (hPath.length > 0) {
           for (const [px, pz] of hPath) {
-            if (grid.paveRoad(px, pz, resourceDeposits)) anyPaved = true;
+            if (GridMap.canRegionConnectToHighwayAt(region.id, px, pz)) {
+              if (grid.paveRoad(px, pz, resourceDeposits)) anyPaved = true;
+            }
+          }
+          if (anyPaved) {
+            memory.hasPavedHighwayRoad = true;
           }
         }
 
@@ -409,6 +402,7 @@ export class BotAISystem {
         }
 
         if (anyPaved) {
+          incrementTerrainVersion();
           incrementBuildingVersion();
           incrementFoliageVersion();
         }
@@ -443,6 +437,7 @@ export class BotAISystem {
           if (attempts >= 1) break;
         }
         if (anyConnected) {
+          incrementTerrainVersion();
           incrementBuildingVersion();
           incrementFoliageVersion();
         }
@@ -606,12 +601,24 @@ export class BotAISystem {
             const availablePeasant = peasants.find((p) => {
               if (p.workBuildingId) return false;
               if (p.currentJob?.type === 'build_structure' && incompleteBuildings.length > 0) return false;
+              if (
+                p.hasMule ||
+                p.muleTransition ||
+                p.currentJob?.type === 'haul_construction_mule' ||
+                p.currentJob?.type === 'haul_log_with_mule' ||
+                p.currentJob?.type === 'return_mule'
+              ) {
+                return false;
+              }
               return true;
             });
 
             if (!availablePeasant) break;
 
             availablePeasant.workBuildingId = b.id;
+            availablePeasant.hasMule = false;
+            availablePeasant.muleTransition = undefined;
+            availablePeasant.assignedMuleHutId = undefined;
             b.assignedWorkers.push(availablePeasant.id);
             const prof = PROFESSION_TITLES[b.buildingType] || 'Робітник';
             availablePeasant.title = prof;
@@ -626,11 +633,10 @@ export class BotAISystem {
         }
       }
 
-      let assignedBuilderThisTick = false;
       for (const p of peasants) {
         const isIdleOrWandering = !p.currentJob || p.currentJob.type === 'idle' || p.currentJob.type === 'wander';
 
-        if (!isNightTime && isIdleOrWandering && incompleteBuildings.length > 0 && p.gridPosition && !assignedBuilderThisTick) {
+        if (!isNightTime && isIdleOrWandering && incompleteBuildings.length > 0 && p.gridPosition) {
           const targetB = incompleteBuildings.find((b) => (builderCounts.get(b.id) || 0) < 3) || incompleteBuildings[0];
           const curBuilders = builderCounts.get(targetB.id) || 0;
 
@@ -694,7 +700,6 @@ export class BotAISystem {
               }
             } else {
               builderCounts.set(targetB.id, curBuilders + 1);
-              assignedBuilderThisTick = true;
               const bW = targetB.buildingWidth || 2;
               const bH = targetB.buildingHeight || 2;
               const buildPath = isRegionOffscreen ? null : AStar.findPathToArea(grid, p.gridPosition, targetB.gridPosition[0], targetB.gridPosition[1], bW, bH, region.bounds);
@@ -744,7 +749,16 @@ export class BotAISystem {
                 const tx = bx + ox;
                 const tz = bz + oz;
                 const dist = Math.hypot(tx - curX, tz - curZ);
-                if (dist >= 3 && dist <= 12 && tx >= region.bounds.minX + 2 && tx <= region.bounds.maxX - 2 && tz >= region.bounds.minZ + 2 && tz <= region.bounds.maxZ - 2 && grid.isWalkable(tx, tz)) {
+                if (
+                  dist >= 3 &&
+                  dist <= 12 &&
+                  tx >= region.bounds.minX + 2 &&
+                  tx <= region.bounds.maxX - 2 &&
+                  tz >= region.bounds.minZ + 2 &&
+                  tz <= region.bounds.maxZ - 2 &&
+                  GridMap.isCoordInRegion(region.id, tx, tz, 0.5) &&
+                  grid.isWalkable(tx, tz)
+                ) {
                   candidateDestinations.push([tx, tz]);
                   if (candidateDestinations.length >= 3) break;
                 }
@@ -759,7 +773,14 @@ export class BotAISystem {
               const dist = 3 + Math.random() * 6;
               const candX = Math.round(curX + Math.cos(angle) * dist);
               const candZ = Math.round(curZ + Math.sin(angle) * dist);
-              if (candX >= region.bounds.minX + 2 && candX <= region.bounds.maxX - 2 && candZ >= region.bounds.minZ + 2 && candZ <= region.bounds.maxZ - 2 && grid.isWalkable(candX, candZ)) {
+              if (
+                candX >= region.bounds.minX + 2 &&
+                candX <= region.bounds.maxX - 2 &&
+                candZ >= region.bounds.minZ + 2 &&
+                candZ <= region.bounds.maxZ - 2 &&
+                GridMap.isCoordInRegion(region.id, candX, candZ, 0.5) &&
+                grid.isWalkable(candX, candZ)
+              ) {
                 candidateDestinations.push([candX, candZ]);
                 break;
               }
@@ -816,7 +837,14 @@ export class BotAISystem {
                 for (const [ox, oz] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
                   const tx = bx + ox;
                   const tz = bz + oz;
-                  if (grid.isWalkable(tx, tz) && tx >= region.bounds.minX + 2 && tx <= region.bounds.maxX - 2 && tz >= region.bounds.minZ + 2 && tz <= region.bounds.maxZ - 2) {
+                  if (
+                    grid.isWalkable(tx, tz) &&
+                    tx >= region.bounds.minX + 2 &&
+                    tx <= region.bounds.maxX - 2 &&
+                    tz >= region.bounds.minZ + 2 &&
+                    tz <= region.bounds.maxZ - 2 &&
+                    GridMap.isCoordInRegion(region.id, tx, tz, 0.5)
+                  ) {
                     candidateDestinations.push([tx, tz]);
                     break;
                   }
@@ -830,7 +858,14 @@ export class BotAISystem {
                 for (const [ox, oz] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
                   const tx = bx + ox;
                   const tz = bz + oz;
-                  if (grid.isWalkable(tx, tz) && tx >= region.bounds.minX + 2 && tx <= region.bounds.maxX - 2 && tz >= region.bounds.minZ + 2 && tz <= region.bounds.maxZ - 2) {
+                  if (
+                    grid.isWalkable(tx, tz) &&
+                    tx >= region.bounds.minX + 2 &&
+                    tx <= region.bounds.maxX - 2 &&
+                    tz >= region.bounds.minZ + 2 &&
+                    tz <= region.bounds.maxZ - 2 &&
+                    GridMap.isCoordInRegion(region.id, tx, tz, 0.5)
+                  ) {
                     candidateDestinations.push([tx, tz]);
                     if (candidateDestinations.length >= 2) break;
                   }
@@ -845,7 +880,14 @@ export class BotAISystem {
                 const dist = 3 + Math.random() * 6;
                 const candX = Math.round(curX + Math.cos(angle) * dist);
                 const candZ = Math.round(curZ + Math.sin(angle) * dist);
-                if (candX >= region.bounds.minX + 2 && candX <= region.bounds.maxX - 2 && candZ >= region.bounds.minZ + 2 && candZ <= region.bounds.maxZ - 2 && grid.isWalkable(candX, candZ)) {
+                if (
+                  candX >= region.bounds.minX + 2 &&
+                  candX <= region.bounds.maxX - 2 &&
+                  candZ >= region.bounds.minZ + 2 &&
+                  candZ <= region.bounds.maxZ - 2 &&
+                  GridMap.isCoordInRegion(region.id, candX, candZ, 0.5) &&
+                  grid.isWalkable(candX, candZ)
+                ) {
                   candidateDestinations.push([candX, candZ]);
                   break;
                 }
@@ -945,9 +987,9 @@ export class BotAISystem {
 
       let totalBeds = 0;
       for (const b of completedBuildings) {
-        if (b.buildingType === 'peasant_house') totalBeds += 2;
-        else if (b.buildingType === 'tent') totalBeds += 1;
-        else if (b.buildingType === 'manor') totalBeds += 4;
+        if (b.buildingType === 'peasant_house') totalBeds += 3;
+        else if (b.buildingType === 'tent') totalBeds += 3;
+        else if (b.buildingType === 'manor') totalBeds += 5;
       }
 
       if (currentTick - memory.lastImmigrationTick >= BOT_AI_IMMIGRATION_INTERVAL) {
@@ -1094,125 +1136,110 @@ export class BotAISystem {
               return cur >= (sp.maxStorage || 200) * 0.85;
             }));
 
-        const freeBeds = totalBeds - peasants.length;
-        const needsHousing = freeBeds <= 2 && peasants.length < BOT_AI_MAX_PEASANTS && count('peasant_house') < 22;
+        const totalCompleted = completedBuildings.length;
+        const houseCount = count('peasant_house');
+        const stockpileCount = count('stockpile');
+
+        const workplaceCount = totalCompleted - houseCount - count('tent') - count('campfire');
+        const allowedHouses = Math.min(
+          BOT_AI_MAX_PEASANTS,
+          Math.max(2, Math.min(18, 2 + Math.floor(Math.max(0, workplaceCount) / 1.1)))
+        );
+        const freeBeds = totalBeds - (peasants.length + (botLord ? 1 : 0));
+        const needsHousing = freeBeds <= 1 && houseCount < allowedHouses && peasants.length < BOT_AI_MAX_PEASANTS;
+
+        const maxStockpiles = Math.min(3, Math.max(1, Math.floor(totalCompleted / 6)));
+        const needsStockpile = areStockpilesNearFull && stockpileCount < maxStockpiles;
 
         let candidateGoal: { type: BuildingType; targetDeposit?: ResourceDeposit } | null = null;
 
         if (canAttempt('hitching_post') && count('hitching_post') === 0) {
           candidateGoal = { type: 'hitching_post' };
-        } else if (canAttempt('stockpile') && areStockpilesNearFull && count('stockpile') < 8) {
-          candidateGoal = { type: 'stockpile' };
-        } else if (canAttempt('peasant_house') && needsHousing) {
-          candidateGoal = { type: 'peasant_house' };
-        } else if (canAttempt('hitching_post') && count('hitching_post') < 2 && peasants.length >= 14) {
-          candidateGoal = { type: 'hitching_post' };
         } else if (canAttempt('lumberjack_hut') && count('lumberjack_hut') === 0) {
+
           candidateGoal = { type: 'lumberjack_hut' };
-        } else if (canAttempt('peasant_house') && count('peasant_house') === 0) {
-          candidateGoal = { type: 'peasant_house' };
-        } else if (canAttempt('stockpile') && count('stockpile') === 0) {
-          candidateGoal = { type: 'stockpile' };
         } else if (canAttempt('foragers_hut') && hasBerryDeposit && count('foragers_hut') === 0) {
+
           candidateGoal = { type: 'foragers_hut', targetDeposit: regionalDeposits.find((d) => d.type === 'berries') };
-        } else if (canAttempt('fishermans_hut') && hasFishDeposit && count('fishermans_hut') === 0) {
-          candidateGoal = { type: 'fishermans_hut', targetDeposit: regionalDeposits.find((d) => d.type === 'fish') };
         } else if (canAttempt('hunters_hut') && hasGameDeposit && count('hunters_hut') === 0) {
           candidateGoal = { type: 'hunters_hut', targetDeposit: regionalDeposits.find((d) => d.type === 'wild_game') };
-        } else if (canAttempt('wheat_farm') && count('wheat_farm') === 0) {
-          candidateGoal = { type: 'wheat_farm' };
-        } else if (canAttempt('peasant_house') && count('peasant_house') < 2) {
+        } else if (canAttempt('fishermans_hut') && hasFishDeposit && count('fishermans_hut') === 0) {
+          candidateGoal = { type: 'fishermans_hut', targetDeposit: regionalDeposits.find((d) => d.type === 'fish') };
+        } else if (canAttempt('peasant_house') && houseCount === 0) {
+
           candidateGoal = { type: 'peasant_house' };
+        } else if (canAttempt('trading_post') && count('trading_post') === 0) {
+
+          candidateGoal = { type: 'trading_post' };
         } else if (canAttempt('stone_quarry') && hasStoneDeposit && count('stone_quarry') === 0) {
+
           candidateGoal = { type: 'stone_quarry', targetDeposit: regionalDeposits.find((d) => d.type === 'stone') };
-        } else if (canAttempt('iron_mine') && hasIronDeposit && count('iron_mine') === 0) {
-          candidateGoal = { type: 'iron_mine', targetDeposit: regionalDeposits.find((d) => d.type === 'iron') };
+        } else if (canAttempt('sawmill') && count('sawmill') === 0 && count('lumberjack_hut') >= 1) {
+
+          candidateGoal = { type: 'sawmill' };
+        } else if (canAttempt('wheat_farm') && count('wheat_farm') === 0) {
+
+          candidateGoal = { type: 'wheat_farm' };
+        } else if (canAttempt('peasant_house') && houseCount < 2 && needsHousing) {
+
+          candidateGoal = { type: 'peasant_house' };
+        } else if (canAttempt('stonecutter') && count('stone_quarry') >= 1 && count('stonecutter') === 0) {
+
+          candidateGoal = { type: 'stonecutter' };
         } else if (canAttempt('clay_pit') && hasClayDeposit && count('clay_pit') === 0) {
           candidateGoal = { type: 'clay_pit', targetDeposit: regionalDeposits.find((d) => d.type === 'clay') };
+        } else if (canAttempt('iron_mine') && hasIronDeposit && count('iron_mine') === 0) {
+          candidateGoal = { type: 'iron_mine', targetDeposit: regionalDeposits.find((d) => d.type === 'iron') };
         } else if (canAttempt('salt_works') && hasSaltDeposit && count('salt_works') === 0) {
           candidateGoal = { type: 'salt_works', targetDeposit: regionalDeposits.find((d) => d.type === 'salt') };
         } else if (canAttempt('windmill') && count('wheat_farm') >= 1 && count('windmill') === 0) {
+
           candidateGoal = { type: 'windmill' };
         } else if (canAttempt('bakery') && count('windmill') >= 1 && count('bakery') === 0) {
+
           candidateGoal = { type: 'bakery' };
-        } else if (canAttempt('stonecutter') && count('stone_quarry') >= 1 && count('stonecutter') === 0) {
-          candidateGoal = { type: 'stonecutter' };
-        } else if (canAttempt('sawmill') && count('sawmill') === 0) {
-          candidateGoal = { type: 'sawmill' };
-        } else if (canAttempt('peasant_house') && count('peasant_house') < 4) {
+        } else if (canAttempt('stockpile') && needsStockpile) {
+
+          candidateGoal = { type: 'stockpile' };
+        } else if (canAttempt('peasant_house') && houseCount < 4 && needsHousing) {
+
           candidateGoal = { type: 'peasant_house' };
         } else if (canAttempt('brewery') && count('wheat_farm') >= 1 && count('brewery') === 0) {
+
           candidateGoal = { type: 'brewery' };
         } else if (canAttempt('tavern') && count('brewery') >= 1 && count('tavern') === 0) {
+
           candidateGoal = { type: 'tavern' };
+        } else if (canAttempt('market') && count('market') === 0) {
+
+          candidateGoal = { type: 'market' };
         } else if (canAttempt('wooden_church') && count('wooden_church') === 0) {
+
           candidateGoal = { type: 'wooden_church' };
         } else if (canAttempt('charcoal_kiln') && count('iron_mine') >= 1 && count('charcoal_kiln') === 0) {
           candidateGoal = { type: 'charcoal_kiln' };
         } else if (canAttempt('iron_smelter') && count('charcoal_kiln') >= 1 && count('iron_smelter') === 0) {
           candidateGoal = { type: 'iron_smelter' };
-        } else if (canAttempt('market') && count('market') === 0) {
-          candidateGoal = { type: 'market' };
-        } else if (canAttempt('barracks') && count('barracks') === 0) {
-          candidateGoal = { type: 'barracks' };
-        } else if (canAttempt('manor') && count('manor') === 0 && peasants.length >= 6) {
-          candidateGoal = { type: 'manor' };
-        } else if (canAttempt('stockpile') && count('stockpile') < 2 && count('peasant_house') >= 3) {
-          candidateGoal = { type: 'stockpile' };
-        } else if (canAttempt('peasant_house') && count('peasant_house') < 6) {
-          candidateGoal = { type: 'peasant_house' };
-        } else if (canAttempt('lumberjack_hut') && count('lumberjack_hut') < 2) {
-          candidateGoal = { type: 'lumberjack_hut' };
-        } else if (canAttempt('wheat_farm') && count('wheat_farm') < 2) {
-          candidateGoal = { type: 'wheat_farm' };
-        } else if (canAttempt('foresters_hut') && count('foresters_hut') === 0 && count('lumberjack_hut') >= 1) {
-          candidateGoal = { type: 'foresters_hut' };
-        } else if (canAttempt('wheat_farm') && peasants.length >= 12 && count('wheat_farm') < 3) {
-          candidateGoal = { type: 'wheat_farm' };
-        } else if (canAttempt('windmill') && count('wheat_farm') >= 2 && count('windmill') < 2) {
-          candidateGoal = { type: 'windmill' };
-        } else if (canAttempt('bakery') && count('windmill') >= 2 && count('bakery') < 2) {
-          candidateGoal = { type: 'bakery' };
         } else if (canAttempt('brickworks') && count('clay_pit') >= 1 && count('brickworks') === 0) {
           candidateGoal = { type: 'brickworks' };
         } else if (canAttempt('weavers_workshop') && count('weavers_workshop') === 0) {
           candidateGoal = { type: 'weavers_workshop' };
-        } else if (canAttempt('sawmill') && peasants.length >= 12 && count('sawmill') < 2) {
-          candidateGoal = { type: 'sawmill' };
-        } else if (canAttempt('stonecutter') && hasStoneDeposit && count('stonecutter') < 2 && peasants.length >= 14) {
-          candidateGoal = { type: 'stonecutter', targetDeposit: regionalDeposits.find((d) => d.type === 'stone') };
-        } else if (canAttempt('lumberjack_hut') && peasants.length >= 16 && count('lumberjack_hut') < 3) {
-          candidateGoal = { type: 'lumberjack_hut' };
-        } else if (canAttempt('market') && peasants.length >= 14 && count('market') < 2) {
-          candidateGoal = { type: 'market' };
-        } else if (canAttempt('tavern') && peasants.length >= 16 && count('tavern') < 2) {
-          candidateGoal = { type: 'tavern' };
-        } else if (canAttempt('barracks') && peasants.length >= 18 && count('barracks') < 2) {
+        } else if (canAttempt('barracks') && count('barracks') === 0 && peasants.length >= 8) {
           candidateGoal = { type: 'barracks' };
-        } else if (canAttempt('wooden_church') && peasants.length >= 20 && count('wooden_church') < 2) {
-          candidateGoal = { type: 'wooden_church' };
-        } else if (canAttempt('wheat_farm') && peasants.length >= 22 && count('wheat_farm') < 4) {
-          candidateGoal = { type: 'wheat_farm' };
-        } else if (canAttempt('windmill') && count('wheat_farm') >= 4 && count('windmill') < 3) {
-          candidateGoal = { type: 'windmill' };
-        } else if (canAttempt('bakery') && count('windmill') >= 3 && count('bakery') < 3) {
-          candidateGoal = { type: 'bakery' };
-        } else if (canAttempt('brewery') && peasants.length >= 22 && count('brewery') < 2) {
-          candidateGoal = { type: 'brewery' };
-        } else if (canAttempt('foresters_hut') && peasants.length >= 24 && count('foresters_hut') < 2) {
-          candidateGoal = { type: 'foresters_hut' };
-        } else if (canAttempt('charcoal_kiln') && peasants.length >= 24 && count('charcoal_kiln') < 2) {
-          candidateGoal = { type: 'charcoal_kiln' };
-        } else if (canAttempt('iron_smelter') && peasants.length >= 26 && count('iron_smelter') < 2) {
-          candidateGoal = { type: 'iron_smelter' };
-        } else if (canAttempt('lumberjack_hut') && peasants.length >= 26 && count('lumberjack_hut') < 4) {
-          candidateGoal = { type: 'lumberjack_hut' };
-        } else if (canAttempt('wheat_farm') && peasants.length >= 30 && count('wheat_farm') < 5) {
-          candidateGoal = { type: 'wheat_farm' };
-        } else if (canAttempt('stockpile') && count('stockpile') < Math.min(8, Math.max(2, Math.ceil(peasants.length / 5)))) {
-          candidateGoal = { type: 'stockpile' };
-        } else if (canAttempt('peasant_house') && count('peasant_house') < 22 && peasants.length < BOT_AI_MAX_PEASANTS) {
+        } else if (canAttempt('manor') && count('manor') === 0 && peasants.length >= 8) {
+          candidateGoal = { type: 'manor' };
+        } else if (canAttempt('peasant_house') && houseCount < 7 && needsHousing) {
           candidateGoal = { type: 'peasant_house' };
+        } else if (canAttempt('foresters_hut') && count('foresters_hut') === 0 && count('lumberjack_hut') >= 1) {
+          candidateGoal = { type: 'foresters_hut' };
+        } else if (canAttempt('lumberjack_hut') && count('lumberjack_hut') < 2 && peasants.length >= 10) {
+          candidateGoal = { type: 'lumberjack_hut' };
+        } else if (canAttempt('wheat_farm') && count('wheat_farm') < 2 && peasants.length >= 10) {
+          candidateGoal = { type: 'wheat_farm' };
+        } else if (canAttempt('peasant_house') && needsHousing) {
+          candidateGoal = { type: 'peasant_house' };
+        } else if (canAttempt('stockpile') && needsStockpile) {
+          candidateGoal = { type: 'stockpile' };
         }
 
         if (candidateGoal) {
@@ -1393,6 +1420,21 @@ export class BotAISystem {
                   }
                   if (placedResult) break;
                 }
+              } else if (bType === 'foragers_hut' || bType === 'hunters_hut') {
+                const depRadii = [3.0, 4.0, 5.0, 6.5, 8.0, 10.0];
+                for (const r of depRadii) {
+                  for (let deg = 0; deg < 360; deg += 15) {
+                    const rad = (deg * Math.PI) / 180;
+                    const cx = dx + r * Math.cos(rad);
+                    const cz = dz + r * Math.sin(rad);
+                    const res = testPositionRotations(cx, cz, camp);
+                    if (res) {
+                      placedResult = res;
+                      break;
+                    }
+                  }
+                  if (placedResult) break;
+                }
               } else {
                 const depRadii = [0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0];
                 for (const r of depRadii) {
@@ -1527,7 +1569,7 @@ export class BotAISystem {
                 isCompleted: false,
                 constructionProgress: 0,
                 requiredMaterials: { ...(bBlueprint.cost || { wood: 5 }) },
-                deliveredMaterials: {},
+                deliveredMaterials: { ...(bBlueprint.cost || { wood: 5 }) },
                 gridPosition: [bx, bz],
                 position: [bx + bWidth / 2, buildingH, bz + bHeight / 2],
                 factionId: botFactionId,
@@ -1535,6 +1577,20 @@ export class BotAISystem {
                 wage: bBlueprint.defaultWage || DEFAULT_WAGE,
                 assignedWorkers: [],
               };
+
+              if (bType === 'trading_post') {
+                botBuilding.tradeRules = {
+                  wood: { resource: 'wood', mode: 'export', targetStock: 30 },
+                  stone: { resource: 'stone', mode: 'export', targetStock: 20 },
+                  ale: { resource: 'ale', mode: 'import', targetStock: 15 },
+                  weapons: { resource: 'weapons', mode: 'import', targetStock: 10 },
+                };
+                botBuilding.localInventory = {
+                  wood: 35,
+                  stone: 25,
+                };
+              }
+
               world.add(botBuilding);
 
               consumeResourcesFromBotSettlement(botBuildings, woodCost, stoneCost);
@@ -1543,6 +1599,7 @@ export class BotAISystem {
               memory.buildStage++;
 
               if (BotAISystem.connectBuildingToRoadNetwork(botBuilding, grid, region, resourceDeposits, currentTick)) {
+                incrementTerrainVersion();
                 incrementBuildingVersion();
                 incrementFoliageVersion();
               }

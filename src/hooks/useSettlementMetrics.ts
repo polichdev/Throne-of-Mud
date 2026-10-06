@@ -57,9 +57,9 @@ export function useSettlementMetrics() {
 
     let totalBeds = 0;
     for (const b of buildings) {
-      if (b.buildingType === 'peasant_house') totalBeds += 2;
-      else if (b.buildingType === 'tent') totalBeds += 1;
-      else if (b.buildingType === 'manor') totalBeds += 4;
+      if (b.buildingType === 'peasant_house') totalBeds += 3;
+      else if (b.buildingType === 'tent') totalBeds += 3;
+      else if (b.buildingType === 'manor') totalBeds += 5;
     }
 
     return {
@@ -133,4 +133,3 @@ export function useSettlementMetrics() {
     muleStats,
   };
 }
-

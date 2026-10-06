@@ -18,6 +18,14 @@ export class ConstructionJobHandler {
   ): boolean {
     const workStep = DEFAULT_BASE_WORK_STEP + Math.floor(buildSkill * WORK_SKILL_STEP_MULTIPLIER);
 
+    if (unit.hasMule || unit.muleTransition || unit.isHaulingLog) {
+      unit.hasMule = false;
+      unit.muleTransition = undefined;
+      unit.muleTransitionProgress = undefined;
+      unit.assignedMuleHutId = undefined;
+      unit.isHaulingLog = false;
+    }
+
     if (job.type === 'build_structure' && currentTick % 12 === 0) {
       unit.speechBubble = {
         text: 'Зводжу споруду...',
@@ -42,6 +50,7 @@ export class ConstructionJobHandler {
       }
       if (bEnt) {
         if (job.type === 'build_structure' && bEnt.isCompleted) {
+          unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
           return true;
         }
 
@@ -55,13 +64,19 @@ export class ConstructionJobHandler {
             }
           }
           if (!materialsDelivered) {
-            if (currentTick % 20 === 0) {
-              unit.speechBubble = {
-                text: 'Очікую підвезення матеріалів мулом...',
-                expiresAtTick: currentTick + 15,
-                type: 'work',
-              };
-            }
+            unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
+            return false;
+          }
+        }
+
+        if (unit.gridPosition && bEnt.gridPosition) {
+          const [ux, uz] = unit.gridPosition;
+          const [bx, bz] = bEnt.gridPosition;
+          const bw = bEnt.buildingWidth || 2;
+          const bh = bEnt.buildingHeight || 2;
+          const isAdjacent = ux >= bx - 1 && ux <= bx + bw && uz >= bz - 1 && uz <= bz + bh;
+          if (!isAdjacent && (!unit.path || unit.path.length === 0)) {
+            unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
             return false;
           }
         }
@@ -85,6 +100,9 @@ export class ConstructionJobHandler {
         }
 
         return job.progress >= job.totalWork;
+      } else {
+        unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
+        return true;
       }
     }
 

@@ -21,11 +21,13 @@ function TiedMule({
   rotation = [0, 0, 0],
   headOffset = 0,
   innerRef,
+  defaultVisible = true,
 }: {
   position: [number, number, number];
   rotation?: [number, number, number];
   headOffset?: number;
   innerRef?: React.RefObject<THREE.Group | null>;
+  defaultVisible?: boolean;
 }) {
   const headRef = useRef<THREE.Group>(null);
   const tailRef = useRef<THREE.Group>(null);
@@ -42,7 +44,7 @@ function TiedMule({
   });
 
   return (
-    <group ref={innerRef} position={position} rotation={rotation}>
+    <group ref={innerRef} position={position} rotation={rotation} visible={defaultVisible}>
       <mesh material={MULE_MATS.muleCoat} position={[0, 0.42, 0]} castShadow receiveShadow>
         <boxGeometry args={[0.3, 0.34, 0.6]} />
       </mesh>
@@ -186,9 +188,9 @@ export function HitchingPostModel({
         )}
       </group>
 
-      <TiedMule innerRef={mule1Ref} position={[0, 0, 0.42]} headOffset={0} />
-      <TiedMule innerRef={mule2Ref} position={[-0.75, 0, 0.42]} headOffset={1.2} />
-      <TiedMule innerRef={mule3Ref} position={[0.75, 0, 0.42]} headOffset={2.5} />
+      <TiedMule innerRef={mule1Ref} position={[0, 0, 0.42]} headOffset={0} defaultVisible={true} />
+      <TiedMule innerRef={mule2Ref} position={[-0.75, 0, 0.42]} headOffset={1.2} defaultVisible={false} />
+      <TiedMule innerRef={mule3Ref} position={[0.75, 0, 0.42]} headOffset={2.5} defaultVisible={false} />
     </group>
   );
 }
