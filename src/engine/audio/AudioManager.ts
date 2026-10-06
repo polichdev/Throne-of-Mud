@@ -1244,4 +1244,3 @@ if (import.meta.hot) {
     audioManager.destroy();
   });
 }
-

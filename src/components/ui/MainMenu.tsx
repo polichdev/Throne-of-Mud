@@ -351,4 +351,3 @@ export function MainMenu({ grid }: MainMenuProps) {
     </div>
   );
 }
-

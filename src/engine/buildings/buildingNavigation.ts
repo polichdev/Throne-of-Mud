@@ -879,4 +879,3 @@ export function createPathToAreaSafely(
   const startGrid = unitGrid || (currentPos ? [Math.floor(currentPos[0]), Math.floor(currentPos[2])] : [areaX, areaZ]);
   return AStar.findPathToArea(grid, startGrid, areaX, areaZ, width, height, bounds);
 }
-

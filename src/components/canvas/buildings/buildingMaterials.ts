@@ -399,4 +399,3 @@ export const SHARED_BUILDING_MATS = {
     metalness: 0.85,
   }),
 };
-

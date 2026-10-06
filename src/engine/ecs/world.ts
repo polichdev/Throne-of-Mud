@@ -7,7 +7,8 @@ import type {
   ResourceInventory,
   BuildingType,
   Thought,
-  ResourceDepositType
+  ResourceDepositType,
+  TradeRule
 } from '../../types/game';
 
 export type {
@@ -18,7 +19,8 @@ export type {
   ResourceInventory,
   BuildingType,
   Thought,
-  ResourceDepositType
+  ResourceDepositType,
+  TradeRule
 };
 
 export interface GameEntity {
@@ -60,6 +62,9 @@ export interface GameEntity {
     expiresAtTick: number;
     type?: 'mood' | 'alert' | 'work';
   };
+  isMerchant?: boolean;
+  hasHorseCart?: boolean;
+  tradeRules?: Record<string, TradeRule>;
 
   isBuilding?: boolean;
   buildingType?: BuildingType;
@@ -106,4 +111,3 @@ export const characterEntities = world.with('isCharacter', 'position', 'gridPosi
 export const buildingEntities = world.with('isBuilding', 'position', 'gridPosition', 'buildingType');
 export const resourceDepositEntities = world.with('isResourceDeposit', 'position', 'gridPosition');
 export const movingEntities = world.with('position', 'gridPosition', 'path');
-

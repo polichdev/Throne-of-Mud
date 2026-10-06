@@ -104,4 +104,3 @@ export function DepositInspectorSection({ entity }: DepositInspectorSectionProps
     </div>
   );
 }
-

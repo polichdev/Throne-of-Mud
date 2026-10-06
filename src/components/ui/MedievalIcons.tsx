@@ -949,4 +949,3 @@ export const PlayCrestIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-
     <polygon points="7 4 19 12 7 20 7 4" />
   </svg>
 );
-

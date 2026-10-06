@@ -40,6 +40,7 @@ import {
   WoodenChurchModel,
   TavernModel,
   HitchingPostModel,
+  TradingPostModel,
 } from './buildings/models';
 import { InstancedWallsRenderer } from './buildings/InstancedWallsRenderer';
 
@@ -54,6 +55,10 @@ interface BuildingFrameState {
   centerZ: number;
 }
 const _buildingFrameStates = new Map<string, BuildingFrameState>();
+
+export function clearBuildingFrameStates() {
+  _buildingFrameStates.clear();
+}
 
 export function BuildingsRenderer() {
   const selectedEntityId = useGameStore((state) => state.selectedEntityId);
@@ -125,7 +130,7 @@ export function BuildingsRenderer() {
       />
       {standardBuildings.map((building) => (
         <Building3DMemo
-          key={building.id}
+          key={`${building.id}_${building.gridPosition?.[0] ?? 0}_${building.gridPosition?.[1] ?? 0}_${building.position?.[0] ?? 0}`}
           building={building}
           isSelected={selectedEntityId === building.id}
           onSelect={setSelectedEntityId}
@@ -196,12 +201,30 @@ function Building3D({
     if (interiorRef.current) interiorRef.current.visible = isSelected;
   }, [isSelected]);
 
+  const posY = pos[1] !== undefined ? pos[1] : 0.05;
+
   useEffect(() => {
-    if (completed && groupRef.current) {
-      groupRef.current.matrixAutoUpdate = false;
+    if (groupRef.current) {
+      const px = building.position ? building.position[0] : (building.gridPosition ? building.gridPosition[0] + width / 2 : pos[0]);
+      const py = posY;
+      const pz = building.position ? building.position[2] : (building.gridPosition ? building.gridPosition[1] + height / 2 : pos[2]);
+      groupRef.current.position.set(px, py, pz);
+      if (completed) {
+        groupRef.current.matrixAutoUpdate = false;
+      }
       groupRef.current.updateMatrix();
     }
-  }, [completed]);
+  }, [
+    building.position?.[0],
+    building.position?.[1],
+    building.position?.[2],
+    building.gridPosition?.[0],
+    building.gridPosition?.[1],
+    posY,
+    width,
+    height,
+    completed,
+  ]);
 
   useFrame(() => {
     if (completed && !building.isDemolishing && !isSelected) return;
@@ -221,8 +244,6 @@ function Building3D({
       progressBarRef.current.style.width = `${Math.max(4, curProg)}%`;
     }
   });
-
-  const posY = pos[1] !== undefined ? pos[1] : 0.05;
 
   function renderBuildingModel() {
     switch (type) {
@@ -290,6 +311,8 @@ function Building3D({
         return <WoodenChurchModel isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
       case 'tavern':
         return <TavernModel isLightOn={isLightOn} isWorking={isWorking} roofRef={roofRef} interiorRef={interiorRef} />;
+      case 'trading_post':
+        return <TradingPostModel isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
       default:
         return <PeasantHouseModel isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
     }
@@ -374,6 +397,11 @@ const Building3DMemo = memo(Building3D, (prev, next) => {
     prev.building.isCompleted === next.building.isCompleted &&
     prev.building.constructionProgress === next.building.constructionProgress &&
     prev.building.isDemolishing === next.building.isDemolishing &&
-    prev.building.mulesCount === next.building.mulesCount
+    prev.building.mulesCount === next.building.mulesCount &&
+    prev.building.gridPosition?.[0] === next.building.gridPosition?.[0] &&
+    prev.building.gridPosition?.[1] === next.building.gridPosition?.[1] &&
+    prev.building.position?.[0] === next.building.position?.[0] &&
+    prev.building.position?.[1] === next.building.position?.[1] &&
+    prev.building.position?.[2] === next.building.position?.[2]
   );
 });

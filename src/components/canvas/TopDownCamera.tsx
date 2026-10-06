@@ -32,8 +32,6 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
   const isMenuMode = stateAtMount.gameMode === 'menu';
   const initFocus = stateAtMount.cameraFocusTarget;
 
-
-
   const initZoom = isMenuMode ? DEFAULT_CAMERA_ZOOM : (stateAtMount.cameraZoomTarget ?? DEFAULT_CAMERA_ZOOM);
   const initAngle = stateAtMount.cameraAngleTarget ?? (Math.PI / 4);
   const startX = isMenuMode ? (mapWidth / 2) : (initFocus ? initFocus[0] : initialCenter[0]);
@@ -163,16 +161,16 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
       let campX = state.playerSpawnPoint?.[0] ?? pReg?.campPosition?.[0] ?? 52;
       let campZ = state.playerSpawnPoint?.[1] ?? pReg?.campPosition?.[1] ?? 52;
 
-      const tent = Array.from(buildingEntities).find(
-        (b) => (b.buildingType === 'tent' || b.buildingType === 'campfire' || b.buildingType === 'manor') &&
+      const campCenterBuilding = Array.from(buildingEntities).find(
+        (b) => (b.buildingType === 'campfire' || b.buildingType === 'manor' || b.buildingType === 'tent') &&
                (b.factionId === 'player' || b.regionId === state.playerRegionId)
       );
-      if (tent?.position) {
-        campX = tent.position[0];
-        campZ = tent.position[2];
-      } else if (tent?.gridPosition) {
-        campX = tent.gridPosition[0];
-        campZ = tent.gridPosition[1];
+      if (campCenterBuilding?.position) {
+        campX = campCenterBuilding.position[0];
+        campZ = campCenterBuilding.position[2];
+      } else if (campCenterBuilding?.gridPosition) {
+        campX = campCenterBuilding.gridPosition[0];
+        campZ = campCenterBuilding.gridPosition[1];
       }
 
       const targetX = state.cameraFocusTarget?.[0] ?? campX;
@@ -186,6 +184,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
       currentAngle.current = desiredAngle;
       targetZoom.current = desiredZoom;
       last3DPos.current = [targetX, targetZ];
+      (window as any).__lastCameraTarget = [targetX, targetZ];
 
       const orthoCam = camera as THREE.OrthographicCamera;
       if (orthoCam.isOrthographicCamera) {
@@ -322,4 +321,3 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
 
   return null;
 }
-

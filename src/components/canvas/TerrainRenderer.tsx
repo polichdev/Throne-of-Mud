@@ -386,12 +386,7 @@ export function TerrainRenderer({ grid }: Props) {
       const dz2 = (wz - lake2Z) - Math.sin((wx - lake2X) * 0.40) * 1.1;
       const distLake2 = Math.hypot(dx2, dz2);
 
-      const roadX = GridMap.getHighwayX(wz);
-      const distRoadX = Math.abs(wx - roadX);
-      const roadZ = GridMap.getHighwayZ(wx);
-      const distRoadZ = Math.abs(wz - roadZ);
-      const distPlaza = Math.hypot(wx - 127.5, wz - 127.5);
-      const isHighway = distRoadX <= 0.85 || distRoadZ <= 0.85 || distPlaza <= 2.4;
+      const isHighway = GridMap.isTradeHighwayTile(Math.round(wx), Math.round(wz));
 
       let elevation = 0.05;
 
@@ -673,12 +668,12 @@ export function TerrainRenderer({ grid }: Props) {
     const { playerRegionId, regions } = useGameStore.getState();
     const pRegion = regions.find((r) => r.id === (playerRegionId ?? 0));
     if (!pRegion?.bounds) return true;
-    if (GridMap.isCoordInRegion(pRegion.id, x, z, 0)) return true;
+    if (GridMap.canRegionConnectToHighwayAt(pRegion.id, x, z)) return true;
 
     const tile = grid.getTile(x, z);
     if (tile?.terrain === 'road') return true;
 
-    if (GridMap.getDistanceToHighway(x, z) <= 2.8) return true;
+    if (GridMap.getDistanceToHighway(x, z) <= 4.0) return true;
 
     return false;
   };
@@ -1386,4 +1381,3 @@ function HoveredTileCursor({ roadEraseMode, currentSnapTarget }: { roadEraseMode
     </mesh>
   );
 }
-

@@ -34,6 +34,30 @@ const _checkedPairs = new Set<number>();
 let _currentRegionMap: Map<number, RegionData> = new Map();
 const _buildingMap = new Map<string, GameEntity>();
 
+export function clampCoordToRegion(regionId: number, x: number, z: number, reg?: RegionData): [number, number] {
+  let cx = x;
+  let cz = z;
+  if (reg?.bounds) {
+    cx = Math.max(reg.bounds.minX + 0.5, Math.min(reg.bounds.maxX - 0.5, cx));
+    cz = Math.max(reg.bounds.minZ + 0.5, Math.min(reg.bounds.maxZ - 0.5, cz));
+  } else {
+    cx = Math.max(2.5, Math.min(381.5, cx));
+    cz = Math.max(2.5, Math.min(381.5, cz));
+  }
+
+  if (regionId !== 5) {
+    const plazaZ = GridMap.getHighwayZ(192.0);
+    const distPlaza = Math.hypot(cx - 192.0, cz - plazaZ);
+    if (distPlaza < 3.8) {
+      const angle = Math.atan2(cz - plazaZ, cx - 192.0);
+      cx = 192.0 + Math.cos(angle) * 3.8;
+      cz = plazaZ + Math.sin(angle) * 3.8;
+    }
+  }
+
+  return [cx, cz];
+}
+
 function tryNudgeEntity(
   ent: GameEntity,
   nudgeX: number,
@@ -47,12 +71,10 @@ function tryNudgeEntity(
   let targetX = curX + nudgeX;
   let targetZ = curZ + nudgeZ;
 
-  if (ent.regionId !== undefined && _currentRegionMap) {
+  const isMerchant = ent.factionId === 'merchant' || ent.isMerchant;
+  if (!isMerchant && ent.regionId !== undefined && _currentRegionMap) {
     const reg = _currentRegionMap.get(ent.regionId);
-    if (reg?.bounds) {
-      targetX = Math.max(reg.bounds.minX + 0.3, Math.min(reg.bounds.maxX + 0.7, targetX));
-      targetZ = Math.max(reg.bounds.minZ + 0.3, Math.min(reg.bounds.maxZ + 0.7, targetZ));
-    }
+    [targetX, targetZ] = clampCoordToRegion(ent.regionId, targetX, targetZ, reg);
   }
 
   const isPositionValid = (x: number, z: number): boolean => {
@@ -110,23 +132,26 @@ export class MovementSystem {
         continue;
       }
 
+      const isMerchant = entity.factionId === 'merchant' || entity.isMerchant;
+
       if (entity.path && entity.path.length > 0) {
         const nextWaypoint = entity.path[0];
 
-        if (entity.regionId !== undefined && _currentRegionMap) {
+        if (!isMerchant && entity.regionId !== undefined && _currentRegionMap) {
           const reg = _currentRegionMap.get(entity.regionId);
-          if (reg?.bounds) {
-            const b = reg.bounds;
-            if (
-              nextWaypoint[0] < b.minX - 2 ||
-              nextWaypoint[0] > b.maxX + 2 ||
-              nextWaypoint[1] < b.minZ - 2 ||
-              nextWaypoint[1] > b.maxZ + 2
-            ) {
-              entity.path = [];
-              stuckTracker.delete(entity.id);
-              continue;
-            }
+          const b = reg?.bounds;
+          const wx = nextWaypoint[0];
+          const wz = nextWaypoint[1];
+          const isAllowed =
+            GridMap.isCoordInRegion(entity.regionId, wx, wz, -2) ||
+            GridMap.canRegionConnectToHighwayAt(entity.regionId, wx, wz) ||
+            GridMap.isTradeHighwayTile(wx, wz) ||
+            (b ? (wx >= b.minX - 3 && wx <= b.maxX + 3 && wz >= b.minZ - 3 && wz <= b.maxZ + 3) : true);
+
+          if (!isAllowed) {
+            entity.path = [];
+            stuckTracker.delete(entity.id);
+            continue;
           }
         }
 
@@ -196,21 +221,26 @@ export class MovementSystem {
           }
         }
 
-        if (entity.regionId !== undefined && _currentRegionMap) {
+        if (!isMerchant && entity.regionId !== undefined && _currentRegionMap) {
           const reg = _currentRegionMap.get(entity.regionId);
-          if (reg?.bounds) {
-            const b = reg.bounds;
-            const clampedX = Math.max(b.minX + 0.5, Math.min(b.maxX + 0.5, entity.position[0]));
-            const clampedZ = Math.max(b.minZ + 0.5, Math.min(b.maxZ + 0.5, entity.position[2]));
-            if (clampedX !== entity.position[0] || clampedZ !== entity.position[2]) {
-              entity.position[0] = clampedX;
-              entity.position[2] = clampedZ;
-              entity.gridPosition = [Math.floor(clampedX), Math.floor(clampedZ)];
-            }
+          const [clampedX, clampedZ] = clampCoordToRegion(entity.regionId, entity.position[0], entity.position[2], reg);
+          if (clampedX !== entity.position[0] || clampedZ !== entity.position[2]) {
+            entity.position[0] = clampedX;
+            entity.position[2] = clampedZ;
+            entity.gridPosition = [Math.floor(clampedX), Math.floor(clampedZ)];
           }
         }
       } else {
         stuckTracker.delete(entity.id);
+        if (!isMerchant && entity.regionId !== undefined && _currentRegionMap) {
+          const reg = _currentRegionMap.get(entity.regionId);
+          const [clampedX, clampedZ] = clampCoordToRegion(entity.regionId, entity.position[0], entity.position[2], reg);
+          if (clampedX !== entity.position[0] || clampedZ !== entity.position[2]) {
+            entity.position[0] = clampedX;
+            entity.position[2] = clampedZ;
+            entity.gridPosition = [Math.floor(clampedX), Math.floor(clampedZ)];
+          }
+        }
       }
     }
 
@@ -299,7 +329,14 @@ export class MovementSystem {
               const nz = dz / dist;
               const pushAmount = Math.min(overlap * 0.5, delta * ENTITY_MAX_PUSH_SPEED);
 
-              if (!fixedA && !fixedB) {
+              const isMerchantA = Boolean(entA.isMerchant || entA.hasHorseCart);
+              const isMerchantB = Boolean(entB.isMerchant || entB.hasHorseCart);
+
+              if (isMerchantA && !isMerchantB) {
+                tryNudgeEntity(entB, -nx * pushAmount, -nz * pushAmount, grid);
+              } else if (!isMerchantA && isMerchantB) {
+                tryNudgeEntity(entA, nx * pushAmount, nz * pushAmount, grid);
+              } else if (!fixedA && !fixedB) {
                 const halfPush = pushAmount * 0.5;
                 tryNudgeEntity(entA, nx * halfPush, nz * halfPush, grid);
                 tryNudgeEntity(entB, -nx * halfPush, -nz * halfPush, grid);

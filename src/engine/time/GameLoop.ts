@@ -8,6 +8,7 @@ import { EconomySystem } from '../ecs/systems/EconomySystem';
 import { ImmigrationSystem } from '../ecs/systems/ImmigrationSystem';
 import { BotAISystem } from '../ecs/systems/BotAISystem';
 import { BanditAISystem } from '../ecs/systems/BanditAISystem';
+import { TradeSystem } from '../ecs/systems/TradeSystem';
 
 export class GameLoop {
   private grid: GridMap;
@@ -76,6 +77,7 @@ export class GameLoop {
 
         if (!isFast || currentTick % 4 === 0) {
           EconomySystem.update(currentTick);
+          TradeSystem.update(this.grid, currentTick);
         }
 
         if (currentTick % 10 === 0) {
@@ -120,4 +122,3 @@ export class GameLoop {
     this.animFrameId = requestAnimationFrame(this.loop);
   };
 }
-

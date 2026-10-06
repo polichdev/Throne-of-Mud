@@ -22,6 +22,14 @@ export class GatheringJobHandler {
     const bType = building.buildingType;
     if (!bType) return false;
 
+    if (unit.hasMule || unit.muleTransition || unit.isHaulingLog) {
+      unit.hasMule = false;
+      unit.muleTransition = undefined;
+      unit.muleTransitionProgress = undefined;
+      unit.assignedMuleHutId = undefined;
+      unit.isHaulingLog = false;
+    }
+
     if (bType === 'fishermans_hut') {
       return this.handleFishermanCycle(unit, building, grid, uBounds, currentTick);
     } else if (bType === 'foragers_hut') {
@@ -544,4 +552,3 @@ export class GatheringJobHandler {
     return true;
   }
 }
-

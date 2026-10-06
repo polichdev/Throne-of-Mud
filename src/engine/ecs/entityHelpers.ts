@@ -48,6 +48,14 @@ export function assignWorkerToBuilding(
   }
   worker.workBuildingId = building.id;
 
+  if (worker.hasMule || worker.muleTransition || worker.isHaulingLog) {
+    worker.hasMule = false;
+    worker.muleTransition = undefined;
+    worker.muleTransitionProgress = undefined;
+    worker.assignedMuleHutId = undefined;
+    worker.isHaulingLog = false;
+  }
+
   if (building.buildingType === 'lumberjack_hut') {
     setEntitySpeech(worker, `Став лісорубом у ${building.name}`, 'work', currentTick);
     worker.currentJob = {
@@ -120,6 +128,14 @@ export function isPeasant(entity: GameEntity): boolean {
 }
 
 export function isFreeWorker(entity: GameEntity): boolean {
-  return isPeasant(entity) && !entity.workBuildingId && !entity.isLevy;
+  return (
+    isPeasant(entity) &&
+    !entity.workBuildingId &&
+    !entity.isLevy &&
+    !entity.hasMule &&
+    !entity.muleTransition &&
+    entity.currentJob?.type !== 'haul_construction_mule' &&
+    entity.currentJob?.type !== 'haul_log_with_mule' &&
+    entity.currentJob?.type !== 'return_mule'
+  );
 }
-

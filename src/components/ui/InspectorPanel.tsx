@@ -191,4 +191,3 @@ export function InspectorPanel() {
     </aside>
   );
 }
-

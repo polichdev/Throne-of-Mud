@@ -20,6 +20,8 @@ import {
 import { initializeWorldEntities } from '../../engine/world/worldInitializer';
 import { BotAISystem } from '../../engine/ecs/systems/BotAISystem';
 import { BanditAISystem } from '../../engine/ecs/systems/BanditAISystem';
+import { DEFAULT_TRADE_RULES } from '../../engine/trade/tradeConfig';
+import { clearBuildingFrameStates } from '../../components/canvas/BuildingsRenderer';
 import type { GameState, SettlementSlice } from '../types';
 
 export type { SettlementSlice };
@@ -443,6 +445,34 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
   immigrationProgress: 0,
   setImmigrationProgress: (val) => set({ immigrationProgress: Math.max(0, Math.min(100, val)) }),
 
+  tradeRules: { ...DEFAULT_TRADE_RULES },
+  setTradeRule: (resource, partial) => {
+    set((state) => ({
+      tradeRules: {
+        ...state.tradeRules,
+        [resource]: {
+          ...(state.tradeRules[resource] || { resource, mode: 'none', targetStock: 30 }),
+          ...partial,
+        },
+      },
+    }));
+  },
+
+  caravanStatus: {
+    state: 'waiting',
+    merchantName: 'Альбрехт з Аугсбурга',
+    nextArrivalHour: 11,
+    nextArrivalMinute: 30,
+  },
+  setCaravanStatus: (status) => {
+    set((state) => ({
+      caravanStatus: {
+        ...state.caravanStatus,
+        ...status,
+      },
+    }));
+  },
+
   resourceDeposits: INITIAL_RESOURCE_DEPOSITS,
   updateResourceDeposit: (depositId, partial) => {
     set((state) => ({
@@ -461,6 +491,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
   initWorld: (grid: GridMap, config?: WorldSetupConfig) => {
     BotAISystem.reset();
     BanditAISystem.reset();
+    clearBuildingFrameStates();
     const result = initializeWorldEntities(grid, config, get().playerRegionId, get().botCount);
 
     set({
@@ -483,6 +514,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
   resetWorld: (grid: GridMap, config?: WorldSetupConfig) => {
     BotAISystem.reset();
     BanditAISystem.reset();
+    clearBuildingFrameStates();
     grid.clearAllRoads();
     grid.generate(Date.now() % 100000 + Math.random() * 500);
     grid.isFullTerrainDirty = true;
@@ -543,4 +575,3 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
   },
   };
 };
-

@@ -57,11 +57,18 @@ export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcuts
           setActiveMenuTab,
         } = useGameStore.getState();
 
+        if (activeMenuTab === 'settings') {
+          setActiveMenuTab(null);
+          audioManager.playUIPanelClose();
+          return;
+        }
+
         if (isWeatherDebugOpen) {
           setIsWeatherDebugOpen(false);
           audioManager.playUIPanelClose();
           return;
         }
+
         if (isStrategicMapOpen) {
           setIsStrategicMapOpen(false);
           audioManager.playUIPanelClose();
@@ -76,24 +83,21 @@ export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcuts
           audioManager.playUIPanelClose();
           return;
         }
+
         if (selectedEntityId) {
           setSelectedEntityId(null);
           audioManager.playUIPanelClose();
           return;
         }
-        if (activeMenuTab === 'buildings') {
+
+        if (activeMenuTab === 'buildings' || activeMenuTab === 'trade' || activeMenuTab === 'military' || activeMenuTab === 'codex') {
           setActiveMenuTab(null);
           audioManager.playUIPanelClose();
           return;
         }
 
-        if (activeMenuTab === 'settings') {
-          setActiveMenuTab(null);
-          audioManager.playUIPanelClose();
-        } else {
-          setActiveMenuTab('settings');
-          audioManager.playUIPanelOpen();
-        }
+        setActiveMenuTab('settings');
+        audioManager.playUIPanelOpen();
       }
     };
 
@@ -103,4 +107,3 @@ export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcuts
     };
   }, [gameMode, togglePause, setSpeedMultiplier, onFocusTownCenter]);
 }
-

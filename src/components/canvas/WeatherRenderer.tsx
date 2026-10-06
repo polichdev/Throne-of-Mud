@@ -3,12 +3,12 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 
-const LOCAL_SPAN = 56;
-const RAIN_COUNT = 2200;
-const RAIN_HEIGHT = 11.5;
+const LOCAL_SPAN = 200;
+const RAIN_COUNT = 7000;
+const RAIN_HEIGHT = 12.0;
 
-const SNOW_COUNT = 1000;
-const SNOW_HEIGHT = 10.0;
+const SNOW_COUNT = 3200;
+const SNOW_HEIGHT = 10.5;
 
 export function WeatherRenderer() {
   const { rainGeometry, rainMaterial } = useMemo(() => {
@@ -21,7 +21,7 @@ export function WeatherRenderer() {
       const rx = (Math.random() - 0.5) * LOCAL_SPAN;
       const ry = Math.random() * RAIN_HEIGHT;
       const rz = (Math.random() - 0.5) * LOCAL_SPAN;
-      const len = 0.35 + Math.random() * 0.25;
+      const len = 0.40 + Math.random() * 0.30;
       const spd = 22 + Math.random() * 8;
       const seed = Math.random() * 100;
 
@@ -66,7 +66,7 @@ export function WeatherRenderer() {
 
         void main() {
           vec3 pos = position;
-          float cycleHeight = 11.5;
+          float cycleHeight = 12.0;
 
           float fall = mod(pos.y - uTime * aSpeed + aSeed * 13.0, cycleHeight);
           pos.y = fall;
@@ -87,6 +87,10 @@ export function WeatherRenderer() {
 
           float topFade = smoothstep(cycleHeight, cycleHeight - 0.75, pos.y);
           vAlpha *= groundImpact * topFade;
+
+          float distFromCenter = length(pos.xz);
+          float edgeFade = 1.0 - smoothstep(85.0, 98.0, distFromCenter);
+          vAlpha *= edgeFade;
 
           vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
           gl_Position = projectionMatrix * mvPosition;
@@ -154,6 +158,10 @@ export function WeatherRenderer() {
           float groundLanding = smoothstep(0.04, 0.35, pos.y);
           vAlpha = groundLanding * 0.85;
 
+          float distFromCenter = length(pos.xz);
+          float edgeFade = 1.0 - smoothstep(85.0, 98.0, distFromCenter);
+          vAlpha *= edgeFade;
+
           vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
           gl_Position = projectionMatrix * mvPosition;
           gl_PointSize = aScale * 3.4;
@@ -196,7 +204,7 @@ export function WeatherRenderer() {
     const orthoCam = camera as THREE.OrthographicCamera;
     const currentZoom = orthoCam.zoom || 38;
 
-    if (isStrategicView || currentZoom <= 18.5) {
+    if (isStrategicView || currentZoom <= 16.5) {
       if (rainMeshRef.current) rainMeshRef.current.visible = false;
       if (snowMeshRef.current) snowMeshRef.current.visible = false;
       return;
@@ -249,4 +257,3 @@ export function WeatherRenderer() {
     </group>
   );
 }
-

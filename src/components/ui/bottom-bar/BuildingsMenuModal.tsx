@@ -116,6 +116,7 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
       BUILDING_BLUEPRINTS.stone_wall,
     ].filter(Boolean),
     trade: [
+      BUILDING_BLUEPRINTS.trading_post,
       BUILDING_BLUEPRINTS.market,
       BUILDING_BLUEPRINTS.hitching_post,
     ].filter(Boolean),

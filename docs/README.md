@@ -7,10 +7,10 @@ This document details the architectural layout, core design patterns, and module
 ## Architecture
 
 Throne of Mud follows a strictly decoupled, unidirectional data flow architecture separating:
-- **Presentation Layer**: React 19 UI (Tailwind CSS v4) for HUD, inspector panels, dialogs, and strategic overlays.
-- **3D Render Layer**: Three.js & React Three Fiber (R3F) handling WebGL meshes, procedural geometry, lighting, and custom GLSL shaders.
-- **Simulation Layer**: Miniplex Entity Component System (ECS) driving real-time agent AI, jobs, movement, needs, and town production loops.
-- **State Layer**: Zustand v5 modular slice store orchestrating global game time, active player actions, audio settings, and settlement-wide stats.
+- **Presentation Layer**: React 19 UI (Tailwind CSS v4) for HUD, inspector panels, trade interfaces, strategic map canvas, and dialogs.
+- **3D Render Layer**: Three.js & React Three Fiber (R3F) handling WebGL meshes, procedural geometry, lighting, working animal companions, and custom GLSL shaders.
+- **Simulation Layer**: Miniplex Entity Component System (ECS) driving real-time agent AI, jobs, movement, needs, town production, mule hauling, trade caravans, and rival lord logic.
+- **State Layer**: Zustand v5 modular slice store orchestrating global game time, active player actions, audio settings, trade policies, and settlement-wide statistics.
 - **Storage Layer**: IndexedDB transaction manager storing serialized game worlds and entity states locally.
 
 ```mermaid
@@ -19,7 +19,8 @@ flowchart TD
         TopHUD[Top HUD / Resources]
         Inspector[Modular Inspector Panel]
         RoadTool[Road & Tool Controls]
-        StrategicMap[Parchment Map Modal]
+        TradeUI[Trade Policies & Market UI]
+        StrategicMap[Parchment Map & Setup Modal]
     end
 
     subgraph State ["State Management (Zustand v5 Slices)"]
@@ -31,10 +32,11 @@ flowchart TD
 
     subgraph Engine ["Simulation Engine (Miniplex ECS)"]
         GameLoop[RAF GameLoop]
-        JobSys[JobSystem]
+        JobSys[JobSystem / Subhandlers]
         MoveSys[MovementSystem]
         NeedSys[NeedsSystem]
         EconSys[EconomySystem]
+        TradeSys[TradeSystem]
         BotSys[BotAISystem]
         Helpers[entityHelpers.ts]
     end
@@ -43,7 +45,7 @@ flowchart TD
         Terrain[TerrainRenderer / Splat Shaders]
         Foliage[FoliageRenderer / Wind Shaders]
         Buildings[BuildingsRenderer / Procedural 3D]
-        Units[UnitsRenderer / Agent Sprites & Meshes]
+        Units[UnitsRenderer / 3D Settlers, Mules & Wagons]
         Weather[WeatherRenderer / Rain & Snow Shaders]
     end
 
@@ -69,7 +71,11 @@ src/
 ├── components/
 │   ├── audio/              # AudioController & spatial listener bridge
 │   ├── canvas/             # Three.js / React Three Fiber 3D renderers
-│   │   ├── buildings/      # Modular procedural 3D building builders
+│   │   ├── buildings/      # Modular procedural 3D building models
+│   │   │   ├── models/     # Individual 3D building models (HitchingPost, TradingPost, etc.)
+│   │   │   └── common/     # Shared procedural geometry primitives & materials
+│   │   ├── fauna/          # Ambient wildlife & fauna renderers
+│   │   ├── units/          # Settler, mule, & wagon materials and textures
 │   │   ├── BuildingsRenderer.tsx
 │   │   ├── DayNightLighting.tsx
 │   │   ├── FoliageRenderer.tsx
@@ -80,46 +86,52 @@ src/
 │   │   └── WoodChipsRenderer.tsx
 │   ├── common/             # Error boundaries & generic layout guards
 │   └── ui/                 # React HTML/Tailwind HUD components
+│       ├── bottom-bar/     # Buildings menu, action bar, time controls
 │       ├── inspector/      # Modular entity, character, & building inspectors
+│       ├── settings/       # Audio controls, language selector, settings modal
+│       ├── trade/          # Trading post inspector & market policy controls
 │       ├── BottomActionBar.tsx
 │       ├── InspectorPanel.tsx
 │       ├── MainMenu.tsx
 │       ├── MedievalIcons.tsx
+│       ├── NewGameSetupModal.tsx
 │       ├── RoadToolPanel.tsx
+│       ├── StrategicMapCanvas.tsx
 │       ├── StrategicMapModal.tsx
 │       ├── TopHUD.tsx
 │       └── WeatherDebugModal.tsx
 ├── constants/              # Centralized domain constants (time, economy, world)
-│   ├── economy.ts          # Resource costs, wage bounds, morale durations
+│   ├── camera.ts           # Zoom limits, pitch angles, pan bounds
 │   ├── time.ts             # Ticks per minute, season offsets, day cycles
-│   └── world.ts            # Map dimensions, default seed, region manifests
+│   └── world.ts            # 384x384 dimensions, preset lords, region manifests
 ├── engine/
 │   ├── assets/             # Three.js texture cache & AssetLoader
 │   ├── audio/              # Web Audio API engine & ambient soundscapes
-│   ├── buildings/          # Building blueprints, costs, and work slots
+│   ├── buildings/          # Building blueprints, costs, dimensions, navigation
 │   ├── ecs/                # Miniplex Entity Component System
 │   │   ├── entityHelpers.ts # Encapsulated entity mutators (thoughts, jobs)
 │   │   ├── world.ts        # ECS world instance & entity archetypes
 │   │   └── systems/        # Decoupled simulation systems
+│   │       ├── jobs/       # Specialized job subhandlers (Hauling, Woodcutting, Rest, etc.)
 │   │       ├── BotAISystem.ts
-│   │       ├── EconomySystem.ts
 │   │       ├── ImmigrationSystem.ts
 │   │       ├── JobSystem.ts
 │   │       ├── MovementSystem.ts
-│   │       ├── NeedsSystem.ts
-│   │       └── ProductionSystem.ts
-│   ├── grid/               # GridMap, tile data, and terrain coordinates
-│   ├── pathfinding/        # A* pathfinding algorithm
+│   │       └── TradeSystem.ts
+│   ├── grid/               # GridMap, tile data, building snap, road generation
+│   ├── pathfinding/        # A* pathfinding algorithm with region constraints
 │   ├── resources/          # Natural resource deposits & quarries
 │   ├── time/               # Main requestAnimationFrame GameLoop
-│   └── world/              # World entity initializer & camp spawning
-├── hooks/                  # Custom React hooks (audio, viewport, controls)
+│   ├── trade/              # Trade valuation & market mechanics
+│   └── world/              # World entity initializer, camp spawning, foliage generation
+├── hooks/                  # Custom React hooks (autosave, shortcuts, metrics, town focus)
 ├── i18n/                   # Internationalization engine (EN / UK dictionaries)
 ├── services/storage/       # IndexedDB save/load manager
 ├── store/                  # Zustand modular state store
 │   ├── slices/             # Time, UI, Audio, and Settlement slices
 │   └── useGameStore.ts     # Root store composition
-└── types/                  # Strict TypeScript domain interfaces
+├── types/                  # Strict TypeScript domain interfaces
+└── utils/                  # Deterministic math, noise, and distance utilities
 ```
 
 ---
@@ -128,12 +140,12 @@ src/
 
 ### 1. Entity Component System (ECS)
 The simulation logic avoids deep inheritance hierarchies by relying on **Miniplex v2**:
-- **Entities**: Simple containers of keyed components (e.g. `position`, `velocity`, `villager`, `job`, `needs`, `inventory`).
-- **Archetypes**: Reactive queries over entities with specific components (`world.with('villager', 'position', 'needs')`).
+- **Entities**: Simple containers of keyed components (e.g. `position`, `gridPosition`, `job`, `needs`, `inventory`, `hasMule`, `isMerchant`).
+- **Archetypes**: Reactive queries over entities with specific components (`characterEntities`, `buildingEntities`).
 - **Systems**: Decoupled tick functions executing on deterministic time intervals.
 
 ### 2. Zustand Slice Pattern
-Rather than maintaining a single monolithic state store, state is segregated into focused slices:
+State is segregated into focused slices:
 - `timeSlice`: Controls calendar time, speed multipliers, and seasonal progression.
 - `settlementSlice`: Manages inventory stockpiles, construction lists, logs, and lord interactions.
 - `uiSlice`: Manages selection states, road painting mode, inspector focus, and UI overlays.
@@ -142,11 +154,11 @@ Rather than maintaining a single monolithic state store, state is segregated int
 All slices are bound together in `src/store/useGameStore.ts` using Zustand's `StateCreator` pattern.
 
 ### 3. Encapsulated Entity Mutators (`entityHelpers.ts`)
-To adhere to DRY principles and prevent out-of-sync state, common mutations on ECS entities (assigning workers, adjusting thoughts, queueing speech bubbles) are isolated in pure helper functions rather than inlined across systems.
+To adhere to DRY principles and prevent out-of-sync state, common mutations on ECS entities (assigning workers, adjusting thoughts, queueing speech bubbles, managing mule transitions) are isolated in helper functions rather than inlined across systems.
 
 ### 4. GPU Shader-Driven World Animation
 High-performance dynamic effects are computed directly on the GPU via custom GLSL shaders:
-- **Multi-texture splatting**: Continuous data textures blend grass, mud, rock, and water without expensive geometry rebuffering.
+- **Multi-texture splatting**: Continuous data textures blend grass, mud, rock, road, and water without expensive geometry rebuffering.
 - **Weather integration**: Terrain darkness increases dynamically with `uWetness`, procedural rain rings ripple on surfaces, and snow accumulates via `uSnowAmount`.
 - **Foliage sway**: Vertex shader wind waves animate thousands of instanced trees with zero CPU overhead.
 

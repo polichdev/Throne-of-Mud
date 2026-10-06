@@ -30,6 +30,14 @@ export class WoodcuttingJobHandler {
     cx: number,
     cz: number
   ): boolean {
+    if (unit.hasMule || unit.muleTransition || unit.isHaulingLog) {
+      unit.hasMule = false;
+      unit.muleTransition = undefined;
+      unit.muleTransitionProgress = undefined;
+      unit.assignedMuleHutId = undefined;
+      unit.isHaulingLog = false;
+    }
+
     const nextAllowedSearch = failedSearchCooldowns.get(unit.id) || 0;
     if (currentTick < nextAllowedSearch) {
       return false;
@@ -102,8 +110,11 @@ export class WoodcuttingJobHandler {
       const minSearchZ = uBounds ? Math.max(uBounds.minZ, hutPos[1] - WOODCUTTING_SEARCH_RADIUS) : Math.max(0, hutPos[1] - WOODCUTTING_SEARCH_RADIUS);
       const maxSearchZ = uBounds ? Math.min(uBounds.maxZ, hutPos[1] + WOODCUTTING_SEARCH_RADIUS) : Math.min(grid.height - 1, hutPos[1] + WOODCUTTING_SEARCH_RADIUS);
 
+      const regId = unit.regionId ?? (uBounds as any)?.regionId;
+
       for (let x = minSearchX; x <= maxSearchX; x++) {
         for (let z = minSearchZ; z <= maxSearchZ; z++) {
+          if (regId !== undefined && !GridMap.isCoordInRegion(regId, x, z, 0.5)) continue;
           const key = (z << 16) | x;
           if (takenTreePositions.has(key)) continue;
 

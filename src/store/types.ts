@@ -12,6 +12,7 @@ import type {
   RegionData,
   ResourceDeposit,
   WorldSetupConfig,
+  TradeRule,
 } from '../types/game';
 import type { SupportedLanguage } from '../i18n/types';
 import type { GridMap } from '../engine/grid/GridMap';
@@ -141,6 +142,17 @@ export interface SettlementSlice {
   immigrationProgress: number;
   setImmigrationProgress: (val: number) => void;
 
+  tradeRules: Record<ResourceType, TradeRule>;
+  setTradeRule: (resource: ResourceType, partial: Partial<TradeRule>) => void;
+  caravanStatus: {
+    state: 'waiting' | 'approaching' | 'trading' | 'departing';
+    merchantName?: string;
+    nextArrivalHour?: number;
+    nextArrivalMinute?: number;
+    lastTradeSummary?: string;
+  };
+  setCaravanStatus: (status: Partial<SettlementSlice['caravanStatus']>) => void;
+
   resourceDeposits: ResourceDeposit[];
   updateResourceDeposit: (depositId: string, partial: Partial<ResourceDeposit>) => void;
 
@@ -150,4 +162,3 @@ export interface SettlementSlice {
 }
 
 export type GameState = TimeSlice & AudioSlice & UISlice & SettlementSlice;
-

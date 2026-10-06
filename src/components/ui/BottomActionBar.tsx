@@ -6,6 +6,7 @@ import { TimeControlsWidget } from './bottom-bar/TimeControlsWidget';
 import { ActionButtonsBar } from './bottom-bar/ActionButtonsBar';
 import { SettingsModal } from './settings/SettingsModal';
 import { WeatherDebugModal } from './WeatherDebugModal';
+import { TradePostModal } from './trade/TradePostModal';
 import { audioManager } from '../../engine/audio/AudioManager';
 
 interface BottomActionBarProps {
@@ -59,6 +60,13 @@ export const BottomActionBar: React.FC<BottomActionBarProps> = React.memo(({ gri
     setActiveMenuTab(null);
   }, [setActiveMenuTab]);
 
+  const handleCloseTrade = useCallback(() => {
+    audioManager.playUIPanelClose();
+    setActiveMenuTab(null);
+  }, [setActiveMenuTab]);
+
+  const isStrategicView = useGameStore((s) => s.isStrategicView);
+
   return (
     <>
       {activeMenuTab === 'buildings' && (
@@ -69,12 +77,22 @@ export const BottomActionBar: React.FC<BottomActionBarProps> = React.memo(({ gri
         <SettingsModal grid={grid} onClose={handleCloseSettings} />
       )}
 
-      <ActionButtonsBar onToggleTab={handleToggleTab} />
-      <TimeControlsWidget />
+      {activeMenuTab === 'trade' && (
+        <TradePostModal onClose={handleCloseTrade} />
+      )}
+
       {isWeatherDebugOpen && <WeatherDebugModal />}
+
+      <div
+        className={`w-full h-full pointer-events-none transition-opacity duration-200 ${
+          isStrategicView ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
+      >
+        <ActionButtonsBar onToggleTab={handleToggleTab} />
+        <TimeControlsWidget />
+      </div>
     </>
   );
 });
 
 BottomActionBar.displayName = 'BottomActionBar';
-

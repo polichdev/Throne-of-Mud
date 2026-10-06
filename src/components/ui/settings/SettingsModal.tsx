@@ -90,4 +90,3 @@ export const SettingsModal: React.FC<SettingsModalProps> = React.memo(({ grid, o
 });
 
 SettingsModal.displayName = 'SettingsModal';
-

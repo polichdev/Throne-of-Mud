@@ -101,4 +101,3 @@ export function PlacementPreview({ grid }: Props) {
     </group>
   );
 }
-

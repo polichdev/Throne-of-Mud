@@ -390,4 +390,3 @@ export const BUILDING_TEXTURES = {
   soil: makeTexture(createSoilCanvas(), 2, 2),
   rug: makeTexture(createRugCanvas(), 1, 1),
 };
-

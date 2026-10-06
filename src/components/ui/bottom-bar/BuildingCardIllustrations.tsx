@@ -973,6 +973,46 @@ export const BuildingIllustration: React.FC<{ type: BuildingType; className?: st
         </svg>
       );
 
+    case 'trading_post':
+      return (
+        <svg viewBox="0 0 100 110" className={className} fill="none">
+          <defs>
+            <linearGradient id="sky_trade" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#bae6fd" />
+              <stop offset="60%" stopColor="#fef3c7" />
+              <stop offset="100%" stopColor="#fde68a" />
+            </linearGradient>
+            <linearGradient id="roof_trade" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#78350f" />
+              <stop offset="100%" stopColor="#451a03" />
+            </linearGradient>
+          </defs>
+          <rect width="100" height="110" fill="url(#sky_trade)" />
+          <path d="M0 72 C30 68 70 70 100 72 L100 110 L0 110 Z" fill="#65a30d" />
+          <path d="M10 88 C35 78 65 78 90 88 L100 110 L0 110 Z" fill="#a16207" opacity="0.6" />
+
+          <rect x="18" y="44" width="40" height="38" fill="#f8fafc" stroke="#1e293b" strokeWidth="2" />
+          <line x1="18" y1="58" x2="58" y2="58" stroke="#78350f" strokeWidth="2.5" />
+          <line x1="38" y1="44" x2="38" y2="82" stroke="#78350f" strokeWidth="2.5" />
+
+          <rect x="58" y="52" width="30" height="30" fill="#fef08a" opacity="0.4" stroke="#78350f" strokeWidth="1.5" />
+          <line x1="88" y1="44" x2="88" y2="82" stroke="#78350f" strokeWidth="3" />
+          <line x1="72" y1="44" x2="72" y2="82" stroke="#78350f" strokeWidth="2" />
+          <rect x="58" y="66" width="28" height="6" fill="#b45309" stroke="#451a03" strokeWidth="1" />
+
+          <polygon points="38,18 10,46 66,46" fill="url(#roof_trade)" stroke="#291102" strokeWidth="2" />
+          <polygon points="66,46 56,28 94,36 94,46" fill="#92400e" stroke="#291102" strokeWidth="1.5" />
+
+          <rect x="62" y="74" width="8" height="8" fill="#ca8a04" stroke="#713f12" strokeWidth="1" />
+          <rect x="72" y="74" width="7" height="7" fill="#854d0e" stroke="#451a03" strokeWidth="1" />
+          <ellipse cx="83" cy="76" rx="4" ry="6" fill="#d97706" stroke="#78350f" strokeWidth="1" />
+
+          <line x1="58" y1="46" x2="54" y2="56" stroke="#1e293b" strokeWidth="1.5" />
+          <circle cx="53" cy="58" r="4.5" fill="#eab308" stroke="#a16207" strokeWidth="1.2" />
+          <path d="M51 58 L55 58 M53 56 L53 60" stroke="#713f12" strokeWidth="1" />
+        </svg>
+      );
+
     default:
       return (
         <svg viewBox="0 0 100 110" className={className} fill="none">

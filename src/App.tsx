@@ -106,24 +106,25 @@ export default function App() {
           {gameMode === 'menu' ? (
             <MainMenu grid={grid} />
           ) : (
-            <div
-              className={`w-full h-full pointer-events-none transition-opacity duration-200 ${
-                isStrategicView ? 'opacity-0 pointer-events-none' : 'opacity-100'
-              }`}
-            >
-              <TopHUD />
-              {isLordsBarOpen && <LordsBar />}
-              <RoadToolPanel />
+            <>
+              <div
+                className={`w-full h-full pointer-events-none transition-opacity duration-200 ${
+                  isStrategicView ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                }`}
+              >
+                <TopHUD />
+                {isLordsBarOpen && <LordsBar />}
+                <RoadToolPanel />
+                <InspectorPanel />
+                <EventLog />
+                <FpsMonitor />
+              </div>
               <BottomActionBar grid={grid} />
-              <InspectorPanel />
-              <EventLog />
               <StrategicMapModal grid={grid} />
-              <FpsMonitor />
-            </div>
+            </>
           )}
         </div>
       </main>
     </ErrorBoundary>
   );
 }
-

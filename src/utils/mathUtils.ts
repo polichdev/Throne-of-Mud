@@ -46,4 +46,3 @@ export function clamp(val: number, min: number, max: number): number {
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
-

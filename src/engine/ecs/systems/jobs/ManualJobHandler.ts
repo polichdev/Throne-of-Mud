@@ -24,7 +24,7 @@ export class ManualJobHandler {
     unit: GameEntity,
     pendingJobs: Job[],
     grid: GridMap,
-    _uBounds: { minX: number; maxX: number; minZ: number; maxZ: number } | undefined,
+    uBounds: { minX: number; maxX: number; minZ: number; maxZ: number; regionId?: number } | undefined,
     currentTick: number
   ): boolean {
     if (!unit.gridPosition) return false;
@@ -163,6 +163,29 @@ export class ManualJobHandler {
       }
     }
 
+    if (unit.hasMule || unit.muleTransition) {
+      const hp = (unit.assignedMuleHutId ? [...buildingEntities].find((b) => b.id === unit.assignedMuleHutId) : undefined) || HaulingJobHandler.findAvailableHitchingPost(unit, unit.regionId);
+      if (hp) {
+        unit.currentJob = {
+          id: `return-mule-${Date.now()}`,
+          type: 'return_mule',
+          targetBuildingId: hp.id,
+          progress: 0,
+          totalWork: 20,
+        };
+        const pathReturn = AStar.findPathToArea(grid, [Math.floor(uX), Math.floor(uZ)], hp.gridPosition ? hp.gridPosition[0] : 0, hp.gridPosition ? hp.gridPosition[1] : 0, hp.buildingWidth || 3, hp.buildingHeight || 2);
+        if (pathReturn && pathReturn.length > 0) {
+          unit.path = pathReturn;
+          return true;
+        }
+      }
+      unit.hasMule = false;
+      unit.muleTransition = undefined;
+      unit.assignedMuleHutId = undefined;
+      (unit as any).nextPendingJobCheckTick = currentTick + 4;
+      return false;
+    }
+
     _viableJobs.length = 0;
     for (const j of _candidateJobs) {
       if (j.type === 'build_structure' && j.targetBuildingId) {
@@ -235,7 +258,7 @@ export class ManualJobHandler {
           if (isAdjacent) {
             path = [];
           } else {
-            path = AStar.findPathToArea(grid, [unitGx, unitGz], bx, bz, bw, bh);
+            path = AStar.findPathToArea(grid, [unitGx, unitGz], bx, bz, bw, bh, uBounds);
           }
         } else if (job.targetPosition) {
           const targetTile: [number, number] = [
@@ -246,7 +269,7 @@ export class ManualJobHandler {
           if (dist <= 1.5) {
             path = [];
           } else {
-            path = AStar.findPath(grid, [unitGx, unitGz], targetTile, true);
+            path = AStar.findPath(grid, [unitGx, unitGz], targetTile, true, uBounds);
           }
         }
       } else {
@@ -264,7 +287,7 @@ export class ManualJobHandler {
         if (dist <= 1.5 && isAdjacentWork) {
           path = [];
         } else {
-          path = AStar.findPath(grid, [unitGx, unitGz], targetTile, isAdjacentWork);
+          path = AStar.findPath(grid, [unitGx, unitGz], targetTile, isAdjacentWork, uBounds);
         }
       }
 
@@ -298,28 +321,53 @@ export class ManualJobHandler {
     cz: number,
     currentTick?: number
   ): void {
+    if (unit.hasMule || unit.muleTransition) {
+      const uX = unit.position ? unit.position[0] : (unit.gridPosition ? unit.gridPosition[0] + 0.5 : 0);
+      const uZ = unit.position ? unit.position[2] : (unit.gridPosition ? unit.gridPosition[1] + 0.5 : 0);
+      const hp = (unit.assignedMuleHutId ? [...buildingEntities].find((b) => b.id === unit.assignedMuleHutId) : undefined) || HaulingJobHandler.findAvailableHitchingPost(unit, unit.regionId);
+      if (hp) {
+        unit.currentJob = {
+          id: `return-mule-${Date.now()}`,
+          type: 'return_mule',
+          targetBuildingId: hp.id,
+          progress: 0,
+          totalWork: 20,
+        };
+        const pathReturn = AStar.findPathToArea(grid, [Math.floor(uX), Math.floor(uZ)], hp.gridPosition ? hp.gridPosition[0] : 0, hp.gridPosition ? hp.gridPosition[1] : 0, hp.buildingWidth || 3, hp.buildingHeight || 2);
+        if (pathReturn && pathReturn.length > 0) {
+          unit.path = pathReturn;
+          return;
+        }
+      }
+      unit.hasMule = false;
+      unit.muleTransition = undefined;
+      unit.assignedMuleHutId = undefined;
+    }
+
     if (!unit.path || unit.path.length === 0) {
       const tick = currentTick ?? (useGameStore.getState().time.tick || 0);
       const idleCooldown = (unit as any).idleCooldownTicks ?? 0;
-      if (tick >= idleCooldown && Math.random() < 0.12 && unit.gridPosition) {
+      if (tick >= idleCooldown && unit.gridPosition) {
         const minX = uBounds ? uBounds.minX + 2 : 2;
         const maxX = uBounds ? uBounds.maxX - 2 : grid.width - 3;
         const minZ = uBounds ? uBounds.minZ + 2 : 2;
         const maxZ = uBounds ? uBounds.maxZ - 2 : grid.height - 3;
         const [unitX, unitZ] = unit.gridPosition;
-        const minimumWanderDistance = 4;
+        const minimumWanderDistance = 2;
+        const regId = unit.regionId ?? (uBounds as any)?.regionId;
 
         _playerBuildings.length = 0;
         for (const b of buildingEntities) {
+          const matchFaction = unit.factionId ? (b.factionId === unit.factionId) : (b.factionId === 'player' || b.factionId === undefined);
           if (
-            (b.factionId === 'player' || b.factionId === undefined) &&
+            matchFaction &&
             b.isCompleted &&
             b.gridPosition
           ) {
             if (uBounds) {
               const bx = b.gridPosition[0];
               const bz = b.gridPosition[1];
-              if (bx < uBounds.minX || bx > uBounds.maxX || bz < uBounds.minZ || bz > uBounds.maxZ) {
+              if (bx < uBounds.minX - 2 || bx > uBounds.maxX + 2 || bz < uBounds.minZ - 2 || bz > uBounds.maxZ + 2) {
                 continue;
               }
             }
@@ -334,13 +382,18 @@ export class ManualJobHandler {
           }
         }
 
+        const isTileAllowed = (tx: number, tz: number) => {
+          if (regId === undefined) return true;
+          return GridMap.isCoordInRegion(regId, tx, tz, -1) || GridMap.canRegionConnectToHighwayAt(regId, tx, tz);
+        };
+
         let targetX = unitX;
         let targetZ = unitZ;
         let foundTarget = false;
 
         const wanderRoll = Math.random();
 
-        if (wanderRoll < 0.40 && _playerBuildings.length > 0) {
+        if (wanderRoll < 0.35 && _playerBuildings.length > 0) {
           const b = _playerBuildings[Math.floor(Math.random() * _playerBuildings.length)];
           if (b.gridPosition) {
             const bw = b.buildingWidth || 2;
@@ -356,6 +409,7 @@ export class ManualJobHandler {
             for (const [fx, fz] of frontCandidates) {
               const cxTile = Math.max(minX, Math.min(maxX, fx));
               const czTile = Math.max(minZ, Math.min(maxZ, fz));
+              if (!isTileAllowed(cxTile, czTile)) continue;
               const key = (czTile << 16) | (cxTile & 0xffff);
               if (!_occupiedCoords.has(key) && grid.isWalkable(cxTile, czTile) && Math.hypot(cxTile - unitX, czTile - unitZ) >= minimumWanderDistance) {
                 targetX = cxTile;
@@ -366,9 +420,10 @@ export class ManualJobHandler {
             }
           }
         } else if (wanderRoll < 0.70) {
-          for (let attempt = 0; attempt < 12; attempt++) {
-            const rx = Math.max(minX, Math.min(maxX, unitX + Math.floor(Math.random() * 41 - 20)));
-            const rz = Math.max(minZ, Math.min(maxZ, unitZ + Math.floor(Math.random() * 41 - 20)));
+          for (let attempt = 0; attempt < 16; attempt++) {
+            const rx = Math.max(minX, Math.min(maxX, unitX + Math.floor(Math.random() * 31 - 15)));
+            const rz = Math.max(minZ, Math.min(maxZ, unitZ + Math.floor(Math.random() * 31 - 15)));
+            if (!isTileAllowed(rx, rz)) continue;
             const t = grid.getTile(rx, rz);
             const key = (rz << 16) | (rx & 0xffff);
             if (t && t.terrain === 'road' && !_occupiedCoords.has(key) && grid.isWalkable(rx, rz) && Math.hypot(rx - unitX, rz - unitZ) >= minimumWanderDistance) {
@@ -379,11 +434,12 @@ export class ManualJobHandler {
             }
           }
         } else if (wanderRoll < 0.90) {
-          for (let attempt = 0; attempt < 10; attempt++) {
+          for (let attempt = 0; attempt < 12; attempt++) {
             const angle = Math.random() * Math.PI * 2;
-            const dist = 12 + Math.random() * 22;
+            const dist = 4 + Math.random() * 14;
             const rx = Math.max(minX, Math.min(maxX, Math.floor(cx + Math.cos(angle) * dist)));
             const rz = Math.max(minZ, Math.min(maxZ, Math.floor(cz + Math.sin(angle) * dist)));
+            if (!isTileAllowed(rx, rz)) continue;
             const key = (rz << 16) | (rx & 0xffff);
             if (!_occupiedCoords.has(key) && grid.isWalkable(rx, rz) && Math.hypot(rx - unitX, rz - unitZ) >= minimumWanderDistance) {
               targetX = rx;
@@ -393,9 +449,10 @@ export class ManualJobHandler {
             }
           }
         } else {
-          for (let attempt = 0; attempt < 8; attempt++) {
+          for (let attempt = 0; attempt < 10; attempt++) {
             const rx = Math.max(minX, Math.min(maxX, cx + Math.floor(Math.random() * 11 - 5)));
             const rz = Math.max(minZ, Math.min(maxZ, cz + Math.floor(Math.random() * 11 - 5)));
+            if (!isTileAllowed(rx, rz)) continue;
             const key = (rz << 16) | (rx & 0xffff);
             if (!_occupiedCoords.has(key) && grid.isWalkable(rx, rz) && Math.hypot(rx - unitX, rz - unitZ) >= minimumWanderDistance) {
               targetX = rx;
@@ -406,6 +463,26 @@ export class ManualJobHandler {
           }
         }
 
+        if (!foundTarget) {
+
+          for (let dx = -4; dx <= 4; dx++) {
+            for (let dz = -4; dz <= 4; dz++) {
+              if (dx === 0 && dz === 0) continue;
+              const fx = Math.max(minX, Math.min(maxX, unitX + dx));
+              const fz = Math.max(minZ, Math.min(maxZ, unitZ + dz));
+              if (!isTileAllowed(fx, fz)) continue;
+              const key = (fz << 16) | (fx & 0xffff);
+              if (!_occupiedCoords.has(key) && grid.isWalkable(fx, fz) && Math.hypot(fx - unitX, fz - unitZ) >= 1.5) {
+                targetX = fx;
+                targetZ = fz;
+                foundTarget = true;
+                break;
+              }
+            }
+            if (foundTarget) break;
+          }
+        }
+
         if (foundTarget) {
           const wanderPath = createPathSafely(
             grid,
@@ -413,7 +490,7 @@ export class ManualJobHandler {
             unit.gridPosition,
             [targetX, targetZ],
             buildingEntities,
-            false,
+            true,
             uBounds
           );
 
@@ -425,9 +502,9 @@ export class ManualJobHandler {
               progress: 0,
               totalWork: 15,
             };
-            (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * 45 + 30);
+            (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * 20 + 20);
 
-            if (Math.random() < 0.07) {
+            if (Math.random() < 0.12) {
               const isLord = isNoble(unit);
               let text = '';
               if (isLord) {
@@ -459,7 +536,7 @@ export class ManualJobHandler {
           }
         }
 
-        (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * 30 + 15);
+        (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * 8 + 6);
       }
     }
   }

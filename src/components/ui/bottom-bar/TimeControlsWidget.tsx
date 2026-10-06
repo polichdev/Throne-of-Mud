@@ -142,4 +142,3 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
 });
 
 TimeControlsWidget.displayName = 'TimeControlsWidget';
-

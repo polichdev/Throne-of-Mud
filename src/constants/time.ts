@@ -125,4 +125,3 @@ export function getTargetSnowAccumulation(
     return 0.0;
   }
 }
-

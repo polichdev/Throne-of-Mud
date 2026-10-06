@@ -1,4 +1,4 @@
-# Throne of Mud — 3D Colony Simulation
+# Throne of Mud — 3D Medieval Colony Simulation
 
 [![React 19](https://img.shields.io/badge/React-19.2-61dafb.svg?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript 6](https://img.shields.io/badge/TypeScript-6.0-blue.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -17,9 +17,9 @@
 
 ## Overview
 
-**Throne of Mud** is an authentic medieval city-builder, feudal management, and colony simulation game rendered entirely in 3D WebGL via Three.js and React Three Fiber.
+**Throne of Mud** is an authentic medieval city-builder, feudal management, and colony simulation game rendered in real-time 3D WebGL via Three.js and React Three Fiber.
 
-The game combines a high-performance **Entity Component System (ECS)**, deterministic procedural terrain generation, custom **GLSL weather and terrain shaders**, multi-tier medieval architecture with realistic animated resource extraction, autonomous AI bot lords with strategic expansion capabilities, an in-depth settler vitality and profession economy, and real-time 3D spatial audio.
+The game features an Entity Component System (ECS) architecture, deterministic procedural terrain generation across a 384×384 realm, custom GLSL weather and terrain shaders, multi-tier production chains, working beast logistics (mules and horse-drawn merchant carts), an autonomous Royal Highway trade network, intelligent rival bot lords, in-depth settler vitality with daily routines, and 3D spatial audio.
 
 <p align="center">
   <img src="docs/preview.jpg" alt="Throne of Mud Gameplay Preview" width="100%" />
@@ -30,68 +30,85 @@ The game combines a high-performance **Entity Component System (ECS)**, determin
 ## Tech Stack
 
 ### 3D Graphics & Simulation Engine
-- **Three.js (r186) & React Three Fiber (v9)**: High-performance WebGL scene graph rendering, camera orchestration, animated mechanical winches, and instanced mesh batching.
-- **Custom GLSL Shader Pipeline**:
-  - Multi-texture terrain splatting (`grass`, `mud`, `stone`, `water`) driven by continuous data texture coordinates.
-  - Dynamic weather surface darkening (`uWetness`) and procedural raindrop splash rings.
-  - Autumn seasonal color shifts (`uAutumnAmount`) and progressive winter snow accumulation (`uSnowAmount`).
-  - Two-layer animated wave deformation with specular sun crest sparkles for open water bodies.
-  - GPU vertex-shader foliage wind waves and elastic hit shudder responses.
-- **Miniplex v2 (Entity Component System)**: High-frequency game loop separating entity state from behavior across decoupled systems (`JobSystem`, `MovementSystem`, `NeedsSystem`, `EconomySystem`, `ProductionSystem`, `ImmigrationSystem`, `BotAISystem`).
-- **Centralized Constants Architecture**: Dedicated constant modules (`needs.ts`, `economy.ts`, `immigration.ts`, `jobs.ts`, `movement.ts`, `ai.ts`, `time.ts`, `camera.ts`, `world.ts`) eliminating magic numbers and ensuring deterministic game balancing.
-- **A* Pathfinding (`AStar.ts`)**: Heuristic path planning supporting obstacle bypass, dynamic building entrance alignments, and regional boundary constraints.
-- **Simplex Noise & Mulberry32 PRNG**: Seeded deterministic mathematical noise for biome elevation, forest clusters, natural resource veins, and highway curves.
+- **Three.js (r186) & React Three Fiber (v9)**: Real-time WebGL scene graph rendering, dynamic camera orchestration, instanced mesh batching, and procedural geometry.
+- **Custom GLSL Shader Pipeline**: Multi-texture terrain splatting (`grass`, `mud`, `stone`, `water`, `road`), dynamic rain wetness, procedural splash rings, seasonal foliage color shifts, winter snow accumulation, animated water waves, and GPU vertex-shader wind physics.
+- **Miniplex v2 (Entity Component System)**: Decoupled high-frequency simulation systems (`JobSystem`, `MovementSystem`, `NeedsSystem`, `EconomySystem`, `ProductionSystem`, `ImmigrationSystem`, `TradeSystem`, `BotAISystem`).
+- **A* Pathfinding (`AStar.ts`)**: Fast heuristic path planning supporting obstacle avoidance, dynamic door alignments, and regional highway constraints.
 
 ### State Management & Architecture
-- **Zustand v5 (Slice Pattern)**: Modular, decoupled store architecture:
-  - `timeSlice`: Calendar progression, authentic 12-month season cycles, and multi-stage weather transitions.
-  - `settlementSlice`: Resource inventories, building assignments, chronicles, natural deposits, and AI lords.
-  - `uiSlice`: Canvas interactions, tool selection, camera focus targets, and animations.
-  - `audioSlice`: Channel gains, muting, and dual-language localization settings.
-- **Clean Architecture & Separation of Concerns**: Strict decoupling between Presentation (React UI), 3D Renderers (Three.js), Simulation Logic (ECS), State Management (Zustand), and Persistence (IndexedDB).
-- **Domain Entity Helpers (`entityHelpers.ts`)**: Encapsulated state mutators eliminating duplicate logic for thoughts, speech bubbles, and worker assignments.
+- **Zustand v5 (Slice Pattern)**: Modular decoupled state slices (`timeSlice`, `settlementSlice`, `uiSlice`, `audioSlice`).
+- **Clean Architecture**: Strict separation of concerns between UI Presentation (React), 3D Renderers (Three.js), Simulation Logic (ECS), State Management (Zustand), and Persistence (IndexedDB).
 
 ### UI, Audio & Storage
-- **React 19 & Tailwind CSS v4**: Medieval Gothic aesthetic inspired by historical manuscripts and parchment art direction (Cinzel typography, filigree headers, embossed buttons).
-- **Web Audio API Engine (`AudioManager.ts`)**: 
-  - Dynamic 3D positional audio emitters with spatial falloff.
-  - Multi-layered environmental ambience (birds, campfire, night crickets, seasonal winds).
-  - Dynamic footsteps adapted to terrain (dirt vs. grass) and medieval voice lines.
-- **Full Dual-Language Localization (`i18n`)**: Complete Ukrainian (`uk`) and English (`en`) translation covering all buildings, resources, event chronicles, tooltips, and dialogues.
-- **IndexedDB Save Engine (`saveManager.ts`)**: Resilient local persistence storing complete game state, grid modifications, and entity inventories with transaction integrity.
-- **Oxlint**: Rust-powered ultra-fast static analysis ensuring strict code hygiene and zero compiler errors.
+- **React 19 & Tailwind CSS v4**: Gothic medieval interface design inspired by historical manuscripts (Cinzel typography, filigree headers, parchment cards).
+- **Web Audio API Engine (`AudioManager.ts`)**: 3D spatial positional audio, environmental soundscapes (birds, campfire, night crickets, wind), footsteps, and voice lines.
+- **Full Dual-Language Localization (`i18n`)**: Complete Ukrainian (`uk`) and English (`en`) translations.
+- **IndexedDB Save Engine (`saveManager.ts`)**: Transactional local persistence storing game worlds, terrain modifications, and entity inventories.
+- **Oxlint**: Ultra-fast Rust-based static analyzer enforcing strict code quality.
 
 ---
 
-## Core Features
+## Key Features
 
-- **Procedural Feudal Realm & Resource Deposits**: 256×256 procedural map divided into 4 sovereign fiefs (*Goldhof*, *Waldau*, *Eichenau*, *Zweiau*), featuring 7 distinct types of regional natural resource deposits (*iron ore veins, limestone quarry rock, clay beds, salt springs, wild berries, wildlife game, and fishing spots*) with automatic building center-snapping.
-- **Procedural 3D Architecture & Multi-Tier Production Chains**: 20+ algorithmic medieval buildings (peasant cottages, timber-frame manors, rotating windmills, stone walls, bakeries, breweries, market stalls, charcoal kilns, iron smelters, sawmills, stonecutters, brickworks, weaver workshops, taverns, wooden churches, and active construction scaffolds) powering an end-to-end raw-to-refined resource economy.
-- **Deep Iron Quarry Excavation & Extraction Cycles**: Tiered open-pit amphitheater quarry with multi-level rock strata, featuring an animated wooden winch lowering ore buckets 1.33m deep into the earth and hoisting raw iron ore.
-- **Dynamic 12-Month Calendar & Weather System**:
-  - Authentic 12-month annual calendar (March to February) spanning 4 distinct seasons with 3 months each (10 days per month, 120 days per year).
-  - Full 24-hour day/night cycle with realistic sun/moon arcs, shadow angles, and twilight color temperatures.
-  - Dynamic multi-stage weather engine (Clear -> Rain -> Thunderstorm with lightning -> Snow).
-  - Progressive seasonal shifts: Spring renewal, Summer clarity, Autumn foliage golden tints, and heavy Winter snow cover.
-- **Interactive Forestry, Mining & Resource Gathering**:
-  - Instanced forest rendering supporting thousands of trees with vertex-shader wind sway.
-  - Responsive tree chopping physics: directional trunk shudder upon axe strikes, flying woodchips, angular tree felling animations, and fallen log sectioning.
-  - Rock clearing, stone quarrying, clay extraction, salt harvesting, berry foraging, freshwater fishing, and hunting.
-- **Autonomous Settlers & Feudal Economy**:
-  - Villagers manage vitality: Hunger, Rest/Energy, Mood, and Ale satisfaction.
-  - Daily wage payouts and autonomous market shopping where workers purchase food and drinks with earned gold.
-  - Psychological Thoughts system with timed modifiers (e.g. *Employed*, *Preached*, *Camp Founded*, *Paid Wages*).
-  - 24+ specialized professions with automated workplace staffing (*Miner, Quarryman, Smelter, Charcoal Burner, Weaver, Innkeeper, Priest, Baker, Hunter, Fisherman*, etc.).
-  - Noble Lord commands: Rally peasant levy militias, preach from the pulpit for morale, or study manuscripts to enhance intellect.
-- **Autonomous AI Bot Lords 2.0**: Independent neighboring fiefs evaluate regional natural resource deposits, construct specialized production hubs, autonomously pave road networks from building entrances to highway arteries, manage organic immigration, and grow their feudal realms.
-- **Real-Time Dirt Road Tool**: Freeform road drawing and erasing that dynamically rasterizes into the terrain shader with realistic edge blending.
-- **Strategic Parchment Map View**: Seamless transition into an ancient cartographic parchment view detailing regional ownership, lord heraldry, demographic analytics, and economic indicators.
+### Expanded Feudal Realm & Geopolitical Regions (384×384)
+- **6 Sovereign Fiefs**: *Goldhof* (northwest meadows), *Mittenwald* (north-central dense forest), *Waldau* (northeast highlands), *Königsweg / Royal Highway* (central trade corridor spanning entire map width), *Eichenau* (southwest oak groves), and *Zweiau* (southeast plains).
+- **7 Regional Natural Resource Deposits**: Procedural iron ore veins, limestone rock quarries, clay pits, salt springs, wild berries, wildlife game, and fishing waters with automatic building snapping.
+
+### Trade Economy & Royal Highway Caravans
+- **Trading Posts (`trading_post`)**: Establish custom import and export trade policies, target inventory reserves, and market tariffs.
+- **Traveling Merchants**: Autonomous horse-drawn merchant wagons traversing the Royal Highway network to trade across fiefs.
+- **Highway Connection Network**: Settlements pave connection roads to the nearest Royal Highway arteries to enable merchant visits.
+
+### Working Beasts & Mule Logistics
+- **Hitching Posts (`hitching_post`)**: Stables supporting up to 3 working mules with animated idle behaviors.
+- **Log Towing & Material Hauling**: Settlers use mules to haul heavy logs from forest clearings and transport bulk materials directly to building scaffolds.
+
+### Multi-Tier Medieval Production Chains
+- **20+ Procedural 3D Buildings**:
+  - *Forestry & Extraction*: Lumberjack Hut, Sawmill, Stone Quarry, Stonecutter, Clay Pit, Brickworks, Salt Works, Iron Mine, Charcoal Kiln, Iron Smelter.
+  - *Agriculture & Food*: Forager's Hut, Hunter's Hut, Fisherman's Hut, Wheat Farm, Windmill, Bakery, Brewery.
+  - *Civic & Residential*: Peasant Houses (3 beds), Settler Tents (3 beds), Roaring Campfire, Hitching Post, Marketplace, Tavern, Wooden Church, Lord's Manor.
+- **Deep Iron Quarry Excavation**: Tiered open-pit amphitheater quarry with an animated wooden winch lowering ore buckets 1.33m into the earth.
+
+### Autonomous AI Rival Lords
+- **Up to 4 Rival Lords**: Compete or trade with *Baron von Goldhof*, *Duke von Walden*, *Count von Eichenau*, and *Count von Reichenbach*.
+- **Autonomous Expansion**: AI lords evaluate regional resources, clear camps, pave roads to highway borders, construct production hubs, build residential quarters, and manage immigration.
+
+### Settler Vitality, Social Life & Daily Routines
+- **Vitality System**: Villagers manage Hunger, Rest/Energy, Mood, Ale satisfaction, and Hygiene.
+- **Daily Schedules & Night Gathering**: Settlers work daytime shifts, gather around campfires at dusk, and sleep in beds at night.
+- **24+ Specialized Professions**: Autonomous workplace staffing across extraction, craft, and civic roles.
+- **Interactive Speech Bubbles**: Real-time mood thoughts, job announcements, and royal proclamations.
+
+### 12-Month Calendar, Weather & Dynamic Seasons
+- **Authentic 12-Month Year (March–February)**: 4 seasons, 10 days per month (120 days/year), full 24-hour sun/moon illumination arcs.
+- **Multi-Stage Weather System**: Clear skies, overcast rain with ground wetness, thunderstorms with lightning, and winter snow.
+- **Seasonal Transformations**: Spring renewal, Summer vibrance, Autumn golden foliage, and heavy Winter snow accumulation.
+
+### Strategic Parchment Map & Game Setup
+- **Interactive Setup Modal**: Choose starting fief, pick settlement camp location, and configure 0 to 4 rival bot lords.
+- **Parchment Map View (`M`)**: Seamless transition into a top-down parchment map displaying borders, heraldry shields, roads, and demographic stats.
+
+### Unified Foliage & Real-Time Road Paving
+- **Instanced Foliage Rendering**: Thousands of swaying trees, bushes, grass tufts, and flowers with vertex-shader wind physics.
+- **Dynamic Road Tool (`R`)**: Freeform road drawing with automatic foliage and clutter clearance.
 
 ---
 
-## Architecture & Project Structure
+## In-Game Controls & Hotkeys
 
-For detailed system architecture, directory structures, entity-component patterns, and diagrams, see the [Architecture Documentation](docs/README.md).
+| Key | Action | Description |
+| :--- | :--- | :--- |
+| **`W` `A` `S` `D` / Arrows** | Camera Pan | Pan across the settlement and landscape |
+| **`Q` / `E`** | Rotate Camera / Building | Rotate camera angle left / right, or rotate building blueprint during placement |
+| **Mouse Wheel** | Zoom In / Out | Smooth altitude zoom (tactical to aerial view) |
+| **Right Mouse Drag** | Orbit / Rotate | Rotate camera angle and pitch |
+| **`Space`** | Pause / Resume | Toggle simulation loop |
+| **`1` `2` `3`** | Game Speed | Switch between 1x, 2x, and 5x simulation speed |
+| **`T`** | Town Center Focus | Center camera on Lord's camp / manor |
+| **`R`** | Road Tool | Toggle dirt road drawing and erase mode |
+| **`M`** | Strategic Map | Toggle top-down parchment map view |
+| **`Escape`** | Settings / Close | Close active panel or open settings modal |
 
 ---
 
@@ -133,22 +150,6 @@ npm run preview
 # Run ultra-fast Oxlint check
 npm run lint
 ```
-
----
-
-## In-Game Controls & Hotkeys
-
-| Key | Action | Description |
-| :--- | :--- | :--- |
-| **`W` `A` `S` `D` / Arrows** | Camera Pan | Pan across the settlement and landscape |
-| **Mouse Wheel** | Zoom In / Out | Smooth altitude zoom (tactical to aerial view) |
-| **Right Mouse Drag** | Orbit / Rotate | Rotate camera angle and pitch |
-| **`Space`** | Pause / Resume | Toggle simulation loop |
-| **`1` `2` `3`** | Game Speed | Switch between 1x, 2x, and 5x simulation speed |
-| **`T`** | Town Center Focus | Instantly center camera on your Lord's manor/tent |
-| **`R`** | Road Tool | Toggle dirt road drawing and erase mode |
-| **`M`** | Strategic Map | Toggle between top-down parchment view and 3D mode |
-| **`Escape`** | Settings / Close | Close active inspector panel or open settings modal |
 
 ---
 

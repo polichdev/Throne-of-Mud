@@ -303,5 +303,39 @@ export interface TranslationDictionary {
     hostileDesc: string;
     close: string;
   };
+  tradePost: {
+    title: string;
+    subtitle: string;
+    categories: {
+      all: string;
+      construction: string;
+      agriculture: string;
+      food: string;
+      materials: string;
+      military: string;
+    };
+    modes: {
+      none: string;
+      import: string;
+      export: string;
+    };
+    headers: {
+      tradeRule: string;
+      item: string;
+      currentStock: string;
+      targetStock: string;
+      unitPrice: string;
+      status: string;
+    };
+    caravan: {
+      waiting: string;
+      approaching: string;
+      atPost: string;
+      departed: string;
+      nextScheduled: string;
+    };
+    openTradePost: string;
+    noActiveTrades: string;
+    saveSettings: string;
+  };
 }
-

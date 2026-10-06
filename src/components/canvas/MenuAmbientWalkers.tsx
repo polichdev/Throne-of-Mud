@@ -51,8 +51,8 @@ export function MenuAmbientWalkers({ grid }: Props) {
       avatarColor: '#854d0e',
       moveSpeed: 1.25,
       type: 'NS',
-      minCoord: 110,
-      maxCoord: 148,
+      minCoord: 164,
+      maxCoord: 206,
       currentDirection: 1,
       pauseTimer: 0,
     },
@@ -63,8 +63,8 @@ export function MenuAmbientWalkers({ grid }: Props) {
       avatarColor: '#047857',
       moveSpeed: 1.15,
       type: 'WE',
-      minCoord: 110,
-      maxCoord: 148,
+      minCoord: 160,
+      maxCoord: 230,
       currentDirection: -1,
       pauseTimer: 0,
     },
@@ -75,8 +75,8 @@ export function MenuAmbientWalkers({ grid }: Props) {
       avatarColor: '#475569',
       moveSpeed: 1.35,
       type: 'NS',
-      minCoord: 114,
-      maxCoord: 146,
+      minCoord: 168,
+      maxCoord: 200,
       currentDirection: -1,
       pauseTimer: 2.0,
     },
@@ -177,4 +177,3 @@ export function MenuAmbientWalkers({ grid }: Props) {
 
   return null;
 }
-

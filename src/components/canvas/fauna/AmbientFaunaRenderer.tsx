@@ -84,7 +84,7 @@ const FAUNA_MATS = {
   birdFeather: new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.8 }),
   birdWing: new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.75, side: THREE.DoubleSide }),
   birdBeak: new THREE.MeshStandardMaterial({ color: '#f59e0b', roughness: 0.5 }),
-  
+
   stagBody: new THREE.MeshStandardMaterial({ color: '#854d0e', roughness: 0.85 }),
   stagUnderbelly: new THREE.MeshStandardMaterial({ color: '#fef3c7', roughness: 0.9 }),
   stagAntlers: new THREE.MeshStandardMaterial({ color: '#451a03', roughness: 0.6 }),
@@ -109,7 +109,7 @@ const FAUNA_GEOS = {
   birdBeak: new THREE.ConeGeometry(0.03, 0.08, 4),
   birdWing: new THREE.PlaneGeometry(0.24, 0.12),
   birdTail: new THREE.BufferGeometry(),
-  
+
   deerTorso: new THREE.BoxGeometry(0.36, 0.42, 0.72),
   deerNeck: new THREE.BoxGeometry(0.18, 0.36, 0.20),
   deerHead: new THREE.BoxGeometry(0.16, 0.18, 0.26),

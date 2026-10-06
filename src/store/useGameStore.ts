@@ -16,4 +16,3 @@ export const useGameStore = create<GameState>((...args) => ({
   ...createUISlice(...args),
   ...createSettlementSlice(...args),
 }));
-

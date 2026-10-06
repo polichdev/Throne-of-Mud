@@ -53,7 +53,7 @@ export class JobSystem {
     }
 
     for (const unit of characterEntities) {
-      if (unit.factionId === 'bandit') continue;
+      if (unit.factionId === 'bandit' || unit.factionId === 'merchant' || unit.isMerchant) continue;
       const isPlayerUnit = unit.factionId === 'player' || unit.factionId === undefined;
       const isNoble = isNobleEntity(unit);
 
@@ -78,7 +78,10 @@ export class JobSystem {
         unit.currentJob?.type === 'demolish_structure' ||
         unit.currentJob?.type === 'chop_tree' ||
         unit.currentJob?.type === 'mine_rock' ||
-        unit.currentJob?.type === 'chop_fallen_log';
+        unit.currentJob?.type === 'chop_fallen_log' ||
+        unit.currentJob?.type === 'haul_log_with_mule' ||
+        unit.currentJob?.type === 'haul_construction_mule' ||
+        unit.currentJob?.type === 'return_mule';
 
       if (!isNightTime && (isAlreadySleeping || isAlreadySitting)) {
         const isRested = isAlreadySleeping
@@ -136,6 +139,13 @@ export class JobSystem {
         if (isUnitWorkHours) {
           const building = _buildingMap.get(unit.workBuildingId);
           if (building && building.isCompleted) {
+            if (building.buildingType !== 'stockpile' && (unit.hasMule || unit.muleTransition || unit.isHaulingLog)) {
+              unit.hasMule = false;
+              unit.muleTransition = undefined;
+              unit.muleTransitionProgress = undefined;
+              unit.assignedMuleHutId = undefined;
+              unit.isHaulingLog = false;
+            }
             let assigned = false;
             if (building.buildingType === 'lumberjack_hut') {
               assigned = WoodcuttingJobHandler.assignWoodcutterHutJob(unit, building, grid, uBounds, currentTick, cx, cz);
@@ -284,6 +294,13 @@ export class JobSystem {
         break;
 
       case 'harvest_wheat':
+        if (unit.hasMule || unit.muleTransition || unit.isHaulingLog) {
+          unit.hasMule = false;
+          unit.muleTransition = undefined;
+          unit.muleTransitionProgress = undefined;
+          unit.assignedMuleHutId = undefined;
+          unit.isHaulingLog = false;
+        }
         if (job.targetBuildingId) {
           let farmBuilding: GameEntity | undefined;
           for (const b of buildingEntities) {

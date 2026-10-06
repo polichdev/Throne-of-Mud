@@ -18,6 +18,14 @@ export class WorkstationJobHandler {
     uBounds: { minX: number; maxX: number; minZ: number; maxZ: number } | undefined,
     currentTick: number
   ): boolean {
+    if (unit.hasMule || unit.muleTransition || unit.isHaulingLog) {
+      unit.hasMule = false;
+      unit.muleTransition = undefined;
+      unit.muleTransitionProgress = undefined;
+      unit.assignedMuleHutId = undefined;
+      unit.isHaulingLog = false;
+    }
+
     const assignedList = building.assignedWorkers || [];
     const workerIndex = Math.max(0, assignedList.indexOf(unit.id));
     const station = getBuildingWorkstation(building, workerIndex, currentTick);
@@ -121,6 +129,14 @@ export class WorkstationJobHandler {
     cz: number,
     currentTick?: number
   ): void {
+    if (unit.hasMule || unit.muleTransition || unit.isHaulingLog) {
+      unit.hasMule = false;
+      unit.muleTransition = undefined;
+      unit.muleTransitionProgress = undefined;
+      unit.assignedMuleHutId = undefined;
+      unit.isHaulingLog = false;
+    }
+
     if (unit.currentJob?.type === 'chop_tree' || unit.currentJob?.type === 'work_at_building') {
       const prevBuildingId = unit.currentJob.targetBuildingId || unit.workBuildingId;
       unit.currentJob = { id: `idle-${unit.id}`, type: 'idle', progress: 0, totalWork: 0 };
@@ -171,4 +187,3 @@ export class WorkstationJobHandler {
     }
   }
 }
-

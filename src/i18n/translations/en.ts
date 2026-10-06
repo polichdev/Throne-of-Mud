@@ -255,6 +255,10 @@ export const en: TranslationDictionary = {
         name: 'Feudal Tavern',
         description: 'Lively village tavern where patrons gather to drink ale, boosting morale and generating tax revenues.',
       },
+      trading_post: {
+        name: 'Trading Post',
+        description: 'Hub of foreign commerce. Configure imports and exports with neighboring realms. Traveling merchant caravans arrive daily between 10:00 and 15:00 to conduct business.',
+      },
     },
     cost: 'Cost',
     capacity: 'Capacity',
@@ -380,7 +384,7 @@ export const en: TranslationDictionary = {
   newGame: {
     title: 'Founding a New Realm • Manor Lords',
     subtitle: 'Select your starting fiefdom, choose a picturesque camp location, and configure rivals',
-    mapTitle: 'Topographical Realm Map (256 × 256)',
+    mapTitle: 'Topographical Realm Map (384 × 384)',
     selectRegion: 'Select Starting Fief',
     selectCamp: 'Camp Placement',
     rivalLords: 'Rival Factions',
@@ -423,5 +427,39 @@ export const en: TranslationDictionary = {
     hostileDesc: 'You laid claim to the frontier timberlands. Lord Hildebolt expressed vehement outrage.',
     close: 'Close',
   },
+  tradePost: {
+    title: 'TRADING POST',
+    subtitle: 'Cross-border trading enterprise & merchant caravans',
+    categories: {
+      all: 'All Goods',
+      construction: 'Construction',
+      agriculture: 'Agriculture',
+      food: 'Foodstuffs',
+      materials: 'Materials',
+      military: 'Military',
+    },
+    modes: {
+      none: 'No Trade',
+      import: 'Import (Buy)',
+      export: 'Export (Sell)',
+    },
+    headers: {
+      tradeRule: 'Trade Rule',
+      item: 'Commodity',
+      currentStock: 'Stock',
+      targetStock: 'Target Stock',
+      unitPrice: 'Price / Unit',
+      status: 'Route Status',
+    },
+    caravan: {
+      waiting: 'Awaiting daily merchant caravan',
+      approaching: 'Traveling merchant approaching post',
+      atPost: 'Merchant at trading post: deals underway',
+      departed: 'Merchant concluded business and departed',
+      nextScheduled: 'Merchant caravan arrives daily at 13:00',
+    },
+    openTradePost: 'Open Trading Stalls',
+    noActiveTrades: 'No active trade orders configured',
+    saveSettings: 'Confirm Settings',
+  },
 };
-

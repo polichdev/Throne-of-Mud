@@ -33,6 +33,7 @@ import {
   ForestersHutModel,
   WoodenChurchModel,
   TavernModel,
+  TradingPostModel,
 } from './models';
 
 interface BuildingPlacementGhostProps {
@@ -120,6 +121,8 @@ export const BuildingPlacementGhost: React.FC<BuildingPlacementGhostProps> = Rea
         return <WoodenChurchModel isLightOn={false} />;
       case 'tavern':
         return <TavernModel isLightOn={false} />;
+      case 'trading_post':
+        return <TradingPostModel isLightOn={false} />;
       default:
         return <PeasantHouseModel isLightOn={false} />;
     }
