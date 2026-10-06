@@ -97,7 +97,7 @@ export function isRoadPathValid(
   return true;
 }
 
-const MAX_GRID_CELLS = 256 * 256;
+const MAX_GRID_CELLS = 512 * 512;
 const _roadGScore = new Float32Array(MAX_GRID_CELLS);
 const _roadFScore = new Float32Array(MAX_GRID_CELLS);
 const _roadVisitedRun = new Int32Array(MAX_GRID_CELLS);
@@ -185,11 +185,13 @@ export function getSmartRoadPath(
   };
 
   const findNearestClear = (cx: number, cz: number): [number, number] | null => {
-    if (!isBlocked(cx, cz)) return [cx, cz];
+    if (!isBlocked(cx, cz) && isTileInRoadBounds(cx, cz, bounds)) return [cx, cz];
     const offsets = [
       [0, 1], [0, -1], [1, 0], [-1, 0],
       [1, 1], [-1, 1], [1, -1], [-1, -1],
       [0, 2], [0, -2], [2, 0], [-2, 0],
+      [0, 3], [0, -3], [3, 0], [-3, 0],
+      [0, 4], [0, -4], [4, 0], [-4, 0],
     ];
     for (const [ox, oz] of offsets) {
       const nx = cx + ox;
@@ -256,13 +258,16 @@ export function getSmartRoadPath(
   ];
 
   let iterations = 0;
-  const maxIterations = 1200;
+  const maxIterations = 15000;
 
   while (_roadHeap.size > 0 && iterations++ < maxIterations) {
     const currentIdx = _roadHeap.pop();
     if (currentIdx === -1) break;
 
-    if (currentIdx === targetIdx) {
+    const cx = currentIdx % gridW;
+    const cz = (currentIdx / gridW) | 0;
+
+    if (currentIdx === targetIdx || (iterations > 1 && Math.hypot(cx - tx, cz - tz) <= 1.05)) {
       const path: [number, number][] = [];
       let curr = currentIdx;
       while (curr !== -1) {
@@ -272,13 +277,13 @@ export function getSmartRoadPath(
         curr = _roadParent[curr];
       }
       path.reverse();
+      if (currentIdx !== targetIdx && !isBlocked(tx, tz) && isTileInRoadBounds(tx, tz, bounds)) {
+        path.push([tx, tz]);
+      }
       return path;
     }
 
     _roadClosedRun[currentIdx] = runId;
-
-    const cx = currentIdx % gridW;
-    const cz = (currentIdx / gridW) | 0;
     const currentG = _roadGScore[currentIdx];
 
     for (let i = 0; i < 4; i++) {
@@ -317,4 +322,3 @@ export function getSmartRoadPath(
 
   return [];
 }
-

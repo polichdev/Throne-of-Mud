@@ -134,4 +134,3 @@ export function getSnappedPlacementCoords(
 
   return [roundX, roundZ];
 }
-

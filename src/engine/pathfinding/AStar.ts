@@ -8,7 +8,7 @@ export interface RegionBounds {
   regionId?: number;
 }
 
-const MAX_GRID_CELLS = 256 * 256;
+const MAX_GRID_CELLS = 512 * 512;
 const visitedRun = new Int32Array(MAX_GRID_CELLS);
 const closedRun = new Int32Array(MAX_GRID_CELLS);
 const gScores = new Float32Array(MAX_GRID_CELLS);
@@ -130,7 +130,11 @@ export class AStar {
           const pz = areaZ + dz;
 
           if (regionBounds) {
-            if (px < regionBounds.minX || px > regionBounds.maxX || pz < regionBounds.minZ || pz > regionBounds.maxZ) {
+            if (regionBounds.regionId !== undefined) {
+              if (!GridMap.isCoordInRegion(regionBounds.regionId, px, pz, 0)) {
+                continue;
+              }
+            } else if (px < regionBounds.minX || px > regionBounds.maxX || pz < regionBounds.minZ || pz > regionBounds.maxZ) {
               continue;
             }
           }
@@ -171,7 +175,8 @@ export class AStar {
     start: [number, number],
     target: [number, number],
     allowAdjacentTarget = false,
-    regionBounds?: RegionBounds
+    regionBounds?: RegionBounds,
+    customMaxIterations?: number
   ): [number, number][] | null {
     let sx = Math.floor(start[0]);
     let sz = Math.floor(start[1]);
@@ -179,7 +184,11 @@ export class AStar {
     const tz = Math.floor(target[1]);
 
     if (regionBounds) {
-      if (tx < regionBounds.minX || tx > regionBounds.maxX || tz < regionBounds.minZ || tz > regionBounds.maxZ) {
+      if (regionBounds.regionId !== undefined) {
+        if (!GridMap.isCoordInRegion(regionBounds.regionId, tx, tz, 0)) {
+          return null;
+        }
+      } else if (tx < regionBounds.minX || tx > regionBounds.maxX || tz < regionBounds.minZ || tz > regionBounds.maxZ) {
         return null;
       }
     }
@@ -210,7 +219,7 @@ export class AStar {
 
       const topNeighbors = neighbors.slice(0, 2);
       for (const n of topNeighbors) {
-        const subPath = AStar.findPath(grid, [sx, sz], [n.x, n.z], false, regionBounds);
+        const subPath = AStar.findPath(grid, [sx, sz], [n.x, n.z], false, regionBounds, customMaxIterations);
         if (subPath && subPath.length > 0) {
           return subPath;
         }
@@ -248,7 +257,7 @@ export class AStar {
 
     sharedHeap.push(startIdx);
 
-    const maxIterations = regionBounds ? 600 : 1000;
+    const maxIterations = customMaxIterations ?? (regionBounds ? 700 : 1600);
     let iterations = 0;
 
     const dirDx = [1, -1, 0, 0, 1, -1, 1, -1];
@@ -274,7 +283,11 @@ export class AStar {
         const nz = cz + dirDz[i];
 
         if (regionBounds) {
-          if (nx < regionBounds.minX || nx > regionBounds.maxX || nz < regionBounds.minZ || nz > regionBounds.maxZ) {
+          if (regionBounds.regionId !== undefined) {
+            if (!GridMap.isCoordInRegion(regionBounds.regionId, nx, nz, 0)) {
+              continue;
+            }
+          } else if (nx < regionBounds.minX || nx > regionBounds.maxX || nz < regionBounds.minZ || nz > regionBounds.maxZ) {
             continue;
           }
         }
@@ -311,7 +324,7 @@ export class AStar {
       }
     }
 
-    if (unreachablePairs.size < 4000) {
+    if (sharedHeap.size === 0 && unreachablePairs.size < 4000) {
       unreachablePairs.add(pairKey);
     }
     return null;

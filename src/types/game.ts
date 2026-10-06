@@ -183,7 +183,8 @@ export type BuildingType =
   | 'weavers_workshop'
   | 'foresters_hut'
   | 'wooden_church'
-  | 'tavern';
+  | 'tavern'
+  | 'trading_post';
 
 export interface BuildingBlueprint {
   type: BuildingType;
@@ -320,3 +321,13 @@ export interface WorldSetupConfig {
   botCount: number;
 }
 
+export type TradeMode = 'none' | 'import' | 'export';
+
+export interface TradeRule {
+  resource: ResourceType;
+  mode: TradeMode;
+  targetStock: number;
+  customPrice?: number;
+}
+
+export type TradeCategory = 'construction' | 'agriculture' | 'food' | 'materials' | 'military';

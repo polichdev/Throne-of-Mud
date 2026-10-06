@@ -22,76 +22,299 @@ export class GridMap {
   public dirtyTerrainCoords: number[] = [];
   public isFullTerrainDirty: boolean = true;
   public dirtyFoliageBuckets: Set<number> = new Set<number>();
+  public generationId: number = 0;
 
   public markFoliageBucketDirty(x: number, z: number): void {
     const cols = Math.ceil(this.width / 16);
+    const rows = Math.ceil(this.height / 16);
     const bx = Math.min(cols - 1, Math.max(0, Math.floor(x / 16)));
-    const bz = Math.min(Math.ceil(this.height / 16) - 1, Math.max(0, Math.floor(z / 16)));
+    const bz = Math.min(rows - 1, Math.max(0, Math.floor(z / 16)));
     this.dirtyFoliageBuckets.add(bz * cols + bx);
-  }
 
-  public static getHighwayX(z: number): number {
-    return 127.5 + Math.sin((z - 128) * 0.042) * 7.5 + Math.sin((z - 128) * 0.095) * 3.5;
+    if (x % 16 <= 1 && bx > 0) this.dirtyFoliageBuckets.add(bz * cols + (bx - 1));
+    if (x % 16 >= 14 && bx < cols - 1) this.dirtyFoliageBuckets.add(bz * cols + (bx + 1));
+    if (z % 16 <= 1 && bz > 0) this.dirtyFoliageBuckets.add((bz - 1) * cols + bx);
+    if (z % 16 >= 14 && bz < rows - 1) this.dirtyFoliageBuckets.add((bz + 1) * cols + bx);
   }
 
   public static getHighwayZ(x: number): number {
-    return 127.5 + Math.sin((x - 128) * 0.045) * 7.0 + Math.sin((x - 128) * 0.11) * 3.0;
+    return 184.0 + Math.sin((x - 192) * 0.035) * 3.0 + Math.sin((x - 96) * 0.08) * 1.5;
+  }
+
+  public static getNorthHighway1X(z: number): number {
+    return 128.0 + Math.sin(z * 0.048) * 3.0 + Math.sin(z * 0.11) * 1.5;
+  }
+
+  public static getNorthHighway2X(z: number): number {
+    return 256.0 + Math.sin(z * 0.048) * 3.0 + Math.sin(z * 0.11) * 1.5;
+  }
+
+  public static getSouthHighwayX(z: number): number {
+    return 192.0 + Math.sin((z - 184) * 0.035) * 2.5 + Math.sin((z - 184) * 0.08) * 1.0;
+  }
+
+  public static getHighwayX(z: number): number {
+    if (z >= 184) {
+      return GridMap.getSouthHighwayX(z);
+    }
+    return 192.0;
   }
 
   public static isTradeHighwayTile(x: number, z: number): boolean {
-    const roadX = GridMap.getHighwayX(z);
-    const distRoadX = Math.abs(x - roadX);
-    const roadZ = GridMap.getHighwayZ(x);
-    const distRoadZ = Math.abs(z - roadZ);
-    const distPlaza = Math.hypot(x - 127.5, z - 127.5);
-    return distRoadX <= 0.90 || distRoadZ <= 0.90 || distPlaza <= 2.8;
+    const mainZ = GridMap.getHighwayZ(x);
+
+    if (Math.abs(z - mainZ) <= 0.90) return true;
+
+    if (z <= mainZ + 1.5) {
+      const n1X = GridMap.getNorthHighway1X(z);
+      if (Math.abs(x - n1X) <= 0.90) return true;
+    }
+
+    if (z <= mainZ + 1.5) {
+      const n2X = GridMap.getNorthHighway2X(z);
+      if (Math.abs(x - n2X) <= 0.90) return true;
+    }
+
+    if (z >= mainZ - 1.5) {
+      const sX = GridMap.getSouthHighwayX(z);
+      if (Math.abs(x - sX) <= 0.90) return true;
+    }
+
+    const j1Z = GridMap.getHighwayZ(128);
+    if (Math.hypot(x - 128.0, z - j1Z) <= 2.6) return true;
+
+    const j2Z = GridMap.getHighwayZ(192);
+    if (Math.hypot(x - 192.0, z - j2Z) <= 2.8) return true;
+
+    const j3Z = GridMap.getHighwayZ(256);
+    if (Math.hypot(x - 256.0, z - j3Z) <= 2.6) return true;
+
+    return false;
   }
 
   public static getDistanceToHighway(x: number, z: number): number {
-    const roadX = GridMap.getHighwayX(z);
-    const distRoadX = Math.abs(x - roadX);
-    const roadZ = GridMap.getHighwayZ(x);
-    const distRoadZ = Math.abs(z - roadZ);
-    const distPlaza = Math.hypot(x - 127.5, z - 127.5);
-    return Math.min(distRoadX, distRoadZ, distPlaza);
+    const mainZ = GridMap.getHighwayZ(x);
+    let minDist = Math.abs(z - mainZ);
+
+    if (z <= mainZ + 2.0) {
+      const n1X = GridMap.getNorthHighway1X(z);
+      minDist = Math.min(minDist, Math.abs(x - n1X));
+      const n2X = GridMap.getNorthHighway2X(z);
+      minDist = Math.min(minDist, Math.abs(x - n2X));
+    }
+
+    if (z >= mainZ - 2.0) {
+      const sX = GridMap.getSouthHighwayX(z);
+      minDist = Math.min(minDist, Math.abs(x - sX));
+    }
+
+    const j1Z = GridMap.getHighwayZ(128);
+    minDist = Math.min(minDist, Math.hypot(x - 128.0, z - j1Z));
+
+    const j2Z = GridMap.getHighwayZ(192);
+    minDist = Math.min(minDist, Math.hypot(x - 192.0, z - j2Z));
+
+    const j3Z = GridMap.getHighwayZ(256);
+    minDist = Math.min(minDist, Math.hypot(x - 256.0, z - j3Z));
+
+    return minDist;
+  }
+
+  public static getClosestHighwayTile(x: number, z: number): [number, number] {
+    const mainZ = GridMap.getHighwayZ(x);
+    let bestDist = Math.hypot(0, z - mainZ);
+    let bestPt: [number, number] = [Math.round(x), Math.round(mainZ)];
+
+    if (z <= mainZ + 2.0) {
+      const n1X = GridMap.getNorthHighway1X(z);
+      const d1 = Math.hypot(x - n1X, 0);
+      if (d1 < bestDist) {
+        bestDist = d1;
+        bestPt = [Math.round(n1X), Math.round(z)];
+      }
+
+      const n2X = GridMap.getNorthHighway2X(z);
+      const d2 = Math.hypot(x - n2X, 0);
+      if (d2 < bestDist) {
+        bestDist = d2;
+        bestPt = [Math.round(n2X), Math.round(z)];
+      }
+    }
+
+    if (z >= mainZ - 2.0) {
+      const sX = GridMap.getSouthHighwayX(z);
+      const dS = Math.hypot(x - sX, 0);
+      if (dS < bestDist) {
+        bestDist = dS;
+        bestPt = [Math.round(sX), Math.round(z)];
+      }
+    }
+
+    const j1Z = GridMap.getHighwayZ(128);
+    const dJ1 = Math.hypot(x - 128, z - j1Z);
+    if (dJ1 < bestDist) {
+      bestDist = dJ1;
+      bestPt = [128, Math.round(j1Z)];
+    }
+
+    const j2Z = GridMap.getHighwayZ(192);
+    const dJ2 = Math.hypot(x - 192, z - j2Z);
+    if (dJ2 < bestDist) {
+      bestDist = dJ2;
+      bestPt = [192, Math.round(j2Z)];
+    }
+
+    const j3Z = GridMap.getHighwayZ(256);
+    const dJ3 = Math.hypot(x - 256, z - j3Z);
+    if (dJ3 < bestDist) {
+      bestDist = dJ3;
+      bestPt = [256, Math.round(j3Z)];
+    }
+
+    return bestPt;
+  }
+
+  public static getClosestHighwayTileForRegion(x: number, z: number, regionId: number): [number, number] {
+
+    if (regionId === 2) {
+      const clampedZ = Math.max(232, Math.min(381, Math.round(z)));
+      const hwX = Math.round(GridMap.getSouthHighwayX(clampedZ));
+      return [hwX, clampedZ];
+    }
+
+    if (regionId === 3) {
+      const clampedZ = Math.max(232, Math.min(381, Math.round(z)));
+      const hwX = Math.round(GridMap.getSouthHighwayX(clampedZ));
+      return [hwX, clampedZ];
+    }
+
+    if (regionId === 0) {
+      const clampedZ = Math.max(2, Math.min(183, Math.round(z)));
+      const eastHwX = Math.round(GridMap.getNorthHighway1X(clampedZ));
+      const distToEast = Math.abs(x - eastHwX);
+
+      const clampedX = Math.max(2, Math.min(127, Math.round(x)));
+      const southHwZ = Math.round(GridMap.getHighwayZ(clampedX));
+      const distToSouth = Math.abs(z - southHwZ);
+
+      if (distToEast <= distToSouth) {
+        return [eastHwX, clampedZ];
+      } else {
+        return [clampedX, southHwZ];
+      }
+    }
+
+    if (regionId === 1) {
+      const clampedZ = Math.max(2, Math.min(183, Math.round(z)));
+      const westHwX = Math.round(GridMap.getNorthHighway2X(clampedZ));
+      const distToWest = Math.abs(x - westHwX);
+
+      const clampedX = Math.max(256, Math.min(381, Math.round(x)));
+      const southHwZ = Math.round(GridMap.getHighwayZ(clampedX));
+      const distToSouth = Math.abs(z - southHwZ);
+
+      if (distToWest <= distToSouth) {
+        return [westHwX, clampedZ];
+      } else {
+        return [clampedX, southHwZ];
+      }
+    }
+
+    if (regionId === 4) {
+      const clampedX = Math.max(128, Math.min(255, Math.round(x)));
+      const southHwZ = Math.round(GridMap.getHighwayZ(clampedX));
+      return [clampedX, southHwZ];
+    }
+
+    return GridMap.getClosestHighwayTile(x, z);
   }
 
   public static getRegionIdForCoord(x: number, z: number): number {
-    const hwX = GridMap.getHighwayX(z);
-    const hwZ = GridMap.getHighwayZ(x);
-    const isEast = x >= hwX;
-    const isSouth = z >= hwZ;
-    if (!isEast && !isSouth) return 0;
-    if (isEast && !isSouth) return 1;
-    if (!isEast && isSouth) return 2;
+
+    if (z >= 184 && z <= 231) {
+      return 5;
+    }
+
+    if (z < 184) {
+      if (x <= 127) return 0;
+      if (x <= 255) return 4;
+      return 1;
+    }
+
+    if (x <= 191) return 2;
     return 3;
   }
 
   public static isCoordInRegion(regionId: number, x: number, z: number, highwayBuffer: number = 0): boolean {
-    if (x < 2 + highwayBuffer || x > 253 - highwayBuffer || z < 2 + highwayBuffer || z > 253 - highwayBuffer) {
-      return false;
-    }
-
-    const hwX = GridMap.getHighwayX(z);
-    const hwZ = GridMap.getHighwayZ(x);
-    const distPlaza = Math.hypot(x - 127.5, z - 127.5);
-
-    if (distPlaza < 3.2 + highwayBuffer) {
+    if (x < highwayBuffer || x > 383 - highwayBuffer || z < highwayBuffer || z > 383 - highwayBuffer) {
       return false;
     }
 
     switch (regionId) {
       case 0:
-        return x <= hwX - highwayBuffer && z <= hwZ - highwayBuffer;
+        return x >= highwayBuffer && x <= 127 - highwayBuffer && z >= highwayBuffer && z <= 183 - highwayBuffer;
       case 1:
-        return x >= hwX + highwayBuffer && z <= hwZ - highwayBuffer;
+        return x >= 256 + highwayBuffer && x <= 383 - highwayBuffer && z >= highwayBuffer && z <= 183 - highwayBuffer;
       case 2:
-        return x <= hwX - highwayBuffer && z >= hwZ + highwayBuffer;
+        return x >= highwayBuffer && x <= 191 - highwayBuffer && z >= 232 + highwayBuffer && z <= 383 - highwayBuffer;
       case 3:
-        return x >= hwX + highwayBuffer && z >= hwZ + highwayBuffer;
+        return x >= 192 + highwayBuffer && x <= 383 - highwayBuffer && z >= 232 + highwayBuffer && z <= 383 - highwayBuffer;
+      case 4:
+        return x >= 128 + highwayBuffer && x <= 255 - highwayBuffer && z >= highwayBuffer && z <= 183 - highwayBuffer;
+      case 5:
+        return x >= highwayBuffer && x <= 383 - highwayBuffer && z >= 184 + highwayBuffer && z <= 231 - highwayBuffer;
       default:
         return false;
     }
+  }
+
+  public static canRegionConnectToHighwayAt(regionId: number, x: number, z: number): boolean {
+    if (x < 1 || x > 382 || z < 1 || z > 382) return false;
+
+    if (GridMap.isCoordInRegion(regionId, x, z, 0)) return true;
+
+    switch (regionId) {
+      case 0:
+
+        if (x >= 2 && x <= 127 && z >= 184 && z <= 188) return true;
+
+        if (z >= 2 && z <= 183 && x >= 128 && x <= 132) return true;
+        break;
+
+      case 1:
+
+        if (x >= 256 && x <= 381 && z >= 184 && z <= 188) return true;
+
+        if (z >= 2 && z <= 183 && x >= 252 && x <= 255) return true;
+        break;
+
+      case 2:
+
+        if (z >= 232 && z <= 381 && x >= 192 && x <= 196) return true;
+        break;
+
+      case 3:
+
+        if (z >= 232 && z <= 381 && x >= 188 && x <= 191) return true;
+        break;
+
+      case 4:
+
+        if (x >= 128 && x <= 255 && z >= 184 && z <= 188) return true;
+
+        if (z >= 2 && z <= 183 && x >= 124 && x <= 127) return true;
+
+        if (z >= 2 && z <= 183 && x >= 256 && x <= 260) return true;
+        break;
+
+      case 5:
+        if (z >= 182 && z <= 233) return true;
+        break;
+    }
+
+    if (GridMap.isTradeHighwayTile(x, z)) return true;
+
+    return false;
   }
 
   public static isBuildingInRegion(
@@ -112,7 +335,7 @@ export class GridMap {
     return true;
   }
 
-  constructor(width = 256, height = 256, seed = 1234.56) {
+  constructor(width = 384, height = 384, seed = 1234.56) {
     this.width = width;
     this.height = height;
     this.tiles = [];
@@ -130,8 +353,10 @@ export class GridMap {
     const lakeNoise = createNoise2D(prng1);
     const foliageNoise = createNoise2D(prng2);
 
+    this.generationId = (this.generationId || 0) + 1;
     this.isFullTerrainDirty = true;
     this.dirtyTerrainCoords = [];
+    this.dirtyFoliageBuckets.clear();
     this.tiles = [];
     this.roadCoords.clear();
 
@@ -143,9 +368,13 @@ export class GridMap {
     const lake2Z = 195;
     const lake2Radius = 4.2;
 
-    const lake3X = 186;
+    const lake3X = 320;
     const lake3Z = 72;
     const lake3Radius = 3.5;
+
+    const lake4X = 192;
+    const lake4Z = 50;
+    const lake4Radius = 3.2;
 
     for (let x = 0; x < this.width; x++) {
       this.tiles[x] = [];
@@ -174,20 +403,19 @@ export class GridMap {
         const isLake3 = (dist3 + perturb3) < lake3Radius;
         const isLake3Shore = !isLake3 && (dist3 + perturb3) < (lake3Radius + 1.6);
 
-        const isLake = isLake1 || isLake2 || isLake3;
-        const isLakeShore = !isLake && (isLake1Shore || isLake2Shore || isLake3Shore);
+        const dx4 = x - lake4X;
+        const dz4 = z - lake4Z;
+        const dist4 = Math.hypot(dx4, dz4);
+        const perturb4 = lakeNoise(nx * 16.0 + 60.0, nz * 16.0 + 60.0) * 1.1;
+        const isLake4 = (dist4 + perturb4) < lake4Radius;
+        const isLake4Shore = !isLake4 && (dist4 + perturb4) < (lake4Radius + 1.5);
 
-        const roadX = GridMap.getHighwayX(z);
-        const distRoadX = Math.abs(x - roadX);
-        const roadZ = GridMap.getHighwayZ(x);
-        const distRoadZ = Math.abs(z - roadZ);
-        const distPlaza = Math.hypot(x - 127.5, z - 127.5);
-        const isTradeHighway = distRoadX <= 0.90 || distRoadZ <= 0.90 || distPlaza <= 2.8;
+        const isLake = isLake1 || isLake2 || isLake3 || isLake4;
+        const isLakeShore = !isLake && (isLake1Shore || isLake2Shore || isLake3Shore || isLake4Shore);
 
-        const isNW = x < 128 && z < 128;
-        const isNE = x >= 128 && z < 128;
-        const isSW = x < 128 && z >= 128;
-        const isSE = x >= 128 && z >= 128;
+        const isTradeHighway = GridMap.isTradeHighwayTile(x, z);
+
+        const regId = GridMap.getRegionIdForCoord(x, z);
 
         const oct1 = foliageNoise(nx * 4.6, nz * 4.6);
         const oct2 = foliageNoise(nx * 9.8 + 14.2, nz * 9.8 + 26.5) * 0.42;
@@ -227,25 +455,29 @@ export class GridMap {
         } else {
           terrain = 'grass';
 
-          if (isNW) {
+          if (regId === 0) {
             fertility = 0.78;
-          } else if (isNE) {
+          } else if (regId === 1) {
             fertility = 0.62;
-          } else if (isSW) {
+          } else if (regId === 2) {
             fertility = 0.74;
-          } else if (isSE) {
+          } else if (regId === 3) {
             fertility = 0.48;
+          } else if (regId === 4) {
+            fertility = 0.68;
+          } else {
+            fertility = 0.60;
           }
 
           tileHeight = 0.05;
 
-          const forestThreshold = isNW ? 0.01 : (isNE ? -0.18 : (isSW ? -0.08 : -0.04));
+          const forestThreshold = regId === 0 ? 0.01 : (regId === 1 || regId === 4 ? -0.18 : (regId === 2 ? -0.08 : -0.04));
 
           const isDenseTree = macroDensity > (forestThreshold + 0.10) && microRand1 < 0.56;
           const isMediumTree = macroDensity > forestThreshold && macroDensity <= (forestThreshold + 0.10) && microRand1 < 0.36;
           const isSolitaryTree = macroDensity <= forestThreshold && microRand1 < 0.085;
 
-          const isRockZone = isSE
+          const isRockZone = regId === 3
             ? (macroDensity < -0.38 && microRand2 < 0.06)
             : (macroDensity < -0.55 && microRand2 < 0.012);
 
@@ -275,7 +507,7 @@ export class GridMap {
       }
     }
 
-    for (let rId = 0; rId < 4; rId++) {
+    for (let rId = 0; rId < 6; rId++) {
       const spawns = GridMap.getPresetSpawnPoints(rId);
       for (const sp of spawns) {
         const [sx, sz] = sp.position;
@@ -557,13 +789,11 @@ export class GridMap {
       }
     }
 
-    if (tile.foliageType) {
-      tile.foliageType = undefined;
-      tile.foliageAngle = undefined;
-      tile.foliageTreeType = undefined;
-      this.removeFoliageFromCoords(x, x, z, z);
-      this.markFoliageBucketDirty(x, z);
-    }
+    tile.foliageType = undefined;
+    tile.foliageAngle = undefined;
+    tile.foliageTreeType = undefined;
+    this.removeFoliageFromCoords(x, x, z, z);
+    this.markFoliageBucketDirty(x, z);
 
     tile.terrain = 'road';
     this.roadCoords.add(x * this.width + z);
@@ -629,4 +859,3 @@ export class GridMap {
     }
   }
 }
-

@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { GridMap } from '../../engine/grid/GridMap';
 import { useGameStore } from '../../store/useGameStore';
 import { characterEntities } from '../../engine/ecs/world';
+import { DEFAULT_REGIONS } from '../../constants/world';
 import type { SpawnPointData } from '../../types/game';
 
 interface StrategicMapCanvasProps {
@@ -30,7 +31,8 @@ export function StrategicMapCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const regions = useGameStore((s) => s.regions);
+  const storeRegions = useGameStore((s) => s.regions);
+  const regions = mode === 'setup' ? DEFAULT_REGIONS : storeRegions;
   const playerRegionId = useGameStore((s) => s.playerRegionId);
   const setCameraFocusTarget = useGameStore((s) => s.setCameraFocusTarget);
   const cameraFocusTarget = useGameStore((s) => s.cameraFocusTarget);
@@ -213,9 +215,6 @@ export function StrategicMapCanvas({
       const toScreenX = (gx: number) => (gx / grid.width) * cw;
       const toScreenY = (gz: number) => (gz / grid.height) * ch;
 
-      const midX = toScreenX(128);
-      const midZ = toScreenY(128);
-
       for (const reg of regions) {
         const isSelected = mode === 'setup' && reg.id === activeRegionId;
         const isHovered = reg.id === hoveredRegionId;
@@ -243,16 +242,6 @@ export function StrategicMapCanvas({
       ctx.lineWidth = 1.8;
 
       ctx.beginPath();
-      for (let gz = 0; gz <= grid.height; gz += 4) {
-        const gx = GridMap.getHighwayX(gz);
-        const sx = toScreenX(gx);
-        const sy = toScreenY(gz);
-        if (gz === 0) ctx.moveTo(sx, sy);
-        else ctx.lineTo(sx, sy);
-      }
-      ctx.stroke();
-
-      ctx.beginPath();
       for (let gx = 0; gx <= grid.width; gx += 4) {
         const gz = GridMap.getHighwayZ(gx);
         const sx = toScreenX(gx);
@@ -261,59 +250,107 @@ export function StrategicMapCanvas({
         else ctx.lineTo(sx, sy);
       }
       ctx.stroke();
-      ctx.restore();
 
-      ctx.save();
-      ctx.fillStyle = '#451a03';
+      const j1Z = GridMap.getHighwayZ(128);
       ctx.beginPath();
-      ctx.arc(midX, midZ, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 2;
+      for (let gz = 0; gz <= j1Z; gz += 3) {
+        const gx = GridMap.getNorthHighway1X(gz);
+        const sx = toScreenX(gx);
+        const sy = toScreenY(gz);
+        if (gz === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.lineTo(toScreenX(128), toScreenY(j1Z));
+      ctx.stroke();
+
+      const j3Z = GridMap.getHighwayZ(256);
+      ctx.beginPath();
+      for (let gz = 0; gz <= j3Z; gz += 3) {
+        const gx = GridMap.getNorthHighway2X(gz);
+        const sx = toScreenX(gx);
+        const sy = toScreenY(gz);
+        if (gz === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.lineTo(toScreenX(256), toScreenY(j3Z));
+      ctx.stroke();
+
+      const j2Z = GridMap.getHighwayZ(192);
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(192), toScreenY(j2Z));
+      for (let gz = Math.ceil(j2Z); gz <= grid.height; gz += 3) {
+        const gx = GridMap.getSouthHighwayX(gz);
+        const sx = toScreenX(gx);
+        const sy = toScreenY(gz);
+        ctx.lineTo(sx, sy);
+      }
       ctx.stroke();
       ctx.restore();
 
+      const plazas = [
+        [128, j1Z],
+        [192, j2Z],
+        [256, j3Z],
+      ];
+      ctx.save();
+      for (const [px, pz] of plazas) {
+        ctx.fillStyle = '#451a03';
+        ctx.beginPath();
+        ctx.arc(toScreenX(px), toScreenY(pz), 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.restore();
+
       const regionTitles = [
-        { id: 0, title: 'ҐОЛЬДГОФ', sub: 'Золоті Рівнини', x: toScreenX(64), y: toScreenY(26), color: '#78350f' },
-        { id: 1, title: 'ВАЛЬДАУ', sub: 'Великий Праліс', x: toScreenX(192), y: toScreenY(26), color: '#7f1d1d' },
-        { id: 2, title: 'АЙХЕНАУ', sub: 'Озерні Заплави', x: toScreenX(64), y: toScreenY(154), color: '#1e3a8a' },
-        { id: 3, title: 'ЦВАЙАУ', sub: 'Скелясті Височини', x: toScreenX(192), y: toScreenY(154), color: '#334155' },
+        { id: 0, title: 'GOLDHOF', x: toScreenX(64), y: toScreenY(92), color: '#78350f' },
+        { id: 4, title: 'MITTENWALD', x: toScreenX(192), y: toScreenY(92), color: '#3f6212' },
+        { id: 1, title: 'WALDAU', x: toScreenX(320), y: toScreenY(92), color: '#7f1d1d' },
+        { id: 5, title: 'KÖNIGSWEG', x: toScreenX(192), y: toScreenY(208), color: '#9a3412' },
+        { id: 2, title: 'EICHENAU', x: toScreenX(96), y: toScreenY(308), color: '#1e3a8a' },
+        { id: 3, title: 'ZWEIAU', x: toScreenX(288), y: toScreenY(308), color: '#14532d' },
       ];
 
       for (const rt of regionTitles) {
         ctx.save();
         ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
 
-        const bannerW = 140;
-        const bannerH = 34;
+        const bannerW = 108;
+        const bannerH = 22;
         const bx = rt.x - bannerW / 2;
         const by = rt.y - bannerH / 2;
 
-        ctx.fillStyle = 'rgba(254, 243, 199, 0.92)';
-        ctx.strokeStyle = '#92400e';
-        ctx.lineWidth = 1.5;
+        ctx.shadowColor = 'rgba(20, 10, 5, 0.4)';
+        ctx.shadowBlur = 5;
+        ctx.shadowOffsetX = 1;
+        ctx.shadowOffsetY = 1.5;
+
+        const cardGrad = ctx.createLinearGradient(bx, by, bx, by + bannerH);
+        cardGrad.addColorStop(0, '#fef9ec');
+        cardGrad.addColorStop(1, '#f5e4c0');
+        ctx.fillStyle = cardGrad;
         ctx.beginPath();
-        ctx.roundRect(bx, by, bannerW, bannerH, 6);
+        ctx.roundRect(bx, by, bannerW, bannerH, 5);
         ctx.fill();
+
+        ctx.shadowColor = 'transparent';
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 1.4;
         ctx.stroke();
 
-        ctx.font = 'bold 13px "Cinzel", "Cinzel Decorative", Georgia, serif';
-        ctx.fillStyle = rt.color;
-        ctx.fillText(rt.title, rt.x, rt.y - 1);
+        ctx.strokeStyle = 'rgba(180, 83, 9, 0.3)';
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(bx + 2, by + 2, bannerW - 4, bannerH - 4);
 
-        ctx.font = 'italic 9px serif';
-        ctx.fillStyle = '#64748b';
-        ctx.fillText(rt.sub, rt.x, rt.y + 11);
+        ctx.font = 'bold 11px "Cinzel", "Cinzel Decorative", Georgia, serif';
+        ctx.fillStyle = rt.color;
+        ctx.fillText(rt.title, rt.x, rt.y);
 
         ctx.restore();
       }
-
-      ctx.save();
-      ctx.font = 'bold 9px "Cinzel", Georgia, serif';
-      ctx.fillStyle = '#451a03';
-      ctx.textAlign = 'center';
-      ctx.fillText('КОРОЛІВСЬКИЙ ТРАКТ', midX, midZ + 18);
-      ctx.restore();
 
       ctx.save();
       ctx.font = 'italic 8.5px "Cinzel", Georgia, serif';
@@ -321,6 +358,7 @@ export function StrategicMapCanvas({
       ctx.textAlign = 'center';
       ctx.fillText('~ оз. Золоте ~', toScreenX(72), toScreenY(70) - 9);
       ctx.fillText('~ оз. Дубове ~', toScreenX(60), toScreenY(195) - 9);
+      ctx.fillText('~ оз. Лісове ~', toScreenX(320), toScreenY(72) - 9);
       ctx.restore();
 
       if (mode === 'setup') {
@@ -385,6 +423,7 @@ export function StrategicMapCanvas({
 
       if (mode === 'ingame') {
         for (const reg of regions) {
+          if (reg.owner === 'unclaimed') continue;
           const camp = reg.campPosition || reg.center;
           const cx = toScreenX(camp[0]);
           const cz = toScreenY(camp[1]);
@@ -608,10 +647,9 @@ export function StrategicMapCanvas({
           🧭 ПІВНІЧ
         </div>
         <div className="bg-[#1e150d]/80 border border-amber-900/50 px-2 py-0.5 rounded text-[9px] text-amber-400/70 font-mono">
-          256 × 256 клітинок
+          {grid.width} × {grid.height} клітинок
         </div>
       </div>
     </div>
   );
 }
-

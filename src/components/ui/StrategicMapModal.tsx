@@ -210,4 +210,3 @@ export function StrategicMapModal({ grid }: StrategicMapModalProps) {
     </div>
   );
 }
-

@@ -201,4 +201,3 @@ export const LordsBar: React.FC = React.memo(() => {
 });
 
 LordsBar.displayName = 'LordsBar';
-

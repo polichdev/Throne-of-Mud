@@ -225,12 +225,12 @@ export function NewGameSetupModal({ isOpen, onClose, onConfirm, grid }: Props) {
                   3
                 </span>
                 <h3 className="text-xs font-bold text-amber-100 uppercase tracking-wider">
-                  {dict.newGame.rivalLords} (0 - 3)
+                  {dict.newGame.rivalLords} (0 - 4)
                 </h3>
               </div>
 
-              <div className="grid grid-cols-4 gap-2">
-                {[0, 1, 2, 3].map((count) => {
+              <div className="grid grid-cols-5 gap-1.5">
+                {[0, 1, 2, 3, 4].map((count) => {
                   const isCountSelected = count === botCount;
                   return (
                     <button
@@ -255,6 +255,12 @@ export function NewGameSetupModal({ isOpen, onClose, onConfirm, grid }: Props) {
                           <div className="flex items-center justify-center gap-1">
                             <CastleKeepIcon size={15} />
                             <WeaponsIcon size={15} />
+                          </div>
+                        )}
+                        {count === 4 && (
+                          <div className="flex items-center justify-center gap-1">
+                            <CrownIcon size={15} />
+                            <CastleKeepIcon size={15} />
                           </div>
                         )}
                       </div>
@@ -320,4 +326,3 @@ export function NewGameSetupModal({ isOpen, onClose, onConfirm, grid }: Props) {
     </div>
   );
 }
-

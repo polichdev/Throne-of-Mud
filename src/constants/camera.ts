@@ -8,4 +8,3 @@ export const CAMERA_DISTANCE = 339.408;
 export const CAMERA_HEIGHT = 288.0;
 export const CAMERA_BOUNDS_MARGIN = 4.0;
 export const CAMERA_INITIAL_OFFSET = 240.0;
-

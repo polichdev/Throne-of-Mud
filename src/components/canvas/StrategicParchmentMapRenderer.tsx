@@ -61,65 +61,48 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     ctx.arc(cw * 0.82, ch * 0.22, 160, 0, Math.PI * 2);
     ctx.stroke();
 
-    const midX = 128 * scale;
-    const midZ = 128 * scale;
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-    ctx.lineWidth = 2.0;
-    ctx.beginPath();
-    ctx.moveTo(0, midZ - 1);
-    ctx.lineTo(cw, midZ - 1);
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(50, 30, 12, 0.22)';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(0, midZ + 1);
-    ctx.lineTo(cw, midZ + 1);
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-    ctx.lineWidth = 2.0;
-    ctx.beginPath();
-    ctx.moveTo(midX - 1, 0);
-    ctx.lineTo(midX - 1, ch);
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(50, 30, 12, 0.22)';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(midX + 1, 0);
-    ctx.lineTo(midX + 1, ch);
-    ctx.stroke();
-
     const regionColors: Record<number, { wash: string; stroke: string; label: string; sub: string; crest: string }> = {
       0: {
         wash: 'rgba(217, 119, 6, 0.06)',
         stroke: '#b45309',
-        label: 'ҐОЛЬДГОФ',
-        sub: 'Золоті Рівнини Корони',
+        label: 'GOLDHOF',
+        sub: '',
         crest: '👑',
       },
       1: {
         wash: 'rgba(185, 28, 28, 0.06)',
         stroke: '#991b1b',
-        label: 'ВАЛЬДАУ',
-        sub: 'Великий Дубовий Праліс',
+        label: 'WALDAU',
+        sub: '',
         crest: '⚔️',
       },
       2: {
         wash: 'rgba(37, 99, 235, 0.06)',
         stroke: '#1d4ed8',
-        label: 'АЙХЕНАУ',
-        sub: 'Озерні Заплави Хільдеґард',
+        label: 'EICHENAU',
+        sub: '',
         crest: '🛡️',
       },
       3: {
         wash: 'rgba(22, 101, 52, 0.06)',
         stroke: '#15803d',
-        label: 'ЦВАЙАУ',
-        sub: 'Скелясті Височини Віттельма',
+        label: 'ZWEIAU',
+        sub: '',
         crest: '🦅',
+      },
+      4: {
+        wash: 'rgba(101, 163, 13, 0.06)',
+        stroke: '#65a30d',
+        label: 'MITTENWALD',
+        sub: '',
+        crest: '🌲',
+      },
+      5: {
+        wash: 'rgba(234, 88, 12, 0.07)',
+        stroke: '#ea580c',
+        label: 'KÖNIGSWEG',
+        sub: '',
+        crest: '⚖️',
       },
     };
 
@@ -239,14 +222,27 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     const highwayWidth = scale * 1.6;
     const localRoadWidth = scale * 1.30;
 
-    const nsHighwayPoints: [number, number][] = [];
-    for (let z = 0; z <= grid.height; z += 0.5) {
-      nsHighwayPoints.push([GridMap.getHighwayX(z) * scale, z * scale]);
-    }
-
     const ewHighwayPoints: [number, number][] = [];
     for (let x = 0; x <= grid.width; x += 0.5) {
       ewHighwayPoints.push([x * scale, GridMap.getHighwayZ(x) * scale]);
+    }
+
+    const j1Z = GridMap.getHighwayZ(128);
+    const n1HighwayPoints: [number, number][] = [];
+    for (let z = 0; z <= j1Z; z += 0.5) {
+      n1HighwayPoints.push([GridMap.getNorthHighway1X(z) * scale, z * scale]);
+    }
+
+    const j3Z = GridMap.getHighwayZ(256);
+    const n2HighwayPoints: [number, number][] = [];
+    for (let z = 0; z <= j3Z; z += 0.5) {
+      n2HighwayPoints.push([GridMap.getNorthHighway2X(z) * scale, z * scale]);
+    }
+
+    const j2Z = GridMap.getHighwayZ(192);
+    const sHighwayPoints: [number, number][] = [];
+    for (let z = j2Z; z <= grid.height; z += 0.5) {
+      sHighwayPoints.push([GridMap.getSouthHighwayX(z) * scale, z * scale]);
     }
 
     const drawHighwayPath = (points: [number, number][]) => {
@@ -257,15 +253,33 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       }
     };
 
-    const plazaX = 127.5 * scale;
-    const plazaZ = 127.5 * scale;
-    const plazaR = 2.4 * scale;
+    const drawAllHighwayBranches = () => {
+      drawHighwayPath(ewHighwayPoints);
+      ctx.stroke();
+      drawHighwayPath(n1HighwayPoints);
+      ctx.stroke();
+      drawHighwayPath(n2HighwayPoints);
+      ctx.stroke();
+      drawHighwayPath(sHighwayPoints);
+      ctx.stroke();
+    };
+
+    const plazas: [number, number, number][] = [
+      [128.0 * scale, j1Z * scale, 2.3 * scale],
+      [192.0 * scale, j2Z * scale, 2.5 * scale],
+      [256.0 * scale, j3Z * scale, 2.3 * scale],
+    ];
+
+    const drawAllPlazaDiscs = (extra: number = 0) => {
+      for (const [px, pz, pr] of plazas) {
+        ctx.beginPath();
+        ctx.arc(px, pz, pr + extra, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
 
     const isHighwayCore = (tx: number, tz: number) => {
-      const dX = Math.abs(tx - GridMap.getHighwayX(tz));
-      const dZ = Math.abs(tz - GridMap.getHighwayZ(tx));
-      const dP = Math.hypot(tx - 127.5, tz - 127.5);
-      return dX <= 0.90 || dZ <= 0.90 || dP <= 2.8;
+      return GridMap.isTradeHighwayTile(tx, tz);
     };
 
     const playerTiles = new Set<string>();
@@ -274,20 +288,28 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
 
     for (let x = 0; x < grid.width; x++) {
       for (let z = 0; z < grid.height; z++) {
+
+        if (isHighwayCore(x, z)) continue;
+
         const tile = grid.tiles[x]?.[z];
-        if (tile && tile.terrain === 'road' && !isHighwayCore(x, z)) {
+        if (tile && tile.terrain === 'road') {
           const k = `${x},${z}`;
           playerTiles.add(k);
           playerTileList.push([x, z]);
 
-          const hwX = GridMap.getHighwayX(z + 0.5);
-          const hwZ = GridMap.getHighwayZ(x + 0.5);
-          if (Math.abs((x + 0.5) - hwX) <= 3.2) {
-            highwayConnMap.set(k, [hwX * scale, (z + 0.5) * scale]);
-          } else if (Math.abs((z + 0.5) - hwZ) <= 3.2) {
-            highwayConnMap.set(k, [(x + 0.5) * scale, hwZ * scale]);
-          } else if (Math.hypot((x + 0.5) - 127.5, (z + 0.5) - 127.5) <= 4.2) {
-            highwayConnMap.set(k, [plazaX, plazaZ]);
+          let touchesHighway = GridMap.getDistanceToHighway(x + 0.5, z + 0.5) <= 1.25;
+          if (!touchesHighway) {
+            for (const [ox, oz] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+              if (GridMap.isTradeHighwayTile(x + ox, z + oz)) {
+                touchesHighway = true;
+                break;
+              }
+            }
+          }
+
+          if (touchesHighway) {
+            const [cTx, cTz] = GridMap.getClosestHighwayTile(x + 0.5, z + 0.5);
+            highwayConnMap.set(k, [cTx * scale, cTz * scale]);
           }
         }
       }
@@ -421,44 +443,6 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       }
     }
 
-    for (const path of rawPaths) {
-      if (path.length === 0) continue;
-
-      const p0 = path[0];
-      const sTx = p0[0] / scale;
-      const sTz = p0[1] / scale;
-      const sHwX = GridMap.getHighwayX(sTz);
-      const sHwZ = GridMap.getHighwayZ(sTx);
-      const sDistX = Math.abs(sTx - sHwX);
-      const sDistZ = Math.abs(sTz - sHwZ);
-      const sDistP = Math.hypot(sTx - 127.5, sTz - 127.5);
-
-      if (sDistX <= 3.2 && sDistX > 0.05) {
-        path.unshift([sHwX * scale, p0[1]]);
-      } else if (sDistZ <= 3.2 && sDistZ > 0.05) {
-        path.unshift([p0[0], sHwZ * scale]);
-      } else if (sDistP <= 4.2 && sDistP > 0.05) {
-        path.unshift([plazaX, plazaZ]);
-      }
-
-      const pEnd = path[path.length - 1];
-      const eTx = pEnd[0] / scale;
-      const eTz = pEnd[1] / scale;
-      const eHwX = GridMap.getHighwayX(eTz);
-      const eHwZ = GridMap.getHighwayZ(eTx);
-      const eDistX = Math.abs(eTx - eHwX);
-      const eDistZ = Math.abs(eTz - eHwZ);
-      const eDistP = Math.hypot(eTx - 127.5, eTz - 127.5);
-
-      if (eDistX <= 3.2 && eDistX > 0.05) {
-        path.push([eHwX * scale, pEnd[1]]);
-      } else if (eDistZ <= 3.2 && eDistZ > 0.05) {
-        path.push([pEnd[0], eHwZ * scale]);
-      } else if (eDistP <= 4.2 && eDistP > 0.05) {
-        path.push([plazaX, plazaZ]);
-      }
-    }
-
     const smoothPolyline = (pts: [number, number][]): [number, number][] => {
       if (pts.length <= 2) return pts;
       let curr = pts;
@@ -496,14 +480,8 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     ctx.fillStyle = '#2b170a';
 
     ctx.lineWidth = highwayWidth + 2.0;
-    drawHighwayPath(nsHighwayPoints);
-    ctx.stroke();
-    drawHighwayPath(ewHighwayPoints);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(plazaX, plazaZ, plazaR + 1.0, 0, Math.PI * 2);
-    ctx.fill();
+    drawAllHighwayBranches();
+    drawAllPlazaDiscs(1.0);
 
     ctx.lineWidth = localRoadWidth + 2.0;
     drawPlayerPathStrokes();
@@ -518,14 +496,8 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     ctx.fillStyle = '#5a361b';
 
     ctx.lineWidth = highwayWidth;
-    drawHighwayPath(nsHighwayPoints);
-    ctx.stroke();
-    drawHighwayPath(ewHighwayPoints);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(plazaX, plazaZ, plazaR, 0, Math.PI * 2);
-    ctx.fill();
+    drawAllHighwayBranches();
+    drawAllPlazaDiscs(0);
 
     ctx.lineWidth = localRoadWidth;
     drawPlayerPathStrokes();
@@ -540,10 +512,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     ctx.fillStyle = '#784d28';
 
     ctx.lineWidth = highwayWidth * 0.50;
-    drawHighwayPath(nsHighwayPoints);
-    ctx.stroke();
-    drawHighwayPath(ewHighwayPoints);
-    ctx.stroke();
+    drawAllHighwayBranches();
 
     ctx.lineWidth = localRoadWidth * 0.44;
     drawPlayerPathStrokes();
@@ -587,8 +556,10 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
 
     ctx.strokeStyle = 'rgba(43, 23, 10, 0.45)';
     ctx.lineWidth = 1.0;
-    drawContinuousWagonRuts(nsHighwayPoints, highwayWidth * 0.28);
     drawContinuousWagonRuts(ewHighwayPoints, highwayWidth * 0.28);
+    drawContinuousWagonRuts(n1HighwayPoints, highwayWidth * 0.28);
+    drawContinuousWagonRuts(n2HighwayPoints, highwayWidth * 0.28);
+    drawContinuousWagonRuts(sHighwayPoints, highwayWidth * 0.28);
 
     ctx.strokeStyle = 'rgba(43, 23, 10, 0.38)';
     ctx.lineWidth = 0.85;
@@ -598,47 +569,43 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       }
     }
 
-    ctx.beginPath();
-    ctx.arc(plazaX, plazaZ, plazaR * 0.88, 0, Math.PI * 2);
-    ctx.fillStyle = '#684523';
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(43, 23, 10, 0.5)';
-    ctx.lineWidth = 1.0;
-    ctx.beginPath();
-    ctx.arc(plazaX, plazaZ, plazaR * 0.65, 0, Math.PI * 2);
-    ctx.arc(plazaX, plazaZ, plazaR * 0.35, 0, Math.PI * 2);
-    ctx.stroke();
-
-    for (let a = 0; a < 8; a++) {
-      const angle = (a * Math.PI) / 4;
+    for (const [px, pz, pr] of plazas) {
       ctx.beginPath();
-      ctx.moveTo(plazaX + Math.cos(angle) * (plazaR * 0.2), plazaZ + Math.sin(angle) * (plazaR * 0.2));
-      ctx.lineTo(plazaX + Math.cos(angle) * (plazaR * 0.85), plazaZ + Math.sin(angle) * (plazaR * 0.85));
+      ctx.arc(px, pz, pr * 0.88, 0, Math.PI * 2);
+      ctx.fillStyle = '#684523';
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(43, 23, 10, 0.5)';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.arc(px, pz, pr * 0.65, 0, Math.PI * 2);
+      ctx.arc(px, pz, pr * 0.35, 0, Math.PI * 2);
+      ctx.stroke();
+
+      for (let a = 0; a < 8; a++) {
+        const angle = (a * Math.PI) / 4;
+        ctx.beginPath();
+        ctx.moveTo(px + Math.cos(angle) * (pr * 0.2), pz + Math.sin(angle) * (pr * 0.2));
+        ctx.lineTo(px + Math.cos(angle) * (pr * 0.85), pz + Math.sin(angle) * (pr * 0.85));
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = '#e7e5e4';
+      ctx.strokeStyle = '#2b170a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(px, pz, 4.5, 0, Math.PI * 2);
+      ctx.fill();
       ctx.stroke();
     }
 
-    ctx.fillStyle = '#e7e5e4';
-    ctx.strokeStyle = '#2b170a';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(plazaX, plazaZ, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
     ctx.fillStyle = 'rgba(43, 23, 10, 0.35)';
-    for (let i = 0; i < nsHighwayPoints.length; i += 8) {
-      const p = nsHighwayPoints[i];
+    const allHighwayPts = [...ewHighwayPoints, ...n1HighwayPoints, ...n2HighwayPoints, ...sHighwayPoints];
+    for (let i = 0; i < allHighwayPts.length; i += 8) {
+      const p = allHighwayPts[i];
       const offset = Math.sin(i * 1.7) * (highwayWidth * 0.35);
       ctx.beginPath();
       ctx.arc(p[0] + offset, p[1], 1.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    for (let i = 0; i < ewHighwayPoints.length; i += 8) {
-      const p = ewHighwayPoints[i];
-      const offset = Math.sin(i * 2.3) * (highwayWidth * 0.35);
-      ctx.beginPath();
-      ctx.arc(p[0], p[1] + offset, 1.2, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -772,9 +739,12 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       1: { type: 'timber', title: 'Вальдау' },
       2: { type: 'mill', title: 'Айхенау' },
       3: { type: 'citadel', title: 'Цвайау' },
+      4: { type: 'timber', title: 'Міттенвальд' },
+      5: { type: 'citadel', title: 'Королівський Тракт' },
     };
 
     for (const reg of regions) {
+      if (reg.owner === 'unclaimed') continue;
       const camp = reg.campPosition || reg.center;
       const tx = camp[0] * scale;
       const tz = camp[1] * scale;
@@ -920,44 +890,40 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
 
     for (const reg of regions) {
       const col = regionColors[reg.id] || regionColors[0];
-      const centerX = ((reg.bounds.minX + reg.bounds.maxX) / 2) * scale;
-      const topY = (reg.bounds.minZ + 24) * scale;
+      const centerX = (((reg.bounds.minX + reg.bounds.maxX) / 2) * scale);
+      const centerY = (((reg.bounds.minZ + reg.bounds.maxZ) / 2) * scale);
 
-      const cwBox = scale * 30.0;
-      const chBox = scale * 6.5;
+      const cwBox = scale * 26.0;
+      const chBox = scale * 4.8;
 
       ctx.fillStyle = 'rgba(25, 15, 5, 0.45)';
       ctx.beginPath();
-      ctx.roundRect(centerX - cwBox / 2 + 5, topY - chBox / 2 + 5, cwBox, chBox, 10);
+      ctx.roundRect(centerX - cwBox / 2 + 4, centerY - chBox / 2 + 4, cwBox, chBox, 8);
       ctx.fill();
 
-      const cartGrad = ctx.createLinearGradient(centerX - cwBox / 2, topY, centerX + cwBox / 2, topY);
+      const cartGrad = ctx.createLinearGradient(centerX - cwBox / 2, centerY, centerX + cwBox / 2, centerY);
       cartGrad.addColorStop(0, '#ebd8b6');
       cartGrad.addColorStop(0.2, '#fcf7ec');
       cartGrad.addColorStop(0.8, '#fcf7ec');
       cartGrad.addColorStop(1, '#ebd8b6');
       ctx.fillStyle = cartGrad;
       ctx.strokeStyle = '#4a331c';
-      ctx.lineWidth = 2.0;
+      ctx.lineWidth = 1.8;
 
       ctx.beginPath();
-      ctx.roundRect(centerX - cwBox / 2, topY - chBox / 2, cwBox, chBox, 8);
+      ctx.roundRect(centerX - cwBox / 2, centerY - chBox / 2, cwBox, chBox, 6);
       ctx.fill();
       ctx.stroke();
 
       ctx.strokeStyle = '#a17849';
       ctx.lineWidth = 1.0;
-      ctx.strokeRect(centerX - cwBox / 2 + 4, topY - chBox / 2 + 4, cwBox - 8, chBox - 8);
+      ctx.strokeRect(centerX - cwBox / 2 + 3, centerY - chBox / 2 + 3, cwBox - 6, chBox - 6);
 
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#22150a';
-      ctx.font = 'bold 22px "Cinzel", Georgia, serif';
-      ctx.fillText(col.label, centerX, topY - 10);
-
-      ctx.fillStyle = '#6b4720';
-      ctx.font = 'italic 13px Georgia, serif';
-      ctx.fillText(col.sub, centerX, topY + 14);
+      ctx.font = 'bold 18px "Cinzel", Georgia, serif';
+      ctx.fillText(col.label, centerX, centerY);
     }
 
     const deposits = (resourceDeposits && resourceDeposits.length > 0)
@@ -1183,4 +1149,3 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     </group>
   );
 }
-
