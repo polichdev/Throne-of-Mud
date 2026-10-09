@@ -38,6 +38,17 @@ export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcuts
         } else {
           setCameraZoomTarget(DEFAULT_CAMERA_ZOOM);
         }
+      } else if (e.key === 'v' || e.key === 'V' || e.key === 'м' || e.key === 'М') {
+        const { activeMenuTab, setActiveMenuTab, setActiveBuildType, setActiveTool } = useGameStore.getState();
+        if (activeMenuTab === 'military') {
+          audioManager.playUIPanelClose();
+          setActiveMenuTab(null);
+        } else {
+          audioManager.playUIPanelOpen();
+          setActiveBuildType(null);
+          setActiveTool('select');
+          setActiveMenuTab('military');
+        }
       } else if (e.key === 'F2') {
         e.preventDefault();
         const { isWeatherDebugOpen, setIsWeatherDebugOpen } = useGameStore.getState();
@@ -80,6 +91,13 @@ export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcuts
           if (activeMenuTab === 'buildings') {
             setActiveMenuTab(null);
           }
+          audioManager.playUIPanelClose();
+          return;
+        }
+
+        const selectedMilitiaSquadId = useGameStore.getState().selectedMilitiaSquadId;
+        if (selectedMilitiaSquadId) {
+          useGameStore.getState().setSelectedMilitiaSquadId(null);
           audioManager.playUIPanelClose();
           return;
         }

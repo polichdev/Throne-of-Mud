@@ -52,8 +52,55 @@ export class JobSystem {
       _regionMap.set(r.id, r);
     }
 
+    const { militiaSquads } = useGameStore.getState();
+    if (militiaSquads && militiaSquads.length > 0) {
+      for (const squad of militiaSquads) {
+        if (squad.activeMarch) {
+          const members = Array.from(characterEntities).filter(
+            (c) => c.isCharacter && c.isLevy && (c.militiaSquadId === squad.id || squad.memberIds.includes(c.id))
+          );
+          if (members.length > 0) {
+            const allArrived = members.every((m) => {
+              const hasNoPath = !m.path || m.path.length === 0;
+              if (!hasNoPath) return false;
+              if (!m.targetPosition || !m.gridPosition) return true;
+              return Math.hypot(m.gridPosition[0] - m.targetPosition[0], m.gridPosition[1] - m.targetPosition[1]) <= 1.2;
+            });
+            if (allArrived) {
+              squad.activeMarch = null;
+              useGameStore.setState((s) => ({
+                militiaSquads: s.militiaSquads.map((sq) =>
+                  sq.id === squad.id ? { ...sq, activeMarch: null } : sq
+                ),
+              }));
+            }
+          }
+        }
+      }
+    }
+
     for (const unit of characterEntities) {
       if (unit.factionId === 'bandit' || unit.factionId === 'merchant' || unit.isMerchant) continue;
+      if (unit.isLevy) {
+        if (!unit.path || unit.path.length === 0) {
+          if (unit.targetPosition && unit.gridPosition) {
+            const dist = Math.hypot(unit.gridPosition[0] - unit.targetPosition[0], unit.gridPosition[1] - unit.targetPosition[1]);
+            if (dist <= 1.0) {
+              if (unit.currentJob?.type !== 'patrol') {
+                unit.currentJob = {
+                  id: `guard-${unit.id}`,
+                  type: 'patrol',
+                  targetPosition: unit.targetPosition,
+                  targetAngle: unit.currentJob?.targetAngle ?? 0,
+                  progress: 0,
+                  totalWork: 0,
+                };
+              }
+            }
+          }
+        }
+        continue;
+      }
       const isPlayerUnit = unit.factionId === 'player' || unit.factionId === undefined;
       const isNoble = isNobleEntity(unit);
 

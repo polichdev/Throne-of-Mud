@@ -48,7 +48,7 @@ export function InspectorPanel() {
     ).length;
   }, [playerRegionId]);
 
-  if (!selectedEntity) {
+  if (!selectedEntity || (selectedEntity.isLevy && selectedEntity.militiaSquadId)) {
     return null;
   }
 

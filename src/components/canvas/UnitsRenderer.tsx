@@ -83,6 +83,9 @@ const SHARED_GEOS = {
   pickaxeHead: new THREE.BoxGeometry(0.18, 0.04, 0.04),
   swordBlade: new THREE.BoxGeometry(0.04, 0.45, 0.02),
   swordGuard: new THREE.BoxGeometry(0.12, 0.03, 0.04),
+  spearShaft: new THREE.CylinderGeometry(0.016, 0.019, 1.45, 6),
+  spearTip: new THREE.ConeGeometry(0.042, 0.22, 5),
+  spearCrossguard: new THREE.BoxGeometry(0.07, 0.02, 0.03),
   scepterHandle: new THREE.CylinderGeometry(0.02, 0.02, 0.35, 4),
   scepterHead: new THREE.DodecahedronGeometry(0.05, 0),
   unitCollider: new THREE.CylinderGeometry(0.35, 0.35, 1.3, 6),
@@ -91,6 +94,8 @@ const SHARED_GEOS = {
 export function UnitsRenderer({ grid }: { grid?: GridMap }) {
   const selectedEntityId = useGameStore((state) => state.selectedEntityId);
   const setSelectedEntityId = useGameStore((state) => state.setSelectedEntityId);
+  const setSelectedMilitiaSquadId = useGameStore((state) => state.setSelectedMilitiaSquadId);
+  const setActiveMenuTab = useGameStore((state) => state.setActiveMenuTab);
   const previewAnimation = useGameStore((state) => state.previewAnimation);
   const isGamePaused = useGameStore((state) => state.time.isPaused || state.time.speedMultiplier === 0);
 
@@ -108,17 +113,35 @@ export function UnitsRenderer({ grid }: { grid?: GridMap }) {
 
   return (
     <group visible={!isStrategicView}>
-      {units.map((unit) => (
-        <Unit3DMemo
-          key={unit.id}
-          unit={unit}
-          grid={grid}
-          isSelected={selectedEntityId === unit.id}
-          isGamePaused={isGamePaused}
-          previewAnimation={previewAnimation?.entityId === unit.id ? previewAnimation : null}
-          onSelect={() => setSelectedEntityId(unit.id)}
-        />
-      ))}
+      {units.map((unit) => {
+        return (
+          <Unit3DMemo
+            key={unit.id}
+            unit={unit}
+            grid={grid}
+            isSelected={selectedEntityId === unit.id && !unit.isLevy}
+            isGamePaused={isGamePaused}
+            previewAnimation={previewAnimation?.entityId === unit.id ? previewAnimation : null}
+            onSelect={() => {
+              if (unit.isLevy) {
+                useGameStore.getState().syncMilitiaSquadsFromWorld();
+                const squads = useGameStore.getState().militiaSquads;
+                const squadId = unit.militiaSquadId || squads[0]?.id;
+                if (squadId) {
+                  unit.militiaSquadId = squadId;
+                  setSelectedEntityId(null);
+                  setSelectedMilitiaSquadId(squadId);
+                  setActiveMenuTab('military');
+                  audioManager.playUIClick();
+                }
+              } else {
+                setSelectedMilitiaSquadId(null);
+                setSelectedEntityId(unit.id);
+              }
+            }}
+          />
+        );
+      })}
       <ActiveSpeechBubblesRenderer />
     </group>
   );
@@ -241,6 +264,7 @@ function Unit3D({
   const hammerRef = useRef<THREE.Group>(null);
   const pickaxeRef = useRef<THREE.Group>(null);
   const swordRef = useRef<THREE.Group>(null);
+  const spearRef = useRef<THREE.Group>(null);
   const scepterRef = useRef<THREE.Group>(null);
   const shadowDiscRef = useRef<THREE.Mesh>(null);
   const detailsRef = useRef<THREE.Group>(null);
@@ -254,10 +278,9 @@ function Unit3D({
   const isLady = characterClass === 'lady';
   const isKnight = characterClass === 'warrior';
   const isBandit = characterClass === 'bandit' || unit.factionId === 'bandit' || unit.id.startsWith('bandit-');
-  const isBanditLeader = isBandit && (unit.id.includes('leader') || unit.title === 'Ватажок розбійників' || unit.title === 'Ватажок');
   const isPeasant = !isLord && !isLady && !isKnight && !isBandit;
 
-  const app = useMemo(() => getUnitAppearance(unit.id, characterClass), [unit.id, characterClass]);
+  const app = useMemo(() => getUnitAppearance(unit.id, characterClass, Boolean(unit.isLevy)), [unit.id, characterClass, unit.isLevy]);
   const multiHeadMats = useMemo(() => [
     app.skinMat,
     app.skinMat,
@@ -270,9 +293,6 @@ function Unit3D({
 
   const prevPhaseRef = useRef<number>(0);
   const prevFootstepRef = useRef<number>(0);
-  const [showBanditBadge, setShowBanditBadge] = useState(false);
-  const showBanditBadgeRef = useRef(false);
-  const banditFrameCountRef = useRef(0);
   const prevJobIdRef = useRef<string | null>(null);
   const targetBuildingTypeRef = useRef<string | undefined>(undefined);
 
@@ -290,25 +310,10 @@ function Unit3D({
       isVisible = distSq < maxDist * maxDist;
       groupRef.current.visible = isVisible;
       if (!isVisible) {
-        if (showBanditBadgeRef.current) {
-          showBanditBadgeRef.current = false;
-          setShowBanditBadge(false);
-        }
         return;
       }
     } else {
       groupRef.current.visible = true;
-    }
-
-    if (isBandit && isBanditLeader) {
-      banditFrameCountRef.current++;
-      if (banditFrameCountRef.current % 12 === 0 || banditFrameCountRef.current === 1) {
-        const shouldShow = isVisible && zoom >= 16;
-        if (shouldShow !== showBanditBadgeRef.current) {
-          showBanditBadgeRef.current = shouldShow;
-          setShowBanditBadge(shouldShow);
-        }
-      }
     }
 
     const curPath = unit.path;
@@ -384,11 +389,15 @@ function Unit3D({
       !isCalmBuilding &&
       targetBuildingType !== 'wheat_farm';
 
+    const isMilitiaSpear = Boolean(unit.isLevy && unit.militiaWeapon !== 'sword');
+    const isMilitiaSword = Boolean(unit.isLevy && unit.militiaWeapon === 'sword');
+
     if (twoHandedRigRef.current) twoHandedRigRef.current.visible = isActivelyChoppingNow;
     if (standardArmsRef.current) standardArmsRef.current.visible = !isActivelyChoppingNow;
     if (hammerRef.current) hammerRef.current.visible = isActivelyBuildingNow;
     if (pickaxeRef.current) pickaxeRef.current.visible = isActivelyMiningNow;
-    if (swordRef.current) swordRef.current.visible = isActivelyFightingNow || (isBandit && !isSleepingNow && !isSittingNow);
+    if (spearRef.current) spearRef.current.visible = isMilitiaSpear && !isSleepingNow && !isSittingNow;
+    if (swordRef.current) swordRef.current.visible = (isActivelyFightingNow || isMilitiaSword || (isBandit && !isSleepingNow && !isSittingNow));
     if (scepterRef.current) scepterRef.current.visible = isLord && !isMovingNow && !isSleepingNow && !isSittingNow;
     if (shadowDiscRef.current) shadowDiscRef.current.visible = !isSleepingNow;
 
@@ -1001,7 +1010,7 @@ function Unit3D({
             <group ref={leftArmRef} position={[-0.22, 0.52, 0]}>
               <mesh material={app.tunicMat} position={[0, -0.06, 0]} geometry={SHARED_GEOS.armSleeveStandard} />
               <mesh material={app.skinMat} position={[0, -0.18, 0]} geometry={SHARED_GEOS.armHandStandard} />
-              {(isKnight || isBandit) && app.shieldMat && (
+              {(isKnight || isBandit || unit.isLevy) && app.shieldMat && (
                 <mesh material={app.shieldMat} position={[-0.08, -0.12, 0.08]} rotation={[0, 0.3, 0]}>
                   <boxGeometry args={[0.04, 0.38, 0.26]} />
                 </mesh>
@@ -1020,6 +1029,12 @@ function Unit3D({
               <group ref={pickaxeRef} position={[0, -0.22, 0.12]} rotation={[-Math.PI / 5, 0, 0]} visible={false}>
                 <mesh material={staticMats.woodHandle} geometry={SHARED_GEOS.pickaxeHandle} />
                 <mesh material={staticMats.ironSteel} position={[0, 0.15, 0]} geometry={SHARED_GEOS.pickaxeHead} />
+              </group>
+
+              <group ref={spearRef} position={[0, 0.22, 0.12]} rotation={[-Math.PI / 16, 0, 0]} visible={false}>
+                <mesh material={staticMats.woodHandle} geometry={SHARED_GEOS.spearShaft} />
+                <mesh material={staticMats.ironSteel} position={[0, 0.78, 0]} geometry={SHARED_GEOS.spearTip} />
+                <mesh material={staticMats.darkIron} position={[0, 0.65, 0]} geometry={SHARED_GEOS.spearCrossguard} />
               </group>
 
               <group ref={swordRef} position={[0, -0.22, 0.15]} rotation={[-Math.PI / 4, 0, 0]} visible={false}>
@@ -1047,46 +1062,24 @@ function Unit3D({
           e.stopPropagation();
           onSelect();
         }}
+        onContextMenu={(e) => {
+          if (useGameStore.getState().selectedMilitiaSquadId) {
+            e.stopPropagation();
+            e.nativeEvent?.preventDefault?.();
+            useGameStore.getState().setSelectedMilitiaSquadId(null);
+            if (useGameStore.getState().activeMenuTab === 'military') {
+              useGameStore.getState().setActiveMenuTab(null);
+            }
+            useGameStore.getState().setHoveredTile(null);
+            audioManager.playUIPanelClose();
+          }
+        }}
         geometry={SHARED_GEOS.unitCollider}
         material={SHARED_STATIC_MATS.invisibleMat}
       />
 
       {isSelected && (
         <mesh position={[0, 0.008, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={SHARED_GEOS.selectionRing} material={SHARED_STATIC_MATS.selectionRingMat} />
-      )}
-
-      {isBandit && isBanditLeader && showBanditBadge && (
-        <Html
-          position={[0, 1.45, 0]}
-          center
-          zIndexRange={[10, 0]}
-          style={{
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        >
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect();
-            }}
-            className={`group flex flex-col items-center select-none pointer-events-auto cursor-pointer ${
-              isSelected ? 'scale-110 -translate-y-1' : 'opacity-95'
-            }`}
-            title="Загін розбійників"
-          >
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center relative transition shadow-[0_3px_10px_rgba(0,0,0,0.85)] ${
-                isSelected
-                  ? 'bg-rose-950 border-2 border-rose-400 shadow-[0_0_14px_rgba(244,63,94,0.8)] scale-110'
-                  : 'bg-[#181614] border-2 border-stone-400/90 hover:border-rose-400'
-              }`}
-            >
-              <div className="absolute inset-[2px] rounded-full border border-white/20 pointer-events-none" />
-              <span className="text-xl leading-none drop-shadow-md select-none">💀</span>
-            </div>
-          </div>
-        </Html>
       )}
     </group>
   );
@@ -1496,8 +1489,9 @@ const Unit3DMemo = memo(Unit3D, (prev, next) => {
     prev.unit.hasMule === next.unit.hasMule &&
     prev.unit.hasHorseCart === next.unit.hasHorseCart &&
     prev.unit.isMerchant === next.unit.isMerchant &&
-    prev.unit.muleTransition === next.unit.muleTransition &&
-    prev.unit.isHaulingLog === next.unit.isHaulingLog &&
+    prev.unit.isLevy === next.unit.isLevy &&
+    prev.unit.militiaWeapon === next.unit.militiaWeapon &&
+    prev.unit.militiaSquadId === next.unit.militiaSquadId &&
     prev.grid === next.grid
   );
 });

@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { GridMap } from '../../engine/grid/GridMap';
 import { BuildingsMenuModal } from './bottom-bar/BuildingsMenuModal';
+import { MilitiaBar } from './bottom-bar/MilitiaBar';
 import { TimeControlsWidget } from './bottom-bar/TimeControlsWidget';
 import { ActionButtonsBar } from './bottom-bar/ActionButtonsBar';
 import { SettingsModal } from './settings/SettingsModal';
@@ -32,14 +33,14 @@ export const BottomActionBar: React.FC<BottomActionBarProps> = React.memo(({ gri
       if (activeMenuTab === tabName) {
         audioManager.playUIPanelClose();
         setActiveMenuTab(null);
-        if (tabName === 'buildings') {
+        if (tabName === 'buildings' || tabName === 'military') {
           setActiveBuildType(null);
           setActiveTool('select');
         }
       } else {
         audioManager.playUIPanelOpen();
         setActiveMenuTab(tabName);
-        if (tabName === 'buildings') {
+        if (tabName === 'buildings' || tabName === 'military') {
           setActiveBuildType(null);
           setActiveTool('select');
         }
@@ -56,6 +57,11 @@ export const BottomActionBar: React.FC<BottomActionBarProps> = React.memo(({ gri
   }, [setActiveMenuTab, setActiveBuildType, setActiveTool]);
 
   const handleCloseSettings = useCallback(() => {
+    audioManager.playUIPanelClose();
+    setActiveMenuTab(null);
+  }, [setActiveMenuTab]);
+
+  const handleCloseMilitary = useCallback(() => {
     audioManager.playUIPanelClose();
     setActiveMenuTab(null);
   }, [setActiveMenuTab]);
@@ -79,6 +85,10 @@ export const BottomActionBar: React.FC<BottomActionBarProps> = React.memo(({ gri
 
       {activeMenuTab === 'trade' && (
         <TradePostModal onClose={handleCloseTrade} />
+      )}
+
+      {activeMenuTab === 'military' && (
+        <MilitiaBar grid={grid} onClose={handleCloseMilitary} />
       )}
 
       {isWeatherDebugOpen && <WeatherDebugModal />}

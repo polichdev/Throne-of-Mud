@@ -44,8 +44,6 @@ const CAMP_PHRASES = [
   'Скоро вирушаємо далі...',
 ];
 
-const ONE_DAY_TICKS = 8640;
-
 const FORMATION_OFFSETS: [number, number][] = [
   [-1.0, -1.3],
   [1.0, -1.3],
@@ -82,9 +80,9 @@ export class BanditAISystem {
       const hasPath = Boolean(leader.path && leader.path.length > 0);
 
       if (distToTarget <= 3.5 || (!hasPath && currentTick % 30 === 0)) {
-        if (distToTarget <= 4.0) {
+        if (distToTarget <= 4.5) {
           this.squad.state = 'camping';
-          this.squad.campTicksRemaining = Math.floor(ONE_DAY_TICKS * (1.0 + Math.random() * 1.0));
+          this.squad.campTicksRemaining = Math.floor(70 + Math.random() * 50);
           leader.path = [];
           this.broadcastSpeech(this.squad, CAMP_PHRASES, currentTick, 35);
         } else {
@@ -94,7 +92,7 @@ export class BanditAISystem {
 
       this.updateMarchingFormation(grid, leader, lx, lz, currentTick);
 
-      if (currentTick - this.squad.lastBubbleTick > 350 && Math.random() < 0.3) {
+      if (currentTick - this.squad.lastBubbleTick > 250 && Math.random() < 0.35) {
         this.broadcastSpeech(this.squad, MARCH_PHRASES, currentTick, 28);
       }
     } else if (this.squad.state === 'camping') {
@@ -102,7 +100,7 @@ export class BanditAISystem {
 
       this.updateCampingPerimeter(lx, lz);
 
-      if (currentTick - this.squad.lastBubbleTick > 500 && Math.random() < 0.25) {
+      if (currentTick - this.squad.lastBubbleTick > 280 && Math.random() < 0.3) {
         this.broadcastSpeech(this.squad, CAMP_PHRASES, currentTick, 28);
       }
 
@@ -122,7 +120,8 @@ export class BanditAISystem {
 
     const existingBandits: GameEntity[] = [];
     for (const c of characterEntities) {
-      if (c.factionId === 'bandit') {
+      if (c.factionId === 'bandit' || c.characterClass === 'bandit') {
+        c.regionId = undefined;
         existingBandits.push(c);
       }
     }
@@ -133,9 +132,9 @@ export class BanditAISystem {
       this.squad = {
         leaderId: leader.id,
         memberIds: members,
-        state: 'camping',
+        state: 'marching',
         targetPos: [leader.gridPosition?.[0] || 20, leader.gridPosition?.[1] || 20],
-        campTicksRemaining: Math.floor(ONE_DAY_TICKS * (0.5 + Math.random() * 1.0)),
+        campTicksRemaining: 25,
         lastTargetRegionIndex: 0,
         lastBubbleTick: 0,
       };
@@ -157,7 +156,7 @@ export class BanditAISystem {
       factionId: 'bandit',
       gridPosition: [sx, sz],
       position: [sx + 0.5, 0.3, sz + 0.5],
-      moveSpeed: 1.25,
+      moveSpeed: 1.30,
       gold: 50,
       skills: { farming: 1, woodcutting: 4, mining: 2, building: 2, cooking: 2, brewing: 4, combat: 9, intellect: 7, charisma: 8 },
       needs: { hunger: 90, energy: 95, mood: 80, ale: 70, hygiene: 60 },
@@ -194,9 +193,9 @@ export class BanditAISystem {
     this.squad = {
       leaderId,
       memberIds,
-      state: 'camping',
+      state: 'marching',
       targetPos: [sx, sz],
-      campTicksRemaining: Math.floor(ONE_DAY_TICKS * (1.0 + Math.random() * 1.0)),
+      campTicksRemaining: 25,
       lastTargetRegionIndex: 0,
       lastBubbleTick: 0,
     };
@@ -241,35 +240,80 @@ export class BanditAISystem {
     const lx = leader.position[0];
     const lz = leader.position[2];
 
-    const candidateDestinations: [number, number][] = [];
+    const currentRegionId = this.squad.lastTargetRegionIndex ?? 0;
+    const regionIds = [0, 4, 1, 3, 2, 5];
+    const curIdx = regionIds.indexOf(currentRegionId);
+    const nextIdx = (curIdx + 1 + Math.floor(Math.random() * 2)) % regionIds.length;
+    const targetRegionId = regionIds[nextIdx];
+    this.squad.lastTargetRegionIndex = targetRegionId;
 
-    for (const r of regions) {
-      const minX = r.bounds.minX + 5;
-      const maxX = r.bounds.maxX - 5;
-      const minZ = r.bounds.minZ + 5;
-      const maxZ = r.bounds.maxZ - 5;
+    const targetRegion = regions.find((r) => r.id === targetRegionId) || regions[targetRegionId % regions.length];
 
-      candidateDestinations.push([minX + 4, minZ + 4]);
-      candidateDestinations.push([maxX - 4, minZ + 4]);
-      candidateDestinations.push([minX + 4, maxZ - 4]);
-      candidateDestinations.push([maxX - 4, maxZ - 4]);
-      candidateDestinations.push([Math.floor((minX + maxX) / 2), minZ + 3]);
-      candidateDestinations.push([Math.floor((minX + maxX) / 2), maxZ - 3]);
+    const minX = Math.max(8, targetRegion.bounds.minX + 8);
+    const maxX = Math.min(grid.width - 9, targetRegion.bounds.maxX - 8);
+    const minZ = Math.max(8, targetRegion.bounds.minZ + 8);
+    const maxZ = Math.min(grid.height - 9, targetRegion.bounds.maxZ - 8);
+
+    const candidates: [number, number][] = [
+      [targetRegion.center[0], targetRegion.center[1]],
+      [minX + 4, minZ + 4],
+      [maxX - 4, minZ + 4],
+      [minX + 4, maxZ - 4],
+      [maxX - 4, maxZ - 4],
+      [Math.floor((minX + maxX) / 2), Math.floor((minZ + maxZ) / 2)],
+    ];
+
+    const validSpots: [number, number][] = candidates.filter(([x, z]) => grid.isWalkable(x, z));
+    const chosenTarget: [number, number] = validSpots.length > 0 ? validSpots[Math.floor(Math.random() * validSpots.length)] : [targetRegion.center[0], targetRegion.center[1]];
+
+    const totalDist = Math.hypot(chosenTarget[0] - lx, chosenTarget[1] - lz);
+
+    let finalTarget: [number, number] = chosenTarget;
+    if (totalDist > 75) {
+      const stepDist = 55 + Math.random() * 15;
+      const dirX = (chosenTarget[0] - lx) / totalDist;
+      const dirZ = (chosenTarget[1] - lz) / totalDist;
+      let stepX = Math.max(5, Math.min(grid.width - 6, Math.round(lx + dirX * stepDist)));
+      let stepZ = Math.max(5, Math.min(grid.height - 6, Math.round(lz + dirZ * stepDist)));
+
+      if (!grid.isWalkable(stepX, stepZ)) {
+        for (let r = 1; r <= 4; r++) {
+          let found = false;
+          for (let dx = -r; dx <= r; dx++) {
+            for (let dz = -r; dz <= r; dz++) {
+              const nx = stepX + dx;
+              const nz = stepZ + dz;
+              if (nx >= 2 && nx < grid.width - 2 && nz >= 2 && nz < grid.height - 2 && grid.isWalkable(nx, nz)) {
+                stepX = nx;
+                stepZ = nz;
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
+          }
+          if (found) break;
+        }
+      }
+      finalTarget = [stepX, stepZ];
     }
 
-    const validDestinations = candidateDestinations.filter(([x, z]) => {
-      const t = grid.getTile(x, z);
-      return t && t.terrain !== 'water' && distance2D(lx, lz, x, z) > 30;
-    });
-
-    if (validDestinations.length === 0) return;
-
-    const chosen = validDestinations[Math.floor(Math.random() * validDestinations.length)];
-    this.squad.targetPos = chosen;
+    this.squad.targetPos = finalTarget;
 
     const startPos: [number, number] = [Math.floor(lx), Math.floor(lz)];
-    const path = AStar.findPath(grid, startPos, chosen, true);
+    let path = AStar.findPath(grid, startPos, finalTarget, true, undefined, 5000);
+
+    if (!path || path.length === 0) {
+      const neighbors = grid.getNeighbors(startPos[0], startPos[1]).filter((n) => grid.isWalkable(n.x, n.z));
+      if (neighbors.length > 0) {
+        path = [[neighbors[0].x, neighbors[0].z]];
+      }
+    }
+
     if (path && path.length > 0) {
+      if (path.length > 1 && path[0][0] === startPos[0] && path[0][1] === startPos[1]) {
+        path.shift();
+      }
       leader.path = path;
     }
   }
@@ -325,7 +369,8 @@ export class BanditAISystem {
             [Math.floor(mx), Math.floor(mz)],
             [Math.floor(targetX), Math.floor(targetZ)],
             true,
-            searchBounds
+            searchBounds,
+            2000
           );
           if (p && p.length > 0) {
             member.path = p;
@@ -334,9 +379,9 @@ export class BanditAISystem {
           }
         }
         member.moveSpeed = 1.45;
-      } else if (distToSpot > 1.2) {
+      } else if (distToSpot > 1.0) {
         member.path = [[Math.floor(targetX), Math.floor(targetZ)]];
-        member.moveSpeed = distToSpot > 4.0 ? 1.40 : 1.30;
+        member.moveSpeed = distToSpot > 3.5 ? 1.40 : 1.30;
       } else {
         member.path = [];
         member.moveSpeed = 1.25;

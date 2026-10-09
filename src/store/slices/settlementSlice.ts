@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 import type { ChronicleEvent, WorldSetupConfig } from '../../types/game';
 import { GridMap } from '../../engine/grid/GridMap';
-import { world, characterEntities, buildingEntities } from '../../engine/ecs/world';
+import { world, characterEntities, buildingEntities, type GameEntity } from '../../engine/ecs/world';
 import { BUILDING_BLUEPRINTS } from '../../engine/buildings/blueprints';
 import {
   INITIAL_RESOURCES,
@@ -22,6 +22,10 @@ import { BotAISystem } from '../../engine/ecs/systems/BotAISystem';
 import { BanditAISystem } from '../../engine/ecs/systems/BanditAISystem';
 import { DEFAULT_TRADE_RULES } from '../../engine/trade/tradeConfig';
 import { clearBuildingFrameStates } from '../../components/canvas/BuildingsRenderer';
+import { AStar } from '../../engine/pathfinding/AStar';
+import { getFormationOffsets, isMilitiaDestinationAllowed } from '../../engine/combat/formationUtils';
+import { audioManager } from '../../engine/audio/AudioManager';
+import type { MilitiaSquad, MilitiaUnitType } from '../../types/game';
 import type { GameState, SettlementSlice } from '../types';
 
 export type { SettlementSlice };
@@ -359,6 +363,479 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     set((state) => ({ ...state }));
   },
 
+  militiaSquads: [],
+  selectedMilitiaSquadId: null,
+  setSelectedMilitiaSquadId: (squadId: string | null) => {
+    set({ selectedMilitiaSquadId: squadId });
+  },
+
+  createMilitiaSquad: (type: MilitiaUnitType, grid: GridMap) => {
+    const state = get();
+    const currentTick = state.time.tick || 0;
+    const playerRegionId = state.playerRegionId ?? 0;
+
+    const eligiblePeasants = Array.from(characterEntities).filter(
+      (c) =>
+        c.isCharacter &&
+        c.characterClass === 'peasant' &&
+        (!c.factionId || c.factionId === 'player') &&
+        !c.isLevy
+    );
+
+    if (eligiblePeasants.length === 0) {
+      return null;
+    }
+
+    eligiblePeasants.sort((a, b) => {
+      const aIdle = !a.workBuildingId ? 0 : 1;
+      const bIdle = !b.workBuildingId ? 0 : 1;
+      return aIdle - bIdle;
+    });
+
+    let draftCount = Math.min(5, eligiblePeasants.length);
+
+    if (type === 'swordsmen') {
+      const availableWeapons = state.resources.weapons || 0;
+      if (availableWeapons < 1) {
+        return null;
+      }
+      draftCount = Math.min(draftCount, availableWeapons);
+      get().consumeResource('weapons', draftCount);
+    }
+
+    const drafted = eligiblePeasants.slice(0, draftCount);
+    if (drafted.length === 0) return null;
+
+    const squadNum = state.militiaSquads.length + 1;
+    const squadId = `squad-${Date.now()}-${squadNum}`;
+
+    const region = state.regions.find((r) => r.id === playerRegionId) || state.regions[0];
+    const campPos = region?.campPosition || state.playerSpawnPoint || [64, 60];
+
+    const squadIndexOffset = state.militiaSquads.length * 4.5;
+    let rallyBaseX = Math.round(campPos[0] + 5 + squadIndexOffset);
+    let rallyBaseZ = Math.round(campPos[1] + 3);
+
+    if (!grid.isWalkable(rallyBaseX, rallyBaseZ)) {
+      const neighbors = grid.getNeighbors(rallyBaseX, rallyBaseZ).filter((n) => grid.isWalkable(n.x, n.z));
+      if (neighbors.length > 0) {
+        rallyBaseX = neighbors[0].x;
+        rallyBaseZ = neighbors[0].z;
+      }
+    }
+
+    const rallyPoint: [number, number] = [rallyBaseX, rallyBaseZ];
+    const offsets = getFormationOffsets(drafted.length, 0);
+
+    drafted.forEach((peasant, idx) => {
+      const off = offsets[idx] || [0, 0];
+      const targetX = Math.max(1, Math.min(grid.width - 2, Math.round(rallyPoint[0] + off[0])));
+      const targetZ = Math.max(1, Math.min(grid.height - 2, Math.round(rallyPoint[1] + off[1])));
+
+      peasant.isLevy = true;
+      peasant.militiaSquadId = squadId;
+      peasant.militiaWeapon = type === 'swordsmen' ? 'sword' : 'spear';
+      peasant.formationIndex = idx;
+
+      const px = peasant.gridPosition ? peasant.gridPosition[0] : Math.floor(peasant.position ? peasant.position[0] : targetX);
+      const pz = peasant.gridPosition ? peasant.gridPosition[1] : Math.floor(peasant.position ? peasant.position[2] : targetZ);
+      const path = AStar.findPath(grid, [px, pz], [targetX, targetZ], true);
+
+      peasant.path = path && path.length > 0 ? path : [[targetX, targetZ]];
+      peasant.targetPosition = [targetX, targetZ];
+      peasant.currentJob = {
+        id: `militia-rally-${peasant.id}`,
+        type: 'patrol',
+        targetPosition: [targetX, targetZ],
+        targetAngle: 0,
+        progress: 0,
+        totalWork: 0,
+      };
+
+      peasant.speechBubble = {
+        text: type === 'swordsmen' ? 'Беру меч та щит за наш трон!' : 'Беру спис, стаю до строю!',
+        expiresAtTick: currentTick + 45,
+        type: 'alert',
+      };
+    });
+
+    const isUkr = (get() as any).language === 'uk';
+    const squadName =
+      type === 'swordsmen'
+        ? (isUkr ? `Ополченці-мечники ${squadNum}` : `Swordsmen Militia ${squadNum}`)
+        : (isUkr ? `Селянські списники ${squadNum}` : `Peasant Spearmen ${squadNum}`);
+
+    const newSquad: MilitiaSquad = {
+      id: squadId,
+      name: squadName,
+      type,
+      memberIds: drafted.map((p) => p.id),
+      maxMembers: 5,
+      rallyPoint,
+      facingAngle: 0,
+      createdAt: Date.now(),
+    };
+
+    set((s) => ({
+      militiaSquads: [...s.militiaSquads, newSquad],
+      selectedMilitiaSquadId: squadId,
+    }));
+
+    get().addChronicleEvent({
+      title: isUkr ? 'Скликано ополчення!' : 'Militia Formed!',
+      description: isUkr
+        ? `Сформовано загін "${squadName}" (${drafted.length} бійців). Вони стають у 2 шеренги неподалік від табору.`
+        : `Formed squad "${squadName}" (${drafted.length} soldiers) assembled in 2 ranks near camp.`,
+      type: 'warning',
+    });
+
+    audioManager.playUISuccess();
+    return newSquad;
+  },
+
+  syncMilitiaSquadsFromWorld: () => {
+    const state = get();
+    const currentSquads = [...state.militiaSquads];
+    const squadMap = new Map<string, MilitiaSquad>();
+    for (const sq of currentSquads) {
+      squadMap.set(sq.id, { ...sq, memberIds: [...sq.memberIds] });
+    }
+
+    const levies = Array.from(characterEntities).filter(
+      (c) => c.isCharacter && c.isLevy && (!c.factionId || c.factionId === 'player')
+    );
+
+    if (levies.length === 0) {
+      if (currentSquads.length > 0) {
+        set({ militiaSquads: [], selectedMilitiaSquadId: null });
+      }
+      return;
+    }
+
+    const groups = new Map<string, GameEntity[]>();
+    for (const levy of levies) {
+      const sqId = levy.militiaSquadId || 'squad-recovered-1';
+      levy.militiaSquadId = sqId;
+      if (!levy.militiaWeapon) {
+        levy.militiaWeapon = 'spear';
+      }
+      const list = groups.get(sqId) || [];
+      list.push(levy);
+      groups.set(sqId, list);
+    }
+
+    const isUkr = (get() as any).language === 'uk';
+    let idx = 1;
+
+    for (const [sqId, members] of groups.entries()) {
+      let existing = squadMap.get(sqId);
+      if (!existing) {
+        let sumX = 0;
+        let sumZ = 0;
+        for (const m of members) {
+          const mx = m.gridPosition ? m.gridPosition[0] : (m.position ? m.position[0] : 52);
+          const mz = m.gridPosition ? m.gridPosition[1] : (m.position ? m.position[2] : 52);
+          sumX += mx;
+          sumZ += mz;
+        }
+        const rallyPoint: [number, number] = [Math.round(sumX / members.length), Math.round(sumZ / members.length)];
+        const isSwords = members.some((m) => m.militiaWeapon === 'sword');
+        const squadType: MilitiaUnitType = isSwords ? 'swordsmen' : 'spearmen';
+        const name = isSwords
+          ? (isUkr ? `Ополченці-мечники ${idx}` : `Swordsmen Militia ${idx}`)
+          : (isUkr ? `Селянські списники ${idx}` : `Peasant Spearmen ${idx}`);
+
+        existing = {
+          id: sqId,
+          name,
+          type: squadType,
+          memberIds: members.map((m) => m.id),
+          maxMembers: 5,
+          rallyPoint,
+          facingAngle: 0,
+          createdAt: Date.now(),
+        };
+        squadMap.set(sqId, existing);
+      } else {
+        existing.memberIds = members.map((m) => m.id);
+      }
+      idx++;
+    }
+
+    const updatedSquads = Array.from(squadMap.values());
+    const nextSelected = state.selectedMilitiaSquadId && updatedSquads.some((s) => s.id === state.selectedMilitiaSquadId)
+      ? state.selectedMilitiaSquadId
+      : null;
+
+    set({
+      militiaSquads: updatedSquads,
+      selectedMilitiaSquadId: nextSelected,
+    });
+  },
+
+  disbandMilitiaSquad: (squadId: string) => {
+    const state = get();
+    const currentTick = state.time.tick || 0;
+    const squad = state.militiaSquads.find((sq) => sq.id === squadId);
+
+    let livingCount = 0;
+    let hadSwords = squad ? squad.type === 'swordsmen' : false;
+
+    for (const peasant of characterEntities) {
+      if (!peasant.isCharacter || !peasant.isLevy) continue;
+      const belongs = peasant.militiaSquadId === squadId || (squad && squad.memberIds.includes(peasant.id)) || squadId === 'all';
+      if (belongs) {
+        livingCount++;
+        if (peasant.militiaWeapon === 'sword') hadSwords = true;
+        peasant.isLevy = false;
+        peasant.militiaSquadId = undefined;
+        peasant.militiaWeapon = undefined;
+        peasant.formationIndex = undefined;
+        peasant.currentJob = {
+          id: `idle-${peasant.id}`,
+          type: 'idle',
+          progress: 0,
+          totalWork: 0,
+        };
+        peasant.speechBubble = {
+          text: (get() as any).language === 'uk' ? 'Ополчення розпущено, повертаюсь до роботи' : 'Militia dismissed, returning to work',
+          expiresAtTick: currentTick + 35,
+          type: 'work',
+        };
+      }
+    }
+
+    if (hadSwords && livingCount > 0) {
+      get().addResource('weapons', livingCount);
+    }
+
+    set((s) => {
+      const remaining = s.militiaSquads.filter((sq) => sq.id !== squadId && squadId !== 'all');
+      return {
+        militiaSquads: remaining,
+        selectedMilitiaSquadId: null,
+      };
+    });
+
+    const isUkr = (get() as any).language === 'uk';
+    const squadName = squad ? squad.name : (isUkr ? 'Ополчення' : 'Militia');
+    get().addChronicleEvent({
+      title: isUkr ? 'Ополчення розпущено' : 'Militia Disbanded',
+      description: isUkr
+        ? `Загін "${squadName}" розпущено (${livingCount} бійців). Селяни повертаються до мирної праці у селі.`
+        : `Squad "${squadName}" disbanded (${livingCount} soldiers). Peasants return to civilian life.`,
+      type: 'info',
+    });
+
+    audioManager.playUIClick();
+  },
+
+  rallyMilitiaSquad: (squadId: string, grid: GridMap) => {
+    let state = get();
+    let squad = state.militiaSquads.find((sq) => sq.id === squadId);
+    if (!squad) {
+      get().syncMilitiaSquadsFromWorld();
+      state = get();
+      squad = state.militiaSquads.find((sq) => sq.id === squadId) || state.militiaSquads[0];
+    }
+    if (!squad) return;
+
+    const livingMembers = Array.from(characterEntities).filter(
+      (c) => c.isCharacter && c.isLevy && (c.militiaSquadId === squad!.id || squad!.memberIds.includes(c.id))
+    );
+    if (livingMembers.length === 0) return;
+
+    const offsets = getFormationOffsets(livingMembers.length, squad.facingAngle);
+    livingMembers.forEach((peasant, idx) => {
+      const off = offsets[idx] || [0, 0];
+      let targetX = Math.max(1, Math.min(grid.width - 2, Math.round(squad!.rallyPoint[0] + off[0])));
+      let targetZ = Math.max(1, Math.min(grid.height - 2, Math.round(squad!.rallyPoint[1] + off[1])));
+
+      if (!grid.isWalkable(targetX, targetZ)) {
+        const neighbors = grid.getNeighbors(targetX, targetZ).filter((n) => grid.isWalkable(n.x, n.z));
+        if (neighbors.length > 0) {
+          targetX = neighbors[0].x;
+          targetZ = neighbors[0].z;
+        } else if (grid.isWalkable(squad!.rallyPoint[0], squad!.rallyPoint[1])) {
+          targetX = squad!.rallyPoint[0];
+          targetZ = squad!.rallyPoint[1];
+        }
+      }
+
+      const px = peasant.gridPosition ? peasant.gridPosition[0] : Math.floor(peasant.position ? peasant.position[0] : targetX);
+      const pz = peasant.gridPosition ? peasant.gridPosition[1] : Math.floor(peasant.position ? peasant.position[2] : targetZ);
+      const path = AStar.findPath(grid, [px, pz], [targetX, targetZ], true);
+
+      peasant.path = path && path.length > 0 ? path : [[targetX, targetZ]];
+      peasant.targetPosition = [targetX, targetZ];
+      peasant.currentJob = {
+        id: `militia-rally-${peasant.id}`,
+        type: 'patrol',
+        targetPosition: [targetX, targetZ],
+        targetAngle: squad!.facingAngle,
+        progress: 0,
+        totalWork: 0,
+      };
+    });
+
+    squad.activeMarch = null;
+    set((s) => ({
+      militiaSquads: s.militiaSquads.map((sq) =>
+        sq.id === squadId ? { ...sq, activeMarch: null } : sq
+      ),
+    }));
+
+    audioManager.playUIClick();
+  },
+
+  moveMilitiaSquad: (squadId: string, targetPos: [number, number], grid: GridMap) => {
+    let state = get();
+    const currentTick = state.time.tick || 0;
+    const playerRegionId = state.playerRegionId ?? 0;
+    const pRegion = state.regions.find((r) => r.id === playerRegionId);
+
+    if (!isMilitiaDestinationAllowed(grid, targetPos[0], targetPos[1], pRegion?.bounds)) {
+      return;
+    }
+
+    let squad = state.militiaSquads.find((sq) => sq.id === squadId);
+    if (!squad) {
+      get().syncMilitiaSquadsFromWorld();
+      state = get();
+      squad = state.militiaSquads.find((sq) => sq.id === squadId) || state.militiaSquads[0];
+    }
+
+    const livingMembers = Array.from(characterEntities).filter(
+      (c) => c.isCharacter && c.isLevy && (!squad || c.militiaSquadId === squad.id || squad.memberIds.includes(c.id))
+    );
+
+    if (livingMembers.length === 0) return;
+
+    let sumX = 0;
+    let sumZ = 0;
+    livingMembers.forEach((p) => {
+      const px = p.gridPosition ? p.gridPosition[0] : (p.position ? p.position[0] : targetPos[0]);
+      const pz = p.gridPosition ? p.gridPosition[1] : (p.position ? p.position[2] : targetPos[1]);
+      sumX += px;
+      sumZ += pz;
+    });
+    const curCenterX = sumX / livingMembers.length;
+    const curCenterZ = sumZ / livingMembers.length;
+
+    const startPos: [number, number] = [Math.round(curCenterX), Math.round(curCenterZ)];
+    const masterPath = AStar.findPath(grid, startPos, targetPos, true) || [[targetPos[0], targetPos[1]]];
+
+    let facingAngle = Math.atan2(targetPos[0] - curCenterX, targetPos[1] - curCenterZ);
+    if (isNaN(facingAngle)) facingAngle = 0;
+
+    const finalOffsets = getFormationOffsets(livingMembers.length, facingAngle);
+
+    livingMembers.forEach((peasant, idx) => {
+      const finalOff = finalOffsets[idx] || [0, 0];
+      let finalTargetX = Math.round(targetPos[0] + finalOff[0]);
+      let finalTargetZ = Math.round(targetPos[1] + finalOff[1]);
+
+      if (!grid.isWalkable(finalTargetX, finalTargetZ)) {
+        let bestX = targetPos[0];
+        let bestZ = targetPos[1];
+        let bestDistSq = Infinity;
+        for (let r = 1; r <= 3; r++) {
+          for (let odx = -r; odx <= r; odx++) {
+            for (let odz = -r; odz <= r; odz++) {
+              const nx = finalTargetX + odx;
+              const nz = finalTargetZ + odz;
+              if (nx >= 1 && nx < grid.width - 1 && nz >= 1 && nz < grid.height - 1 && grid.isWalkable(nx, nz)) {
+                const dSq = (nx - finalTargetX) ** 2 + (nz - finalTargetZ) ** 2;
+                if (dSq < bestDistSq) {
+                  bestDistSq = dSq;
+                  bestX = nx;
+                  bestZ = nz;
+                }
+              }
+            }
+          }
+          if (bestDistSq < Infinity) break;
+        }
+        finalTargetX = bestX;
+        finalTargetZ = bestZ;
+      }
+
+      const curX = peasant.gridPosition
+        ? peasant.gridPosition[0]
+        : Math.round(peasant.position ? peasant.position[0] : finalTargetX);
+      const curZ = peasant.gridPosition
+        ? peasant.gridPosition[1]
+        : Math.round(peasant.position ? peasant.position[2] : finalTargetZ);
+
+      let soldierPath = AStar.findPath(grid, [curX, curZ], [finalTargetX, finalTargetZ], true);
+
+      if (!soldierPath || soldierPath.length === 0) {
+        soldierPath = [[finalTargetX, finalTargetZ]];
+      } else if (soldierPath.length > 1 && soldierPath[0][0] === curX && soldierPath[0][1] === curZ) {
+        soldierPath.shift();
+      }
+
+      peasant.path = soldierPath;
+      peasant.targetPosition = [finalTargetX, finalTargetZ];
+      peasant.currentJob = {
+        id: `militia-move-${peasant.id}-${Date.now()}`,
+        type: 'patrol',
+        targetPosition: [finalTargetX, finalTargetZ],
+        targetAngle: facingAngle,
+        progress: 0,
+        totalWork: 0,
+      };
+
+      if (idx === 0) {
+        const isUkr = (get() as any).language === 'uk';
+        const phrases = isUkr
+          ? ['Шикуйсь! Кроком руш!', 'Рушаймо у похід!', 'Так, пане!', 'Тримати стрій!']
+          : ['Advance in formation!', 'Marching forth!', 'Hold the line!', 'Yes, my Lord!'];
+        const text = phrases[Math.floor(Math.random() * phrases.length)];
+        peasant.speechBubble = {
+          text,
+          expiresAtTick: currentTick + 35,
+          type: 'alert',
+        };
+      }
+    });
+
+    const activeMarch = {
+      targetPos,
+      facingAngle,
+      path: masterPath,
+    };
+
+    if (squad) {
+      squad.rallyPoint = targetPos;
+      squad.facingAngle = facingAngle;
+      squad.activeMarch = activeMarch;
+      set((s) => ({
+        militiaSquads: s.militiaSquads.map((sq) =>
+          sq.id === squad!.id ? { ...sq, rallyPoint: targetPos, facingAngle, activeMarch } : sq
+        ),
+        selectedMilitiaSquadId: null,
+      }));
+    } else {
+      get().syncMilitiaSquadsFromWorld();
+      set({ selectedMilitiaSquadId: null });
+    }
+
+    audioManager.playUIClick();
+  },
+
+  clearMilitiaSquadMarch: (squadId: string) => {
+    const squad = get().militiaSquads.find((sq) => sq.id === squadId);
+    if (squad) {
+      squad.activeMarch = null;
+    }
+    set((s) => ({
+      militiaSquads: s.militiaSquads.map((sq) =>
+        sq.id === squadId ? { ...sq, activeMarch: null } : sq
+      ),
+    }));
+  },
+
   chronicle: [
     {
       id: 'init-1',
@@ -566,6 +1043,8 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       isLordsBarOpen: false,
       isInitialized: true,
       isStrategicMapOpen: false,
+      militiaSquads: [],
+      selectedMilitiaSquadId: null,
     });
 
     get().initWorld(grid, config);

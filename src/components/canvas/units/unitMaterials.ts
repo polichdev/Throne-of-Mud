@@ -95,8 +95,8 @@ function hashString(str: string): number {
 
 const BANDIT_TUNIC_PALETTES = ['#292524', '#3f3f46', '#44403c', '#334155', '#3b2219', '#374151', '#262626'];
 
-export function getUnitAppearance(unitId: string, characterClass = 'peasant'): UnitAppearance {
-  const cacheKey = `${unitId}_${characterClass}`;
+export function getUnitAppearance(unitId: string, characterClass = 'peasant', isLevy = false): UnitAppearance {
+  const cacheKey = `${unitId}_${characterClass}_${isLevy ? 'levy' : 'norm'}`;
   const existing = unitAppearanceCache.get(cacheKey);
   if (existing) return existing;
 
@@ -245,6 +245,15 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant'): U
     } else {
       headwearType = 'cap';
     }
+  } else if (isLevy) {
+    const hwRoll = seed % 3;
+    if (hwRoll === 0) {
+      headwearType = 'helmet';
+    } else if (hwRoll === 1) {
+      headwearType = 'hood';
+    } else {
+      headwearType = 'cap';
+    }
   } else if (gender === 'male' && !isLord && !isKnight) {
     const hwRoll = (seed >> 2) % 6;
     if (hwRoll === 0) {
@@ -320,7 +329,7 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant'): U
   }
 
   let shieldMat: THREE.MeshStandardMaterial | undefined = undefined;
-  if (isKnight || isBandit) {
+  if (isKnight || isBandit || isLevy) {
     const emblem = isBandit ? 'skull' : (['cross', 'lion', 'chevron', 'tree'] as const)[seed % 4];
     const shieldBg = isBandit ? '#1c1917' : '#1e40af';
     const shieldKey = `${shieldBg}_${emblem}`;

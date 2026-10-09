@@ -9,6 +9,8 @@ import { TerrainRenderer } from './TerrainRenderer';
 import { FoliageRenderer } from './FoliageRenderer';
 import { BuildingsRenderer } from './BuildingsRenderer';
 import { UnitsRenderer } from './UnitsRenderer';
+import { MilitiaMarchRenderer } from './MilitiaMarchRenderer';
+import { BanditsRenderer } from './BanditsRenderer';
 import { WoodChipsRenderer } from './WoodChipsRenderer';
 import { PlacementPreview } from './PlacementPreview';
 import { ResourceDepositsRenderer } from './ResourceDepositsRenderer';
@@ -20,6 +22,7 @@ import { SpatialAudioListener } from './SpatialAudioListener';
 import { AmbientFaunaRenderer } from './fauna/AmbientFaunaRenderer';
 
 import { useGameStore } from '../../store/useGameStore';
+import { audioManager } from '../../engine/audio/AudioManager';
 import {
   DEFAULT_CAMERA_ZOOM,
   CAMERA_HEIGHT,
@@ -69,7 +72,21 @@ export function GameCanvas({ grid }: Props) {
   const center = useMemo<[number, number]>(() => cameraFocusTarget || playerSpawnPoint || [grid.width / 2, grid.height / 2], [cameraFocusTarget, playerSpawnPoint, grid.width, grid.height]);
 
   return (
-    <div className="w-full h-full relative z-0" style={{ isolation: 'isolate' }}>
+    <div
+      className="w-full h-full relative z-0"
+      style={{ isolation: 'isolate' }}
+      onContextMenu={(e) => {
+        if (useGameStore.getState().selectedMilitiaSquadId) {
+          e.preventDefault();
+          useGameStore.getState().setSelectedMilitiaSquadId(null);
+          if (useGameStore.getState().activeMenuTab === 'military') {
+            useGameStore.getState().setActiveMenuTab(null);
+          }
+          useGameStore.getState().setHoveredTile(null);
+          audioManager.playUIPanelClose();
+        }
+      }}
+    >
       <Canvas
         shadows
         dpr={1}
@@ -113,6 +130,8 @@ export function GameCanvas({ grid }: Props) {
         <PlacementPreview grid={grid} />
         <WeatherRenderer />
         <StrategicParchmentMapRenderer grid={grid} />
+        <MilitiaMarchRenderer grid={grid} />
+        <BanditsRenderer />
         <MenuAmbientWalkers grid={grid} />
         <AmbientFaunaRenderer grid={grid} />
         <SpatialAudioListener />

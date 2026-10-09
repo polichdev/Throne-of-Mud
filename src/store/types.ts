@@ -13,6 +13,8 @@ import type {
   ResourceDeposit,
   WorldSetupConfig,
   TradeRule,
+  MilitiaSquad,
+  MilitiaUnitType,
 } from '../types/game';
 import type { SupportedLanguage } from '../i18n/types';
 import type { GridMap } from '../engine/grid/GridMap';
@@ -122,6 +124,16 @@ export interface SettlementSlice {
   setBuildingWage: (buildingId: string, wage: number) => void;
   callLevyMilitia: (lordId: string) => void;
   lordPreach: (lordId: string) => void;
+
+  militiaSquads: MilitiaSquad[];
+  selectedMilitiaSquadId: string | null;
+  setSelectedMilitiaSquadId: (squadId: string | null) => void;
+  createMilitiaSquad: (type: MilitiaUnitType, grid: GridMap) => MilitiaSquad | null;
+  disbandMilitiaSquad: (squadId: string) => void;
+  rallyMilitiaSquad: (squadId: string, grid: GridMap) => void;
+  moveMilitiaSquad: (squadId: string, targetPos: [number, number], grid: GridMap) => void;
+  clearMilitiaSquadMarch: (squadId: string) => void;
+  syncMilitiaSquadsFromWorld: () => void;
 
   chronicle: ChronicleEvent[];
   addChronicleEvent: (event: Omit<ChronicleEvent, 'id' | 'timestamp' | 'gameDay' | 'gameHour'>) => void;

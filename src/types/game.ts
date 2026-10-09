@@ -127,6 +127,7 @@ export type JobType =
   | 'drink_ale'
   | 'socialize'
   | 'flee'
+  | 'guard_formation'
   | 'fight';
 
 export interface Job {
@@ -331,3 +332,23 @@ export interface TradeRule {
 }
 
 export type TradeCategory = 'construction' | 'agriculture' | 'food' | 'materials' | 'military';
+
+export type MilitiaUnitType = 'spearmen' | 'swordsmen';
+
+export interface MilitiaActiveMarch {
+  targetPos: [number, number];
+  facingAngle: number;
+  path: [number, number][];
+}
+
+export interface MilitiaSquad {
+  id: string;
+  name: string;
+  type: MilitiaUnitType;
+  memberIds: string[];
+  maxMembers: number;
+  rallyPoint: [number, number];
+  facingAngle: number;
+  createdAt: number;
+  activeMarch?: MilitiaActiveMarch | null;
+}

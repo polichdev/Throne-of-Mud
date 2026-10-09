@@ -8,7 +8,9 @@ import type {
   BuildingType,
   Thought,
   ResourceDepositType,
-  TradeRule
+  TradeRule,
+  MilitiaUnitType,
+  MilitiaSquad,
 } from '../../types/game';
 
 export type {
@@ -20,7 +22,9 @@ export type {
   BuildingType,
   Thought,
   ResourceDepositType,
-  TradeRule
+  TradeRule,
+  MilitiaUnitType,
+  MilitiaSquad,
 };
 
 export interface GameEntity {
@@ -52,6 +56,9 @@ export interface GameEntity {
   morale?: number;
   isLevy?: boolean;
   commandingLordId?: string;
+  militiaSquadId?: string;
+  militiaWeapon?: 'spear' | 'sword';
+  formationIndex?: number;
   hasMule?: boolean;
   isHaulingLog?: boolean;
   assignedMuleHutId?: string;

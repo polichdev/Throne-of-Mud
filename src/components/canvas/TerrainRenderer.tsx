@@ -16,6 +16,7 @@ import {
   getRotatedBuildingFootprint,
   validateRotatedBuildingPlacement,
 } from '../../engine/buildings/buildingValidation';
+import { isMilitiaDestinationAllowed } from '../../engine/combat/formationUtils';
 import { BuildingPlacementGhost } from './buildings/BuildingPlacementGhost';
 
 const COVERED_TILE_GEO = new THREE.PlaneGeometry(0.96, 0.96);
@@ -621,6 +622,9 @@ export function TerrainRenderer({ grid }: Props) {
       keysRef.current[code] = true;
 
       if (e.key === 'Escape') {
+        if (useGameStore.getState().selectedMilitiaSquadId) {
+          useGameStore.getState().setSelectedMilitiaSquadId(null);
+        }
         if (activeTool === 'road') {
           setRoadStartPoint(null);
           setRoadPreviewPath([]);
@@ -676,6 +680,48 @@ export function TerrainRenderer({ grid }: Props) {
     if (GridMap.getDistanceToHighway(x, z) <= 4.0) return true;
 
     return false;
+  };
+
+  const getBestWalkableTileAt = (clickX: number, clickZ: number): [number, number] | null => {
+    const baseTileX = Math.max(1, Math.min(grid.width - 2, Math.floor(clickX)));
+    const baseTileZ = Math.max(1, Math.min(grid.height - 2, Math.floor(clickZ)));
+
+    const { playerRegionId = 0, regions } = useGameStore.getState();
+    const pRegion = regions.find((r) => r.id === (playerRegionId ?? 0));
+    const pBounds = pRegion?.bounds;
+
+    if (!isMilitiaDestinationAllowed(grid, baseTileX, baseTileZ, pBounds)) {
+      return null;
+    }
+
+    if (grid.isWalkable(baseTileX, baseTileZ)) {
+      return [baseTileX, baseTileZ];
+    }
+
+    let bestTile: [number, number] | null = null;
+    let bestDistSq = Infinity;
+
+    for (let r = 1; r <= 3; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dz = -r; dz <= r; dz++) {
+          if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue;
+          const nx = baseTileX + dx;
+          const nz = baseTileZ + dz;
+          if (isMilitiaDestinationAllowed(grid, nx, nz, pBounds) && grid.isWalkable(nx, nz)) {
+            const centerX = nx + 0.5;
+            const centerZ = nz + 0.5;
+            const dSq = (centerX - clickX) ** 2 + (centerZ - clickZ) ** 2;
+            if (dSq < bestDistSq) {
+              bestDistSq = dSq;
+              bestTile = [nx, nz];
+            }
+          }
+        }
+      }
+      if (bestTile) break;
+    }
+
+    return bestTile;
   };
 
   const getEffectiveTile = (
@@ -834,6 +880,7 @@ export function TerrainRenderer({ grid }: Props) {
 
     if (rawX >= 0 && rawX < grid.width && rawZ >= 0 && rawZ < grid.height) {
       const isRoadOrBuild = activeTool === 'road' || activeTool === 'build';
+      const hasSquadSelected = Boolean(useGameStore.getState().selectedMilitiaSquadId);
       let gx = rawX;
       let gz = rawZ;
 
@@ -846,6 +893,22 @@ export function TerrainRenderer({ grid }: Props) {
         const curHover = useGameStore.getState().hoveredTile;
         if (!curHover || curHover[0] !== gx || curHover[1] !== gz) {
           useGameStore.getState().setHoveredTile([gx, gz]);
+        }
+      } else if (hasSquadSelected) {
+        const best = getBestWalkableTileAt(e.point.x, e.point.z);
+        if (best) {
+          const curHover = useGameStore.getState().hoveredTile;
+          if (!curHover || curHover[0] !== best[0] || curHover[1] !== best[1]) {
+            useGameStore.getState().setHoveredTile([best[0], best[1]]);
+          }
+        } else {
+          if (useGameStore.getState().hoveredTile !== null) {
+            useGameStore.getState().setHoveredTile(null);
+          }
+        }
+      } else {
+        if (useGameStore.getState().hoveredTile !== null) {
+          useGameStore.getState().setHoveredTile(null);
         }
       }
 
@@ -908,7 +971,49 @@ export function TerrainRenderer({ grid }: Props) {
     const tile = grid.getTile(gx, gz);
     if (!tile) return;
 
-    const { addChronicleEvent, addPendingJob, resources, playerRegionId = 0, regions } = useGameStore.getState();
+    const {
+      addChronicleEvent,
+      addPendingJob,
+      resources,
+      playerRegionId = 0,
+      regions,
+      selectedMilitiaSquadId,
+      moveMilitiaSquad,
+      setSelectedMilitiaSquadId,
+    } = useGameStore.getState();
+
+    if (selectedMilitiaSquadId) {
+      if (activeTool !== 'road' && activeTool !== 'build') {
+        if (e.button === 2) {
+          setSelectedMilitiaSquadId(null);
+          if (useGameStore.getState().activeMenuTab === 'military') {
+            useGameStore.getState().setActiveMenuTab(null);
+          }
+          useGameStore.getState().setHoveredTile(null);
+          audioManager.playUIPanelClose();
+          return;
+        }
+
+        if (e.button === 0) {
+          const currentHover = useGameStore.getState().hoveredTile;
+          const targetTile = currentHover || getBestWalkableTileAt(e.point.x, e.point.z);
+          const { playerRegionId = 0, regions } = useGameStore.getState();
+          const pRegion = regions.find((r) => r.id === (playerRegionId ?? 0));
+          if (
+            targetTile &&
+            isMilitiaDestinationAllowed(grid, targetTile[0], targetTile[1], pRegion?.bounds) &&
+            grid.isWalkable(targetTile[0], targetTile[1])
+          ) {
+            moveMilitiaSquad(selectedMilitiaSquadId, [targetTile[0], targetTile[1]], grid);
+            setSelectedMilitiaSquadId(null);
+            useGameStore.getState().setHoveredTile(null);
+            return;
+          }
+          audioManager.playRoadErase();
+          return;
+        }
+      }
+    }
 
     if (activeTool === 'road') {
       if (!isRoadPlacementAllowed(gx, gz)) {
@@ -1199,8 +1304,16 @@ export function TerrainRenderer({ grid }: Props) {
         onPointerMove={handlePointerMove}
         onPointerDown={handlePointerDown}
         onContextMenu={(e) => {
-          if (activeTool === 'road') {
+          if (activeTool === 'road' || useGameStore.getState().selectedMilitiaSquadId) {
             e.nativeEvent?.preventDefault?.();
+            if (useGameStore.getState().selectedMilitiaSquadId) {
+              useGameStore.getState().setSelectedMilitiaSquadId(null);
+              if (useGameStore.getState().activeMenuTab === 'military') {
+                useGameStore.getState().setActiveMenuTab(null);
+              }
+              useGameStore.getState().setHoveredTile(null);
+              audioManager.playUIPanelClose();
+            }
           }
         }}
       >

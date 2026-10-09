@@ -395,5 +395,29 @@ export class MovementSystem {
         }
       }
     }
+
+    const squads = useGameStore.getState().militiaSquads;
+    if (squads.length > 0) {
+      for (let i = 0; i < squads.length; i++) {
+        const sq = squads[i];
+        if (!sq.activeMarch) continue;
+
+        let anyAlive = false;
+        let anyMoving = false;
+        for (const c of characterEntities) {
+          if (c.isCharacter && c.isLevy && (c.militiaSquadId === sq.id || sq.memberIds.includes(c.id))) {
+            anyAlive = true;
+            if (c.path && c.path.length > 0) {
+              anyMoving = true;
+              break;
+            }
+          }
+        }
+
+        if (!anyAlive || !anyMoving) {
+          useGameStore.getState().clearMilitiaSquadMarch(sq.id);
+        }
+      }
+    }
   }
 }

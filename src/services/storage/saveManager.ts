@@ -1,7 +1,7 @@
 import { GridMap } from '../../engine/grid/GridMap';
 import { world, type GameEntity } from '../../engine/ecs/world';
 import { useGameStore } from '../../store/useGameStore';
-import type { ResourceInventory, GameTime, ChronicleEvent, TileData, RegionData, ResourceDeposit } from '../../types/game';
+import type { ResourceInventory, GameTime, ChronicleEvent, TileData, RegionData, ResourceDeposit, MilitiaSquad } from '../../types/game';
 import { initResourceDeposits } from '../../engine/resources/ResourceDeposits';
 import { INITIAL_RESOURCES } from '../../constants/economy';
 import { DEFAULT_REGIONS } from '../../constants/world';
@@ -34,6 +34,8 @@ export interface SaveData {
     cameraPosition?: [number, number];
     cameraZoom?: number;
     cameraAngle?: number;
+    militiaSquads?: MilitiaSquad[];
+    selectedMilitiaSquadId?: string | null;
   };
   grid: {
     width: number;
@@ -116,6 +118,8 @@ export async function saveGameToIndexedDB(grid: GridMap): Promise<boolean> {
         cameraPosition: cameraTarget ? [cameraTarget[0], cameraTarget[1]] : undefined,
         cameraZoom: typeof cameraZoom === 'number' ? cameraZoom : 38,
         cameraAngle: typeof cameraAngle === 'number' ? cameraAngle : Math.PI / 4,
+        militiaSquads: state.militiaSquads ? [...state.militiaSquads] : [],
+        selectedMilitiaSquadId: state.selectedMilitiaSquadId || null,
       },
       grid: gridData,
       entities: entitiesList,
@@ -395,7 +399,11 @@ export async function loadGameFromIndexedDB(grid: GridMap): Promise<boolean> {
       terrainVersion: useGameStore.getState().terrainVersion + 1,
       resourceDeposits: deposits || [],
       pendingJobs: loadedPendingJobs,
+      militiaSquads: saveData.gameState.militiaSquads ? [...saveData.gameState.militiaSquads] : [],
+      selectedMilitiaSquadId: saveData.gameState.selectedMilitiaSquadId || null,
     });
+
+    useGameStore.getState().syncMilitiaSquadsFromWorld();
 
     TradeSystem.reset();
 
