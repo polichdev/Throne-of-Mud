@@ -47,7 +47,6 @@ export function BuildingInspectorSection({
   const pendingJobs = useGameStore((s) => s.pendingJobs);
   const addPendingJob = useGameStore((s) => s.addPendingJob);
   const removePendingJob = useGameStore((s) => s.removePendingJob);
-  const addChronicleEvent = useGameStore((s) => s.addChronicleEvent);
   const incrementBuildingVersion = useGameStore((s) => s.incrementBuildingVersion);
   const tradeRules = useGameStore((s) => s.tradeRules);
   const caravanStatus = useGameStore((s) => s.caravanStatus);
@@ -101,14 +100,6 @@ export function BuildingInspectorSection({
       entity.isDemolishing = true;
       entity.demolitionProgress = 0;
       incrementBuildingVersion();
-
-      addChronicleEvent({
-        title: language === 'uk' ? 'Наказ: Знесення споруди' : 'Order: Demolish Structure',
-        description: language === 'uk'
-          ? `Призначено демонтаж ${entity.name || 'споруди'}. Вільні селяни вирушають розібрати будівлю.`
-          : `Assigned demolition of ${entity.name || 'structure'}. Idle workers are dispatched to dismantle it.`,
-        type: 'info',
-      });
     }
   };
 
@@ -316,13 +307,6 @@ export function BuildingInspectorSection({
           consumeResource('gold', totalCost);
           addResource(item.res, qty);
           audioManager.playUIClick();
-          addChronicleEvent({
-            title: language === 'uk' ? 'Ринок: Купівля товарів' : 'Market: Goods Purchased',
-            description: language === 'uk'
-              ? `Куплено ${qty} од. ${item.nameUk} за ${totalCost} золота.`
-              : `Purchased ${qty} ${item.nameEn} for ${totalCost} gold.`,
-            type: 'info',
-          });
         };
 
         const handleSell = (item: typeof tradeItems[0], qty: number) => {
@@ -335,13 +319,6 @@ export function BuildingInspectorSection({
           consumeResource(item.res, qty);
           addResource('gold', totalEarn);
           audioManager.playUIClick();
-          addChronicleEvent({
-            title: language === 'uk' ? 'Ринок: Продаж товарів' : 'Market: Goods Sold',
-            description: language === 'uk'
-              ? `Продано ${qty} од. ${item.nameUk} за ${totalEarn} золота.`
-              : `Sold ${qty} ${item.nameEn} for ${totalEarn} gold.`,
-            type: 'info',
-          });
         };
 
         return (
@@ -541,22 +518,12 @@ export function BuildingInspectorSection({
                 if (curMules >= maxM) return;
                 if (resources.gold < 50) {
                   audioManager.playUIError();
-                  addChronicleEvent({
-                    title: 'Бракує золота!',
-                    description: 'Для купівлі нового мула потрібно 50 золота.',
-                    type: 'warning',
-                  });
                   return;
                 }
                 consumeResource('gold', 50);
                 entity.mulesCount = curMules + 1;
                 incrementBuildingVersion();
                 audioManager.playUIClick();
-                addChronicleEvent({
-                  title: 'Куплено мула!',
-                  description: `До прив'язі додано нового робочого мула (${entity.mulesCount}/3).`,
-                  type: 'success',
-                });
               }}
               disabled={resources.gold < 50}
               className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition border cursor-pointer ${
@@ -565,7 +532,6 @@ export function BuildingInspectorSection({
                   : 'bg-slate-800/40 text-slate-500 border-slate-750 cursor-not-allowed'
               }`}
             >
-              <span>🫏</span>
               {language === 'uk' ? 'Купити мула (50' : 'Buy Mule (50'}
               <GoldIcon className="w-3.5 h-3.5 text-amber-400" />
               {')'}

@@ -108,6 +108,11 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
         });
       }
 
+      const isNewDay = newDay !== state.time.day;
+      const nextChronicle = isNewDay && state.chronicle
+        ? state.chronicle.filter((e) => e.gameDay >= newDay - 1)
+        : state.chronicle;
+
       return {
         time: {
           ...state.time,
@@ -128,6 +133,7 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
           snowAccumulation: newSnowAcc,
         },
         resourceDeposits: nextDeposits,
+        chronicle: nextChronicle,
         foliageVersion: state.foliageVersion + 1,
       };
     });

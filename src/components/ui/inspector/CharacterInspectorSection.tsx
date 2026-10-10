@@ -32,7 +32,6 @@ export function CharacterInspectorSection({
   const { dict, language } = useTranslation();
   const callLevyMilitia = useGameStore((s) => s.callLevyMilitia);
   const lordPreach = useGameStore((s) => s.lordPreach);
-  const addChronicleEvent = useGameStore((s) => s.addChronicleEvent);
   const triggerAnimation = useGameStore((s) => s.triggerAnimation);
 
   return (
@@ -83,11 +82,6 @@ export function CharacterInspectorSection({
                   text: language === 'uk' ? 'Вивчив трактат про правління (+10)' : 'Studied governance treatise (+10)',
                   modifier: 10,
                   durationTicks: 1500,
-                });
-                addChronicleEvent({
-                  title: language === 'uk' ? 'Вивчення трактату' : 'Studying Treatises',
-                  description: `${entity.name} ${language === 'uk' ? 'заглибився у стародавні рукописи. Інтелект зріс!' : 'delved into ancient manuscripts. Intellect increased!'}`,
-                  type: 'info',
                 });
               }}
               className="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-750 text-slate-200 rounded-lg text-xs font-semibold flex items-center justify-between transition border border-slate-700 hover:border-amber-700 cursor-pointer"

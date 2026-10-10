@@ -3,6 +3,7 @@ import { createTimeSlice } from './slices/timeSlice';
 import { createAudioSlice } from './slices/audioSlice';
 import { createUISlice } from './slices/uiSlice';
 import { createSettlementSlice } from './slices/settlementSlice';
+import { createDiplomacySlice } from './slices/diplomacySlice';
 import type { GameState } from './types';
 
 export type { GameState } from './types';
@@ -15,4 +16,5 @@ export const useGameStore = create<GameState>((...args) => ({
   ...createAudioSlice(...args),
   ...createUISlice(...args),
   ...createSettlementSlice(...args),
+  ...createDiplomacySlice(...args),
 }));

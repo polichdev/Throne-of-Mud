@@ -18,6 +18,10 @@ import type {
 } from '../types/game';
 import type { SupportedLanguage } from '../i18n/types';
 import type { GridMap } from '../engine/grid/GridMap';
+import type { DiplomacySlice } from '../types/diplomacy';
+
+export type { DiplomacySlice } from '../types/diplomacy';
+export * from '../types/diplomacy';
 
 export interface TimeSlice {
   time: GameTime;
@@ -173,4 +177,4 @@ export interface SettlementSlice {
   resetWorld: (grid: GridMap, config?: WorldSetupConfig) => void;
 }
 
-export type GameState = TimeSlice & AudioSlice & UISlice & SettlementSlice;
+export type GameState = TimeSlice & AudioSlice & UISlice & SettlementSlice & DiplomacySlice;

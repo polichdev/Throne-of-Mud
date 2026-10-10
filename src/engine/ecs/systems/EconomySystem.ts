@@ -33,11 +33,11 @@ export class EconomySystem {
   private static lastWageDayPaid = -1;
 
   public static update(currentTick: number): void {
-    const { time, resources, consumeResource, addResource, addChronicleEvent } = useGameStore.getState();
+    const { time, resources, consumeResource, addResource } = useGameStore.getState();
 
     if (time.hour === WAGE_PAYOUT_HOUR && this.lastWageDayPaid !== time.day) {
       this.lastWageDayPaid = time.day;
-      this.payDailyWages(currentTick, resources, consumeResource, addChronicleEvent);
+      this.payDailyWages(currentTick, resources, consumeResource);
     }
 
     if (time.hour >= MARKET_SHOPPING_START_HOUR && time.hour <= MARKET_SHOPPING_END_HOUR && currentTick % MARKET_SHOPPING_TICK_INTERVAL === 0) {
@@ -48,8 +48,7 @@ export class EconomySystem {
   private static payDailyWages(
     currentTick: number,
     resources: ResourceInventory,
-    consumeResource: (type: any, amount: number) => boolean,
-    addChronicleEvent: any
+    consumeResource: (type: any, amount: number) => boolean
   ): void {
     const { playerRegionId } = useGameStore.getState();
     const charMap = new Map<string, GameEntity>();
@@ -123,19 +122,6 @@ export class EconomySystem {
 
     if (totalWagesPaid > 0) {
       consumeResource('gold', totalWagesPaid);
-      addChronicleEvent({
-        title: 'Виплата зарплат',
-        description: `Виплачено ${totalWagesPaid} золота робітникам за сьогоднішню зміну.`,
-        type: 'info',
-      });
-    }
-
-    if (unpaidWorkersCount > 0) {
-      addChronicleEvent({
-        title: 'Криза скарбниці!',
-        description: `Бракує золота! ${unpaidWorkersCount} робітників не отримали платню та обурені.`,
-        type: 'danger',
-      });
     }
   }
 

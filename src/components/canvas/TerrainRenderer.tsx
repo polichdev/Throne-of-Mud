@@ -966,7 +966,7 @@ export function TerrainRenderer({ grid }: Props) {
 
     const rawX = Math.floor(e.point.x);
     const rawZ = Math.floor(e.point.z);
-    const { coords, snapTarget } = getEffectiveTile(rawX, rawZ, e.shiftKey);
+    const { coords } = getEffectiveTile(rawX, rawZ, e.shiftKey);
     const [gx, gz] = coords;
     const tile = grid.getTile(gx, gz);
     if (!tile) return;
@@ -1017,11 +1017,7 @@ export function TerrainRenderer({ grid }: Props) {
 
     if (activeTool === 'road') {
       if (!isRoadPlacementAllowed(gx, gz)) {
-        addChronicleEvent({
-          title: 'Чужі володіння!',
-          description: 'Ви не маєте права прокладати дороги в глибині чужих володінь без дозволу сусіднього лорда.',
-          type: 'warning',
-        });
+        audioManager.playUIError();
         return;
       }
     } else if (activeTool === 'build' || activeTool === 'chop') {
@@ -1029,11 +1025,7 @@ export function TerrainRenderer({ grid }: Props) {
       if (pRegion?.bounds) {
         const b = pRegion.bounds;
         if (gx < b.minX || gx > b.maxX || gz < b.minZ || gz > b.maxZ) {
-          addChronicleEvent({
-            title: 'Чужі володіння!',
-            description: 'Ви не маєте права будувати чи рубати ліс на чужій території без дозволу сусіднього лорда.',
-            type: 'warning',
-          });
+          audioManager.playUIError();
           return;
         }
       }
@@ -1056,11 +1048,6 @@ export function TerrainRenderer({ grid }: Props) {
           audioManager.playUIClick();
           setRoadStartPoint(null);
           setRoadPreviewPath([]);
-          addChronicleEvent({
-            title: 'Прокладання скасовано',
-            description: 'Поточну лінію дороги скасовано.',
-            type: 'info',
-          });
         } else {
           eraseRoadAtTile(rawX, rawZ);
         }
@@ -1074,22 +1061,11 @@ export function TerrainRenderer({ grid }: Props) {
             audioManager.playRoadDraw();
             setRoadStartPoint([gx, gz]);
             setRoadPreviewPath([[gx, gz]]);
-            const snapMsg = snapTarget ? ` (прив'язка: ${snapTarget.label})` : '';
-            addChronicleEvent({
-              title: 'Початок дороги обрано',
-              description: `Тягніть лінію та клацніть ЛКМ, щоб прокласти шлях.${snapMsg} ПКМ або Esc — скасувати.`,
-              type: 'info',
-            });
           }
         } else {
           if (roadPreviewPath.length > 0) {
             if (!isRoadPathValid(grid, roadPreviewPath, resourceDeposits)) {
               audioManager.playUIError();
-              addChronicleEvent({
-                title: 'Неможливо прокласти дорогу!',
-                description: 'Шлях перетинає воду, споруду або поклади ресурсів.',
-                type: 'warning',
-              });
               return;
             }
 
@@ -1105,14 +1081,6 @@ export function TerrainRenderer({ grid }: Props) {
               audioManager.playRoadDraw();
               useGameStore.getState().incrementBuildingVersion();
               useGameStore.getState().incrementFoliageVersion(true);
-              const connectMsg = snapTarget
-                ? ` Приєднано до: ${snapTarget.label}.`
-                : '';
-              addChronicleEvent({
-                title: 'Прокладено дорогу',
-                description: `Збудовано ґрунтовий шлях (${roadPreviewPath.length} м).${connectMsg} Селяни отримали бонус +50% до швидкості руху!`,
-                type: 'info',
-              });
             }
 
             setRoadStartPoint(null);
@@ -1157,11 +1125,6 @@ export function TerrainRenderer({ grid }: Props) {
 
       if (!validation.allowed) {
         audioManager.playUIError();
-        addChronicleEvent({
-          title: 'Неможливо збудувати!',
-          description: validation.reason || 'Місце зайняте водою, іншою будівлею або перешкодами.',
-          type: 'warning',
-        });
         return;
       }
 
@@ -1175,11 +1138,6 @@ export function TerrainRenderer({ grid }: Props) {
 
       if (!canAfford) {
         audioManager.playUIError();
-        addChronicleEvent({
-          title: 'Бракує ресурсів!',
-          description: `Недостатньо матеріалів для зведення ${blueprint.name}.`,
-          type: 'danger',
-        });
         return;
       }
 
@@ -1241,13 +1199,6 @@ export function TerrainRenderer({ grid }: Props) {
         progress: 0,
         totalWork: isFallen ? 45 : 55,
       });
-      addChronicleEvent({
-        title: isFallen ? 'Наказ: Розпил поваленого дерева' : 'Наказ: Лісоповал',
-        description: isFallen
-          ? `Призначено розпил поваленого стовбура на (${gx}, ${gz}).`
-          : `Призначено вирубку дерева на координатах (${gx}, ${gz}).`,
-        type: 'info',
-      });
       return;
     }
 
@@ -1259,11 +1210,6 @@ export function TerrainRenderer({ grid }: Props) {
         targetPosition: [gx, gz],
         progress: 0,
         totalWork: 35,
-      });
-      addChronicleEvent({
-        title: 'Наказ: Видобуток каменю',
-        description: `Призначено розкопку валуна на координатах (${gx}, ${gz}).`,
-        type: 'info',
       });
       return;
     }

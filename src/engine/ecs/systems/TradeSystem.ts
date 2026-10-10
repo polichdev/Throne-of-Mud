@@ -341,16 +341,9 @@ export class TradeSystem {
   }
 
   private static departMerchant(merchant: GameEntity, setCaravanStatus: (status: any) => void): void {
-    const name = this.merchantState?.name || 'Купець';
     world.remove(merchant);
     this.merchantState = null;
     setCaravanStatus({ state: 'departing' });
-
-    useGameStore.getState().addChronicleEvent({
-      title: 'Купець покинув край',
-      description: `Валка ${name} завершила перехід головним трактом на схід і вирушила до сусідніх земель.`,
-      type: 'info',
-    });
   }
 
   private static executeTradeOnce(tradingPostId: string, currentTick: number): void {
@@ -423,12 +416,6 @@ export class TradeSystem {
     useGameStore.getState().setCaravanStatus({
       state: 'approaching',
       merchantName: name,
-    });
-
-    useGameStore.getState().addChronicleEvent({
-      title: 'Мандрівний купець на тракті!',
-      description: `Рівно о 13:00 до регіону прибув ${name} з кінним возом товарів. Валка прямує головним торговим трактом.`,
-      type: 'info',
     });
 
     this.findNextDestination(grid, merchantEntity);
@@ -549,7 +536,7 @@ export class TradeSystem {
       return;
     }
 
-    const { tradeRules, resources, addResource, consumeResource, addChronicleEvent, setCaravanStatus } = useGameStore.getState();
+    const { tradeRules, resources, addResource, consumeResource, setCaravanStatus } = useGameStore.getState();
 
     let totalBought = 0;
     let totalSold = 0;
@@ -578,7 +565,7 @@ export class TradeSystem {
             addResource(res, toBuy);
             totalBought += toBuy;
             goldSpent += cost;
-            tradeSummaries.push(`+${toBuy} ${item.nameUk} (-${cost} 🪙)`);
+            tradeSummaries.push(`+${toBuy} ${item.nameUk} (-${cost} зол.)`);
           }
         }
       } else if (rule.mode === 'export' && playerStock > targetStock) {
@@ -591,7 +578,7 @@ export class TradeSystem {
             addResource('gold', revenue);
             totalSold += toSell;
             goldEarned += revenue;
-            tradeSummaries.push(`-${toSell} ${item.nameUk} (+${revenue} 🪙)`);
+            tradeSummaries.push(`-${toSell} ${item.nameUk} (+${revenue} зол.)`);
           }
         }
       }
@@ -604,23 +591,10 @@ export class TradeSystem {
 
     if (totalBought > 0 || totalSold > 0) {
       audioManager.playUIClick();
-      const netGold = goldEarned - goldSpent;
       const summaryText = tradeSummaries.slice(0, 3).join(', ') + (tradeSummaries.length > 3 ? ` (+ще ${tradeSummaries.length - 3})` : '');
 
       setCaravanStatus({
         lastTradeSummary: summaryText,
-      });
-
-      addChronicleEvent({
-        title: 'Успішна угода з купцем!',
-        description: `Торговий пункт провів транзакції: ${summaryText}. Баланс золота: ${netGold >= 0 ? `+${netGold}` : netGold} 🪙.`,
-        type: 'success',
-      });
-    } else {
-      addChronicleEvent({
-        title: 'Купець оглянув торговий пункт',
-        description: 'Усі запаси відповідають нормам або не налаштовано активних угод.',
-        type: 'info',
       });
     }
   }

@@ -8,6 +8,7 @@ import { ActionButtonsBar } from './bottom-bar/ActionButtonsBar';
 import { SettingsModal } from './settings/SettingsModal';
 import { WeatherDebugModal } from './WeatherDebugModal';
 import { TradePostModal } from './trade/TradePostModal';
+import { DiplomacyModal } from './diplomacy/DiplomacyModal';
 import { audioManager } from '../../engine/audio/AudioManager';
 
 interface BottomActionBarProps {
@@ -71,6 +72,11 @@ export const BottomActionBar: React.FC<BottomActionBarProps> = React.memo(({ gri
     setActiveMenuTab(null);
   }, [setActiveMenuTab]);
 
+  const handleCloseDiplomacy = useCallback(() => {
+    audioManager.playUIPanelClose();
+    setActiveMenuTab(null);
+  }, [setActiveMenuTab]);
+
   const isStrategicView = useGameStore((s) => s.isStrategicView);
 
   return (
@@ -89,6 +95,10 @@ export const BottomActionBar: React.FC<BottomActionBarProps> = React.memo(({ gri
 
       {activeMenuTab === 'military' && (
         <MilitiaBar grid={grid} onClose={handleCloseMilitary} />
+      )}
+
+      {activeMenuTab === 'codex' && (
+        <DiplomacyModal onClose={handleCloseDiplomacy} />
       )}
 
       {isWeatherDebugOpen && <WeatherDebugModal />}

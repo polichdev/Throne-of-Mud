@@ -482,6 +482,28 @@ export const ScrollIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4',
   </svg>
 );
 
+export const DiplomacyDeskIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4', size, color }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ width: size, height: size, color }}
+  >
+    <path d="M4 9 L17 4 L21 7 L8 12 Z" fill="currentColor" fillOpacity="0.35" />
+    <path d="M8 12 L8 17 L21 12 L21 7" />
+    <path d="M10 7 L17 4.5" strokeWidth="1.2" opacity="0.75" />
+    <path d="M11 9 L17 6.7" strokeWidth="1.2" opacity="0.75" />
+    <line x1="7" y1="14" x2="5" y2="20" strokeWidth="1.8" />
+    <line x1="5" y1="20" x2="9" y2="20" strokeWidth="1.8" />
+    <line x1="18" y1="13" x2="20" y2="20" strokeWidth="1.8" />
+    <circle cx="17.5" cy="18" r="1.5" fill="currentColor" />
+  </svg>
+);
+
 export const SettingsIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4', size, color }) => (
   <svg
     viewBox="0 0 24 24"

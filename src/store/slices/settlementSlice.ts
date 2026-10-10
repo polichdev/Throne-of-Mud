@@ -165,12 +165,6 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
 
     assignWorkerHelper(building, availablePeasant, get().time.tick || 0);
 
-    get().addChronicleEvent({
-      title: 'Нове призначення',
-      description: `${availablePeasant.name} призначений робітником у ${building.name}.`,
-      type: 'info',
-    });
-
     set((state) => ({ ...state }));
     return true;
   },
@@ -180,11 +174,6 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     const worker = world.entities.find((e) => e.id === workerId);
     if (building && worker) {
       dismissWorkerHelper(building, worker, get().time.tick || 0);
-      get().addChronicleEvent({
-        title: 'Звільнення з роботи',
-        description: `${worker.name} більше не працює у ${building?.name || 'споруді'}.`,
-        type: 'info',
-      });
     }
     set((state) => ({ ...state }));
   },
@@ -224,12 +213,6 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
           expiresAtTick: (get().time.tick || 0) + 35,
           type: 'work',
         };
-
-        get().addChronicleEvent({
-          title: 'Шляхетний нагляд',
-          description: `${lord.name} призначений наглядачем у ${building.name}. Продуктивність зросла!`,
-          type: 'success',
-        });
       }
     }
 
@@ -353,12 +336,6 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
         };
       }
     }
-
-    get().addChronicleEvent({
-      title: 'Проповідь Лорда',
-      description: `${lord.name} провів проповідь. Дух селян зміцнився!`,
-      type: 'success',
-    });
 
     set((state) => ({ ...state }));
   },
@@ -846,20 +823,60 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       description: 'Король Болеслав прибув на болотисті землі разом зі шляхтою та першими поселенцями.',
       type: 'info',
     },
+    {
+      id: 'init-letter-hildegard',
+      timestamp: new Date().toLocaleTimeString(),
+      gameDay: 1,
+      gameHour: 8,
+      title: 'Лист від: Леді Хільдеґард',
+      description: 'Отримано дипломатичне послання: Грамота про добросусідство та визнання кордонів.',
+      type: 'social',
+    },
+    {
+      id: 'init-letter-wilhelm',
+      timestamp: new Date().toLocaleTimeString(),
+      gameDay: 1,
+      gameHour: 9,
+      title: 'Лист від: Герцог Вільгельм',
+      description: 'Отримано дипломатичне послання: Про гірські перевали та безпеку купецьких валок.',
+      type: 'social',
+    },
   ],
 
   addChronicleEvent: (event) => {
     const { time } = get();
+    const currentDay = time.day;
     const newEvent: ChronicleEvent = {
       ...event,
       id: `event-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
       timestamp: new Date().toLocaleTimeString(),
-      gameDay: time.day,
+      gameDay: currentDay,
       gameHour: time.hour,
     };
-    set((state) => ({
-      chronicle: [newEvent, ...state.chronicle].slice(0, 50),
-    }));
+    set((state) => {
+      let filtered = (state.chronicle || []).filter((e) => e.gameDay >= currentDay - 1);
+      const yesterdayEvents = filtered.filter((e) => e.gameDay < currentDay);
+      if (yesterdayEvents.length > 0) {
+        let oldestYesterdayIdx = -1;
+        let oldestScore = Infinity;
+        for (let i = 0; i < filtered.length; i++) {
+          const item = filtered[i];
+          if (item.gameDay < currentDay) {
+            const score = item.gameDay * 100 + (item.gameHour ?? 0);
+            if (score < oldestScore) {
+              oldestScore = score;
+              oldestYesterdayIdx = i;
+            }
+          }
+        }
+        if (oldestYesterdayIdx !== -1) {
+          filtered = filtered.filter((_, idx) => idx !== oldestYesterdayIdx);
+        }
+      }
+      return {
+        chronicle: [newEvent, ...filtered].slice(0, 50),
+      };
+    });
   },
 
   buildingVersion: 0,

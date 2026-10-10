@@ -170,11 +170,6 @@ export class ConstructionJobHandler {
               population: botPop,
               wealth: reg.wealth + 15,
             });
-            addChronicleEvent({
-              title: `Розвиток ${reg.ukrName}`,
-              description: `${reg.lordName} завершив будівництво ${bEnt.name || 'споруди'} у володінні ${reg.ukrName}. Поселення росте!`,
-              type: 'info',
-            });
           }
         }
 

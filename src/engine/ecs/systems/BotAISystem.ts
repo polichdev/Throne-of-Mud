@@ -322,7 +322,6 @@ export class BotAISystem {
       incrementTerrainVersion,
       incrementBuildingVersion,
       incrementFoliageVersion,
-      addChronicleEvent,
       updateRegionStats,
     } = useGameStore.getState();
 
@@ -1055,12 +1054,6 @@ export class BotAISystem {
             },
             currentJob: { id: `idle-${newUnitId}`, type: 'idle', progress: 0, totalWork: 0 },
           });
-
-          addChronicleEvent({
-            title: `Новий поселенець у ${region.ukrName}`,
-            description: `${chosenName} прибув(ла) до володінь ${region.lordName} та оселився(лася) у новому будинку!`,
-            type: 'social',
-          });
         }
       }
 
@@ -1649,12 +1642,6 @@ export class BotAISystem {
                   }
                 }
               }
-
-              addChronicleEvent({
-                title: `Будівництво у ${region.ukrName}`,
-                description: `${region.lordName} заклав фундамент для ${bBlueprint.name} у володінні ${region.ukrName}. Селяни беруться за молоти!`,
-                type: 'info',
-              });
 
               incrementBuildingVersion();
               incrementFoliageVersion();

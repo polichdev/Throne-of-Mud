@@ -49,6 +49,17 @@ export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcuts
           setActiveTool('select');
           setActiveMenuTab('military');
         }
+      } else if (e.key === 'l' || e.key === 'L' || e.key === 'д' || e.key === 'Д') {
+        const { activeMenuTab, setActiveMenuTab, setActiveBuildType, setActiveTool } = useGameStore.getState();
+        if (activeMenuTab === 'codex') {
+          audioManager.playUIPanelClose();
+          setActiveMenuTab(null);
+        } else {
+          audioManager.playUIPanelOpen();
+          setActiveBuildType(null);
+          setActiveTool('select');
+          setActiveMenuTab('codex');
+        }
       } else if (e.key === 'F2') {
         e.preventDefault();
         const { isWeatherDebugOpen, setIsWeatherDebugOpen } = useGameStore.getState();

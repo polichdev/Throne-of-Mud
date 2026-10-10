@@ -8,7 +8,7 @@ import {
   HammerIcon,
   WeaponsIcon,
   GoldIcon,
-  ScrollIcon,
+  DiplomacyDeskIcon,
   SettingsIcon,
 } from '../MedievalIcons';
 
@@ -22,6 +22,18 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
 
   const activeTool = useGameStore((s) => s.activeTool);
   const activeMenuTab = useGameStore((s) => s.activeMenuTab);
+  const lordDiplomacy = useGameStore((s) => s.lordDiplomacy);
+
+  const unreadLettersCount = React.useMemo(() => {
+    if (!lordDiplomacy) return 0;
+    let count = 0;
+    for (const key of Object.keys(lordDiplomacy)) {
+      for (const letter of lordDiplomacy[key]?.letters || []) {
+        if (!letter.isRead) count++;
+      }
+    }
+    return count;
+  }, [lordDiplomacy]);
 
   return (
     <footer className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 pointer-events-auto z-40 select-none">
@@ -82,12 +94,17 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
 
         <button
           onClick={() => onToggleTab('codex')}
-          className={`w-11 h-11 manor-square-btn flex items-center justify-center transition cursor-pointer ${
+          className={`relative w-11 h-11 manor-square-btn flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'codex' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          title={language === 'uk' ? 'Літопис та довідник королівства (?)' : 'Kingdom Codex & Chronicle (?)'}
+          title={language === 'uk' ? 'Дипломатія та листи королівств (L)' : 'Kingdom Diplomacy & Letters (L)'}
         >
-          <ScrollIcon className="w-5 h-5 text-amber-200 drop-shadow" />
+          <DiplomacyDeskIcon className="w-5 h-5 text-amber-200 drop-shadow" />
+          {unreadLettersCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-600 text-[10px] font-mono font-bold text-white flex items-center justify-center border border-amber-300 shadow-[0_0_8px_rgba(225,29,72,0.9)] animate-pulse">
+              {unreadLettersCount}
+            </span>
+          )}
         </button>
 
         <button
