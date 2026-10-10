@@ -11,6 +11,8 @@ import type {
   TradeRule,
   MilitiaUnitType,
   MilitiaSquad,
+  HouseTier,
+  BackyardExtensionType,
 } from '../../types/game';
 
 export type {
@@ -25,6 +27,8 @@ export type {
   TradeRule,
   MilitiaUnitType,
   MilitiaSquad,
+  HouseTier,
+  BackyardExtensionType,
 };
 
 export interface GameEntity {
@@ -94,6 +98,11 @@ export interface GameEntity {
   maxStorage?: number;
   mulesCount?: number;
   maxMules?: number;
+  houseTier?: HouseTier;
+  backyardExtension?: BackyardExtensionType;
+  backyardProgress?: number;
+  pendingHouseTier?: HouseTier;
+  pendingBackyardExtension?: BackyardExtensionType;
   requiredMaterials?: Partial<ResourceInventory>;
   deliveredMaterials?: Partial<ResourceInventory>;
 

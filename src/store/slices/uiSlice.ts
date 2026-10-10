@@ -5,7 +5,12 @@ export type { UISlice };
 
 export const createUISlice: StateCreator<GameState, [], [], UISlice> = (set, get) => ({
   selectedEntityId: null,
-  setSelectedEntityId: (id) => set({ selectedEntityId: id }),
+  setSelectedEntityId: (id) => set((state) => ({
+    selectedEntityId: id,
+    houseFloorView: state.selectedEntityId === id ? state.houseFloorView : 1,
+  })),
+  houseFloorView: 1,
+  setHouseFloorView: (floor) => set({ houseFloorView: floor }),
 
   activeBuildType: null,
   setActiveBuildType: (type) => set({ activeBuildType: type, activeTool: type ? 'build' : 'select' }),

@@ -25,7 +25,8 @@ import { clearBuildingFrameStates } from '../../components/canvas/BuildingsRende
 import { AStar } from '../../engine/pathfinding/AStar';
 import { getFormationOffsets, isMilitiaDestinationAllowed } from '../../engine/combat/formationUtils';
 import { audioManager } from '../../engine/audio/AudioManager';
-import type { MilitiaSquad, MilitiaUnitType } from '../../types/game';
+import { HOUSE_TIERS_CONFIG, BACKYARD_EXTENSIONS_CONFIG, FOOD_RESOURCE_KEYS } from '../../constants/housing';
+import type { MilitiaSquad, MilitiaUnitType, HouseTier, BackyardExtensionType, ResourceInventory } from '../../types/game';
 import type { GameState, SettlementSlice } from '../types';
 
 export type { SettlementSlice };
@@ -338,6 +339,140 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     }
 
     set((state) => ({ ...state }));
+  },
+
+  upgradeHouseTier: (buildingId: string) => {
+    const state = get();
+    const building = world.entities.find((e) => e.id === buildingId);
+    if (!building || !building.isCompleted || building.pendingHouseTier || building.pendingBackyardExtension || (building.buildingType !== 'peasant_house' && building.buildingType !== 'manor')) {
+      audioManager.playUIError();
+      return false;
+    }
+
+    const currentTier = (building.houseTier || 1) as HouseTier;
+    if (currentTier >= 3) {
+      audioManager.playUIError();
+      return false;
+    }
+
+    const nextTier = (currentTier + 1) as HouseTier;
+    const tierConfig = HOUSE_TIERS_CONFIG[nextTier];
+    if (!tierConfig) {
+      audioManager.playUIError();
+      return false;
+    }
+
+    for (const [res, amount] of Object.entries(tierConfig.upgradeCost)) {
+      if ((state.resources[res as keyof ResourceInventory] || 0) < (amount || 0)) {
+        audioManager.playUIError();
+        return false;
+      }
+    }
+
+    let availableFoodTypesCount = 0;
+    for (const foodKey of FOOD_RESOURCE_KEYS) {
+      if ((state.resources[foodKey] || 0) > 0) {
+        availableFoodTypesCount++;
+      }
+    }
+
+    if (availableFoodTypesCount < tierConfig.upgradeMinFoodTypes) {
+      audioManager.playUIError();
+      return false;
+    }
+
+    for (const reqGood of tierConfig.upgradeRequiredGoods) {
+      if ((state.resources[reqGood] || 0) <= 0) {
+        audioManager.playUIError();
+        return false;
+      }
+    }
+
+    state.consumeResource('gold', tierConfig.upgradeCost.gold || 0);
+    building.pendingHouseTier = nextTier;
+    building.requiredMaterials = { ...tierConfig.upgradeCost };
+    delete building.requiredMaterials.gold;
+    building.deliveredMaterials = {};
+    building.constructionProgress = 0;
+    building.isCompleted = false;
+    state.addPendingJob({
+      id: `job-upgrade-house-${buildingId}-${Date.now()}`,
+      type: 'build_structure',
+      targetPosition: building.gridPosition || [0, 0],
+      targetBuildingId: buildingId,
+      progress: 0,
+      totalWork: 80 + nextTier * 35,
+    });
+
+    state.incrementBuildingVersion();
+    audioManager.playUISuccess();
+
+    state.addChronicleEvent({
+      type: 'success',
+      title: `${tierConfig.nameUk}`,
+      description: `Розпочато покращення садиби до ${tierConfig.nameUk}. Доставте матеріали та завершіть роботу будівельників.`,
+    });
+
+    set((s) => ({ ...s }));
+    return true;
+  },
+
+  setBackyardExtension: (buildingId: string, extension: BackyardExtensionType) => {
+    const state = get();
+    const building = world.entities.find((e) => e.id === buildingId);
+    if (!building || !building.isCompleted || building.pendingHouseTier || building.pendingBackyardExtension || (building.buildingType !== 'peasant_house' && building.buildingType !== 'manor')) {
+      audioManager.playUIError();
+      return false;
+    }
+
+    const tier = (building.houseTier || 1) as HouseTier;
+    const extConfig = BACKYARD_EXTENSIONS_CONFIG[extension];
+    if (!extConfig) {
+      audioManager.playUIError();
+      return false;
+    }
+
+    if (tier < extConfig.requiredTier) {
+      audioManager.playUIError();
+      return false;
+    }
+
+    for (const [res, amount] of Object.entries(extConfig.cost)) {
+      if ((state.resources[res as keyof ResourceInventory] || 0) < (amount || 0)) {
+        audioManager.playUIError();
+        return false;
+      }
+    }
+
+    state.consumeResource('gold', extConfig.cost.gold || 0);
+    building.pendingBackyardExtension = extension;
+    building.requiredMaterials = { ...extConfig.cost };
+    delete building.requiredMaterials.gold;
+    building.deliveredMaterials = {};
+    building.constructionProgress = 0;
+    building.isCompleted = false;
+    state.addPendingJob({
+      id: `job-upgrade-yard-${buildingId}-${Date.now()}`,
+      type: 'build_structure',
+      targetPosition: building.gridPosition || [0, 0],
+      targetBuildingId: buildingId,
+      progress: 0,
+      totalWork: 55 + (extConfig.requiredTier - 1) * 25,
+    });
+
+    state.incrementBuildingVersion();
+    audioManager.playUIClick();
+
+    if (extension !== 'none') {
+      state.addChronicleEvent({
+        type: 'info',
+        title: `Присадибне господарство: ${extConfig.nameUk}`,
+        description: `Розпочато облаштування: ${extConfig.nameUk}. Доставте матеріали та завершіть роботу будівельників.`,
+      });
+    }
+
+    set((s) => ({ ...s }));
+    return true;
   },
 
   militiaSquads: [],

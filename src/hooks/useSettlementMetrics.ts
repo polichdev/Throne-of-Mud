@@ -4,10 +4,12 @@ import { characterEntities, buildingEntities } from '../engine/ecs/world';
 import { BUILDING_BLUEPRINTS } from '../engine/buildings/blueprints';
 import { BASE_STORAGE_CAPACITY } from '../constants/economy';
 import { isNoble, isPeasant } from '../engine/ecs/entityHelpers';
+import { HOUSE_TIERS_CONFIG } from '../constants/housing';
 
 export function useSettlementMetrics() {
   const playerRegionId = useGameStore((s) => s.playerRegionId);
   const resources = useGameStore((s) => s.resources);
+  const buildingVersion = useGameStore((s) => s.buildingVersion);
 
   const allCharacters = useMemo(() => {
     return Array.from(characterEntities).filter(
@@ -57,7 +59,7 @@ export function useSettlementMetrics() {
 
     let totalBeds = 0;
     for (const b of buildings) {
-      if (b.buildingType === 'peasant_house') totalBeds += 3;
+      if (b.buildingType === 'peasant_house') totalBeds += HOUSE_TIERS_CONFIG[b.houseTier || 1].capacity;
       else if (b.buildingType === 'tent') totalBeds += 3;
       else if (b.buildingType === 'manor') totalBeds += 5;
     }
@@ -66,7 +68,7 @@ export function useSettlementMetrics() {
       occupied: allCharacters.length,
       capacity: Math.max(totalBeds, allCharacters.length),
     };
-  }, [allCharacters.length, playerRegionId, buildingEntities.size]);
+  }, [allCharacters.length, playerRegionId, buildingVersion]);
 
   const storageUsage = useMemo(() => {
     const buildings = Array.from(buildingEntities).filter(

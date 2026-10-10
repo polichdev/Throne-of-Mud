@@ -18,6 +18,8 @@ export type ResourceType =
   | 'salt'
   | 'meat'
   | 'hides'
+  | 'vegetables'
+  | 'eggs'
   | 'iron_ore'
   | 'coal'
   | 'cut_stone'
@@ -41,6 +43,8 @@ export interface ResourceInventory {
   salt: number;
   meat: number;
   hides: number;
+  vegetables: number;
+  eggs: number;
   iron_ore: number;
   coal: number;
   cut_stone: number;
@@ -48,6 +52,17 @@ export interface ResourceInventory {
   planks: number;
   clothes: number;
 }
+
+export type HouseTier = 1 | 2 | 3;
+
+export type BackyardExtensionType =
+  | 'none'
+  | 'vegetable_garden'
+  | 'chicken_coop'
+  | 'goat_shed'
+  | 'artisan_bowyer'
+  | 'artisan_shields'
+  | 'artisan_brewery';
 
 export type ResourceDepositType = 'fish' | 'berries' | 'stone' | 'iron' | 'clay' | 'salt' | 'wild_game';
 

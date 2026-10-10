@@ -19,6 +19,7 @@ import {
   DEFAULT_SPEECH_DURATION_TICKS,
 } from '../../../../constants/needs';
 import { distance2D } from '../../../../utils/mathUtils';
+import { HOUSE_TIERS_CONFIG } from '../../../../constants/housing';
 
 export function getEntityRegionId(entity: GameEntity, regions: RegionData[], defaultRegionId: number = 0): number {
   if (entity.regionId !== undefined) return entity.regionId;
@@ -193,12 +194,14 @@ export class RestJobHandler {
       const sleepJob = unit.currentJob;
       const targetPos = sleepJob.targetPosition;
       if (targetPos) {
-        const [bedX, bedZ] = targetPos;
+        let [bedX, bedZ] = targetPos;
         let targetY = sleepJob.targetY;
-        if (sleepJob.targetBuildingId && (targetY === undefined || targetY < 0.16 || sleepJob.targetAngle === undefined)) {
+        if (sleepJob.targetBuildingId) {
           const b = findBuilding(sleepJob.targetBuildingId, buildingMap);
-          if (b) {
+          if (b && (b.buildingType === 'peasant_house' || targetY === undefined || targetY < 0.16 || sleepJob.targetAngle === undefined)) {
             const spot = getBuildingSleepSpot(b, sleepJob.bedIndex ?? 0);
+            [bedX, bedZ] = spot.bedWorldPos;
+            sleepJob.targetPosition = spot.bedWorldPos;
             targetY = spot.bedY;
             sleepJob.targetY = spot.bedY;
             sleepJob.targetAngle = spot.facingAngle;
@@ -407,7 +410,7 @@ export class RestJobHandler {
         for (const b of _completedBuildings) {
           if (b.buildingType === 'peasant_house') {
             const occupied = _buildingOccupiedBeds.get(b.id);
-            for (let i = 0; i < 2; i++) {
+            for (let i = 0; i < HOUSE_TIERS_CONFIG[b.houseTier || 1].capacity; i++) {
               if (!occupied || !occupied.has(i)) {
                 chosenBuilding = b;
                 chosenBedIndex = i;
@@ -440,7 +443,7 @@ export class RestJobHandler {
       for (const b of _completedBuildings) {
         if (b.buildingType === 'peasant_house') {
           const occupied = _buildingOccupiedBeds.get(b.id);
-          for (let i = 0; i < 2; i++) {
+          for (let i = 0; i < HOUSE_TIERS_CONFIG[b.houseTier || 1].capacity; i++) {
             if (!occupied || !occupied.has(i)) {
               chosenBuilding = b;
               chosenBedIndex = i;

@@ -24,6 +24,7 @@ import {
   IMMIGRANT_THOUGHT_DURATION_TICKS,
 } from '../../../constants/immigration';
 import { DEFAULT_SPEECH_BUBBLE_TICKS } from '../../../constants/economy';
+import { HOUSE_TIERS_CONFIG } from '../../../constants/housing';
 
 const UKRAINIAN_NAMES_MALE = [
   'Тарас', 'Богдан', 'Остап', 'Яромир', 'Михайло',
@@ -68,9 +69,15 @@ export class ImmigrationSystem {
     let totalBeds = 0;
     for (const b of buildingEntities) {
       if (b.isCompleted && (b.factionId === 'player' || b.factionId === undefined) && (b.regionId === playerRegionId || b.regionId === undefined)) {
-        if (b.buildingType === 'peasant_house') totalBeds += 3;
-        else if (b.buildingType === 'tent') totalBeds += 3;
-        else if (b.buildingType === 'manor') totalBeds += 5;
+        if (b.buildingType === 'peasant_house') {
+          const tier = b.houseTier || 1;
+          totalBeds += (HOUSE_TIERS_CONFIG[tier]?.capacity || 2);
+        } else if (b.buildingType === 'tent') {
+          totalBeds += 2;
+        } else if (b.buildingType === 'manor') {
+          const tier = b.houseTier || 1;
+          totalBeds += (HOUSE_TIERS_CONFIG[tier]?.capacity || 2) + 2;
+        }
       }
     }
 

@@ -26,8 +26,7 @@ function createButtressGeo(pos: [number, number, number], rotY: number, height =
   cap1.applyMatrix4(new THREE.Matrix4().makeRotationX(0.45).setPosition(0, height * 0.5 + 0.04, -0.02));
   const cap2 = new THREE.BoxGeometry(0.23, 0.1, 0.2);
   cap2.applyMatrix4(new THREE.Matrix4().makeRotationX(0.45).setPosition(0, height * 0.94 + 0.04, -0.05));
-  const cone = new THREE.ConeGeometry(0.12, 0.28, 4).translate(0, height + 0.12, -0.06);
-  geos.push(b1, b2, cap1, cap2, cone);
+  geos.push(b1, b2, cap1, cap2);
   const m = new THREE.Matrix4().makeRotationY(rotY).setPosition(pos[0], pos[1], pos[2]);
   return toStandard(mergeGeometries(geos) || b1).applyMatrix4(m);
 }
@@ -91,10 +90,10 @@ export const manorWallsGeometry = (() => {
   geos.push(createButtressGeo([2.48, 0.16, 1.98], Math.PI / 4));
   geos.push(createButtressGeo([-2.48, 0.16, -1.98], -Math.PI * 0.75));
   geos.push(createButtressGeo([2.48, 0.16, -1.98], Math.PI * 0.75));
-  geos.push(createButtressGeo([-0.96, 0.16, 1.96], 0));
-  geos.push(createButtressGeo([0.96, 0.16, 1.96], 0));
-  geos.push(createButtressGeo([-1.2, 0.16, -1.96], Math.PI));
-  geos.push(createButtressGeo([1.2, 0.16, -1.96], Math.PI));
+  geos.push(createButtressGeo([-0.96, 0.16, 1.96], 0, 1.60));
+  geos.push(createButtressGeo([0.96, 0.16, 1.96], 0, 1.60));
+  geos.push(createButtressGeo([-1.2, 0.16, -1.96], Math.PI, 1.60));
+  geos.push(createButtressGeo([1.2, 0.16, -1.96], Math.PI, 1.60));
   geos.push(createButtressGeo([-2.46, 0.16, 0], -Math.PI / 2));
   geos.push(createButtressGeo([2.46, 0.16, 0], Math.PI / 2));
 
@@ -150,19 +149,30 @@ export const manorCorniceGeometry = (() => {
 
 export const manorRoofGeometry = (() => {
   const geos: THREE.BufferGeometry[] = [];
-  const r1 = new THREE.BoxGeometry(5.06, 2.52, 0.18);
-  r1.applyMatrix4(new THREE.Matrix4().makeRotationX(-0.679).setPosition(0, 2.62, 0.98));
-  const r2 = new THREE.BoxGeometry(5.06, 2.52, 0.18);
-  r2.applyMatrix4(new THREE.Matrix4().makeRotationX(0.679).setPosition(0, 2.62, -0.98));
-  const ridge = new THREE.BoxGeometry(5.08, 0.18, 0.2).translate(0, 3.42, 0);
+  const ridgeY = 3.50;
+  const halfSpan = 2.13;
+  const pitch = 1.58 / 1.94;
+  const eaveY = ridgeY - pitch * halfSpan;
+  const angle = Math.atan(pitch);
+  const slopeLength = Math.hypot(halfSpan, ridgeY - eaveY);
+  for (const side of [-1, 1]) {
+    const slope = new THREE.BoxGeometry(5.34, 0.14, slopeLength);
+    slope.applyMatrix4(new THREE.Matrix4().makeRotationX(side * angle)
+      .setPosition(0, (ridgeY + eaveY) / 2, side * halfSpan / 2));
+    geos.push(toStandard(slope));
+  }
+  const ridge = new THREE.BoxGeometry(5.38, 0.14, 0.20).translate(0, ridgeY + 0.025, 0);
+  geos.push(toStandard(ridge));
+  return mergeGeometries(geos)!;
+})();
 
+export const manorChimneyGeometry = (() => {
   const chim = new THREE.BoxGeometry(0.52, 1.45, 0.64).translate(2.28, 2.85 + 0.725, 0);
   const chimCap = new THREE.BoxGeometry(0.60, 0.08, 0.72).translate(2.28, 2.85 + 1.49, 0);
   const pot1 = new THREE.CylinderGeometry(0.10, 0.12, 0.30, 8).translate(2.28, 2.85 + 1.68, -0.16);
   const pot2 = new THREE.CylinderGeometry(0.10, 0.12, 0.30, 8).translate(2.28, 2.85 + 1.68, 0.16);
 
-  geos.push(toStandard(r1), toStandard(r2), toStandard(ridge), toStandard(chim), toStandard(chimCap), toStandard(pot1), toStandard(pot2));
-  return mergeGeometries(geos) || geos[0];
+  return mergeGeometries([chim, chimCap, pot1, pot2].map(toStandard))!;
 })();
 
 export const manorBannersGeometry = (() => {
@@ -172,10 +182,12 @@ export const manorBannersGeometry = (() => {
 })();
 
 export function ManorModel({
+  buildingId,
   isLightOn = false,
   roofRef,
   interiorRef,
 }: {
+  buildingId?: string;
   isLightOn?: boolean;
   roofRef?: RefObject<THREE.Group | null>;
   interiorRef?: RefObject<THREE.Group | null>;
@@ -196,7 +208,13 @@ export function ManorModel({
 
       <group ref={roofRef}>
         <mesh geometry={manorRoofGeometry} material={mats.gothicSlateRoof} castShadow receiveShadow />
-        <ChimneySmoke position={[2.28, 2.85 + 1.70, 0]} />
+        <mesh geometry={manorChimneyGeometry} material={mats.stoneMed} castShadow receiveShadow />
+        {[-0.16, 0.16].map((z) => (
+          <mesh key={z} material={mats.charcoalBlack} position={[2.28, 4.685, z]}>
+            <cylinderGeometry args={[0.075, 0.075, 0.012, 8]} />
+          </mesh>
+        ))}
+        <ChimneySmoke position={[2.28, 2.85 + 1.70, 0]} residentialBuildingId={buildingId ?? null} />
       </group>
 
       <group ref={interiorRef} visible={false}>

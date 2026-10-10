@@ -8,12 +8,33 @@ import {
   SUPERVISOR_SKILL_MULTIPLIER,
   RESOURCE_DEPOSIT_DRAIN_RADIUS,
 } from '../../../constants/jobs';
+import { BACKYARD_EXTENSIONS_CONFIG, HOUSE_TIERS_CONFIG } from '../../../constants/housing';
 
 const _lordMap = new Map<string, GameEntity>();
 
 export class ProductionSystem {
+  private static lastTaxDayPaid = -1;
+
   public static update(): void {
     const { resources, addResource, consumeResource, addPendingJob, pendingJobs, playerRegionId, time } = useGameStore.getState();
+
+    if (time && time.hour === 8 && this.lastTaxDayPaid !== time.day) {
+      this.lastTaxDayPaid = time.day;
+      let totalTaxCollected = 0;
+      for (const b of buildingEntities) {
+        if (b.isCompleted && (b.buildingType === 'peasant_house' || b.buildingType === 'manor')) {
+          if (b.factionId === 'player' || b.factionId === undefined) {
+            const tier = b.houseTier || 1;
+            const tax = HOUSE_TIERS_CONFIG[tier]?.dailyTaxGold || 0;
+            if (tax > 0) totalTaxCollected += tax;
+          }
+        }
+      }
+      if (totalTaxCollected > 0) {
+        addResource('gold', totalTaxCollected);
+      }
+    }
+
     const isNight = time ? (time.hour >= 20 || time.hour < 6) : false;
     if (isNight) return;
 
@@ -27,6 +48,31 @@ export class ProductionSystem {
 
       if (building.factionId && building.factionId !== 'player') continue;
       if (building.regionId !== undefined && building.regionId !== playerRegionId) continue;
+
+      if ((building.buildingType === 'peasant_house' || building.buildingType === 'manor') && building.backyardExtension && building.backyardExtension !== 'none') {
+        const ext = BACKYARD_EXTENSIONS_CONFIG[building.backyardExtension];
+        if (ext && ext.productionCycleTicks > 0) {
+          building.backyardProgress = (building.backyardProgress || 0) + 1;
+          if (building.backyardProgress >= ext.productionCycleTicks) {
+            building.backyardProgress = 0;
+            let canProduceBackyard = true;
+            for (const [res, amount] of Object.entries(ext.inputs)) {
+              if ((resources[res as keyof typeof resources] || 0) < (amount || 0)) {
+                canProduceBackyard = false;
+                break;
+              }
+            }
+            if (canProduceBackyard) {
+              for (const [res, amount] of Object.entries(ext.inputs)) {
+                consumeResource(res as ResourceType, amount || 0);
+              }
+              for (const [res, amount] of Object.entries(ext.outputs)) {
+                addResource(res as ResourceType, amount || 0);
+              }
+            }
+          }
+        }
+      }
 
       const blueprint = BUILDING_BLUEPRINTS[building.buildingType];
       if (!blueprint || !blueprint.produces) continue;

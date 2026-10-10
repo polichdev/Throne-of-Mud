@@ -2,6 +2,7 @@ import { type GameEntity, buildingEntities } from '../ecs/world';
 import { GridMap } from '../grid/GridMap';
 import { AStar, type RegionBounds } from '../pathfinding/AStar';
 import { BUILDING_BLUEPRINTS } from './blueprints';
+import { PEASANT_GROUND_BEDS } from '../../constants/housing';
 
 export interface WorkstationInfo {
   doorApproachPos: [number, number];
@@ -179,7 +180,11 @@ export function getBuildingDoorInfo(building: GameEntity): {
       localDoorPos = [0, 1.38];
       break;
     }
-    case 'peasant_house':
+    case 'peasant_house': {
+      localDoorApproach = [0, 2.25];
+      localDoorPos = [0, 1.65];
+      break;
+    }
     default: {
       if (defH === 3) {
         localDoorApproach = [0, 2.0];
@@ -537,10 +542,17 @@ export function getBuildingSleepSpot(
     }
     case 'peasant_house':
     default: {
-      localBedPos = [bedIndex === 1 ? 1.25 : -1.25, -0.15];
-      bedY = buildingBaseY + 0.28;
+      if (bedIndex < 2) {
+        const bed = PEASANT_GROUND_BEDS[bedIndex === 1 ? 1 : 0];
+        localBedPos = [bed.x * 1.15, bed.z * 1.25 + 0.65];
+        bedY = buildingBaseY + 0.40;
+      } else {
+        const upperBeds = building.houseTier === 3 ? [-0.20, 1.05] : [0.95];
+        localBedPos = [upperBeds[Math.min(bedIndex - 2, upperBeds.length - 1)] * 1.15, -0.09 * 1.25 + 0.65];
+        bedY = buildingBaseY + 1.50;
+      }
       localFacingAngle = 0;
-      localIntermediatePos = [0, 0.3];
+      localIntermediatePos = bedIndex < 2 ? [0, 1.07] : [-1.46 * 1.15, 0.75];
       break;
     }
   }

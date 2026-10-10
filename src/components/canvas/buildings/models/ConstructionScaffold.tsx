@@ -12,6 +12,7 @@ interface ConstructionScaffoldProps {
   width: number;
   height: number;
   progress: number;
+  isUpgrade?: boolean;
   progressTextRef: RefObject<HTMLSpanElement | null>;
   progressBarRef: RefObject<HTMLDivElement | null>;
 }
@@ -21,6 +22,7 @@ export function ConstructionScaffold({
   width,
   height,
   progress,
+  isUpgrade = false,
   progressTextRef,
   progressBarRef,
 }: ConstructionScaffoldProps) {
@@ -34,13 +36,13 @@ export function ConstructionScaffold({
 
   return (
     <group>
-      {!isMinimal && (
+      {!isMinimal && !isUpgrade && (
         <mesh material={mats.richSoil} position={[0, 0.02, 0]} receiveShadow>
           <boxGeometry args={[width * 0.95, 0.04, height * 0.95]} />
         </mesh>
       )}
 
-      {!isMinimal && (
+      {!isMinimal && !isUpgrade && (
         <mesh material={mats.stoneMed} position={[0, 0.08, 0]} receiveShadow >
           <boxGeometry args={[width * 0.88, 0.08, height * 0.88]} />
         </mesh>
@@ -97,7 +99,7 @@ export function ConstructionScaffold({
         ))}
       </group>
 
-      {progress > 5 && (
+      {!isUpgrade && progress > 5 && (
         <mesh material={mats.timberDark} position={[0, 0.1 + (progress / 100) * 0.3, 0]} receiveShadow>
           <boxGeometry args={[width * 0.78, Math.max(0.1, (progress / 100) * 0.6), height * 0.78]} />
         </mesh>
@@ -116,15 +118,19 @@ export function ConstructionScaffold({
         <boxGeometry args={[0.2, 0.18, 0.2]} />
       </mesh>
 
-      <mesh material={mats.blueprintGhost} position={[0, 0.5, 0]}>
-        <boxGeometry args={[width * 0.8, 0.9, height * 0.8]} />
-      </mesh>
-      <mesh material={mats.blueprintGhost} position={[0, 1.15, height * 0.2]} rotation={[-0.85, 0, 0]}>
-        <boxGeometry args={[width * 0.85, height * 0.55, 0.05]} />
-      </mesh>
-      <mesh material={mats.blueprintGhost} position={[0, 1.15, -height * 0.2]} rotation={[0.85, 0, 0]}>
-        <boxGeometry args={[width * 0.85, height * 0.55, 0.05]} />
-      </mesh>
+      {!isUpgrade && (
+        <>
+          <mesh material={mats.blueprintGhost} position={[0, 0.5, 0]}>
+            <boxGeometry args={[width * 0.8, 0.9, height * 0.8]} />
+          </mesh>
+          <mesh material={mats.blueprintGhost} position={[0, 1.15, height * 0.2]} rotation={[-0.85, 0, 0]}>
+            <boxGeometry args={[width * 0.85, height * 0.55, 0.05]} />
+          </mesh>
+          <mesh material={mats.blueprintGhost} position={[0, 1.15, -height * 0.2]} rotation={[0.85, 0, 0]}>
+            <boxGeometry args={[width * 0.85, height * 0.55, 0.05]} />
+          </mesh>
+        </>
+      )}
 
       <ConstructionHUD
         progress={progress}

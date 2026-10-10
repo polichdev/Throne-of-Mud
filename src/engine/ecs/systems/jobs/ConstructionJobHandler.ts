@@ -125,15 +125,31 @@ export class ConstructionJobHandler {
     for (const b of buildingEntities) {
       const bEnt = b as GameEntity;
       if (bEnt.id === job.targetBuildingId) {
+        const upgradedTier = bEnt.pendingHouseTier;
+        const upgradedYard = bEnt.pendingBackyardExtension;
+        if (upgradedTier) {
+          bEnt.houseTier = upgradedTier;
+          bEnt.pendingHouseTier = undefined;
+          bEnt.maxBuildingHealth = (bEnt.maxBuildingHealth || 150) + 100;
+        }
+        if (upgradedYard) {
+          bEnt.backyardExtension = upgradedYard;
+          bEnt.pendingBackyardExtension = undefined;
+          bEnt.backyardProgress = 0;
+        }
         bEnt.constructionProgress = 100;
         bEnt.isCompleted = true;
         bEnt.buildingHealth = bEnt.maxBuildingHealth || 150;
+        bEnt.requiredMaterials = undefined;
+        bEnt.deliveredMaterials = undefined;
         incrementBuildingVersion();
 
         if (isPlayerUnit) {
           addChronicleEvent({
-            title: 'Будівництво завершено!',
-            description: `Зведено нову споруду: ${bEnt.name || 'Будівля'}.`,
+            title: upgradedTier || upgradedYard ? 'Покращення завершено!' : 'Будівництво завершено!',
+            description: upgradedTier || upgradedYard
+              ? `Садибу ${bEnt.name || 'Будівля'} покращено.`
+              : `Зведено нову споруду: ${bEnt.name || 'Будівля'}.`,
             type: 'success',
           });
         } else if (bEnt.factionId && bEnt.factionId.startsWith('bot-')) {

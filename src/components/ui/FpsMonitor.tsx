@@ -15,6 +15,10 @@ export const FpsMonitor: React.FC = React.memo(() => {
     drawCalls: 0,
     triangles: 0,
     simulationMs: 0,
+    cpuFrameMs: null as number | null,
+    cpuRenderMs: null as number | null,
+    gpuMs: null as number | null,
+    gpuSupported: false,
     geometries: 0,
     textures: 0,
     programs: 0,
@@ -40,6 +44,10 @@ export const FpsMonitor: React.FC = React.memo(() => {
       drawCalls: 0,
       triangles: 0,
       simulationMs: 0,
+      cpuFrameMs: null,
+      cpuRenderMs: null,
+      gpuMs: null,
+      gpuSupported: false,
       geometries: 0,
       textures: 0,
       programs: 0,
@@ -105,20 +113,24 @@ export const FpsMonitor: React.FC = React.memo(() => {
           const fps = Math.round(1000 / (currentFt || 16.6));
           const avgFps = Math.round(1000 / (avgFt || 16.6));
           const minFps = Math.round(1000 / (maxFt || 16.6));
-          const renderMetrics = (window as any).__renderMetrics as { calls?: number; triangles?: number; geometries?: number; textures?: number; programs?: number } | undefined;
+          const renderMetrics = (window as any).__renderMetrics as { calls?: number; triangles?: number; geometries?: number; textures?: number; programs?: number; cpuFrameMs?: number; cpuRenderMs?: number; gpuMs?: number | null; gpuSupported?: boolean } | undefined;
           const simulationMs = Number(((window as any).__simulationMs || 0).toFixed(1));
           const memory = (performance as any).memory;
           const heapMb = memory?.usedJSHeapSize ? Math.round(memory.usedJSHeapSize / (1024 * 1024)) : 0;
 
           setStats({
-            fps: Math.min(fps, 360),
+            fps,
             frameTime: Number(currentFt.toFixed(1)),
-            minFps: Math.min(minFps, 360),
-            avgFps: Math.min(avgFps, 360),
+            minFps,
+            avgFps,
             maxFrameTime: Number(maxFt.toFixed(1)),
             drawCalls: renderMetrics?.calls || 0,
             triangles: renderMetrics?.triangles || 0,
             simulationMs,
+            cpuFrameMs: renderMetrics?.cpuFrameMs ?? null,
+            cpuRenderMs: renderMetrics?.cpuRenderMs ?? null,
+            gpuMs: renderMetrics?.gpuMs ?? null,
+            gpuSupported: renderMetrics?.gpuSupported ?? false,
             geometries: renderMetrics?.geometries || 0,
             textures: renderMetrics?.textures || 0,
             programs: renderMetrics?.programs || 0,
@@ -339,6 +351,21 @@ export const FpsMonitor: React.FC = React.memo(() => {
             <div className="flex flex-col">
               <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">Симуляція</span>
               <span className="font-mono text-xs font-bold text-stone-200 mt-0.5">{stats.simulationMs} ms</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1 bg-black/30 border border-stone-800/60 rounded-xl px-2 py-1.5 text-center">
+            <div title="Час оновлень React Three Fiber і відправлення кадру на CPU; не включає всю роботу інтерфейсу браузера.">
+              <span className="text-[8px] text-stone-400 uppercase">CPU кадр</span>
+              <div className="font-mono text-xs font-bold text-stone-200 mt-0.5">{stats.cpuFrameMs === null ? '—' : `${stats.cpuFrameMs.toFixed(1)} ms`}</div>
+            </div>
+            <div className="border-x border-stone-800/60" title="Час gl.render на CPU: обхід сцени, підготовка та відправлення команд малювання.">
+              <span className="text-[8px] text-stone-400 uppercase">CPU рендер</span>
+              <div className="font-mono text-xs font-bold text-stone-200 mt-0.5">{stats.cpuRenderMs === null ? '—' : `${stats.cpuRenderMs.toFixed(1)} ms`}</div>
+            </div>
+            <div title={stats.gpuSupported ? 'Асинхронний вимір часу рендеру на GPU; включає оновлення тіней. CPU та GPU можуть працювати паралельно.' : 'Браузер не надав розширення для вимірювання GPU. Прочерк не означає нульове навантаження.'}>
+              <span className="text-[8px] text-stone-400 uppercase">GPU</span>
+              <div className="font-mono text-xs font-bold text-amber-200 mt-0.5">{stats.gpuMs === null ? '—' : `${stats.gpuMs.toFixed(1)} ms`}</div>
             </div>
           </div>
 

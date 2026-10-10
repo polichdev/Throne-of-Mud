@@ -15,6 +15,7 @@ import type {
   TradeRule,
   MilitiaSquad,
   MilitiaUnitType,
+  BackyardExtensionType,
 } from '../types/game';
 import type { SupportedLanguage } from '../i18n/types';
 import type { GridMap } from '../engine/grid/GridMap';
@@ -63,6 +64,8 @@ export interface AudioSlice {
 export interface UISlice {
   selectedEntityId: string | null;
   setSelectedEntityId: (id: string | null) => void;
+  houseFloorView: 1 | 2;
+  setHouseFloorView: (floor: 1 | 2) => void;
   activeBuildType: BuildingType | null;
   setActiveBuildType: (type: BuildingType | null) => void;
   activeTool: ToolType;
@@ -128,6 +131,9 @@ export interface SettlementSlice {
   setBuildingWage: (buildingId: string, wage: number) => void;
   callLevyMilitia: (lordId: string) => void;
   lordPreach: (lordId: string) => void;
+
+  upgradeHouseTier: (buildingId: string) => boolean;
+  setBackyardExtension: (buildingId: string, extension: BackyardExtensionType) => boolean;
 
   militiaSquads: MilitiaSquad[];
   selectedMilitiaSquadId: string | null;

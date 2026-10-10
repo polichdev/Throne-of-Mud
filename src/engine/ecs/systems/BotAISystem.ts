@@ -986,7 +986,7 @@ export class BotAISystem {
 
       let totalBeds = 0;
       for (const b of completedBuildings) {
-        if (b.buildingType === 'peasant_house') totalBeds += 3;
+        if (b.buildingType === 'peasant_house') totalBeds += 2;
         else if (b.buildingType === 'tent') totalBeds += 3;
         else if (b.buildingType === 'manor') totalBeds += 5;
       }

@@ -38,9 +38,20 @@ export class NeedsSystem {
     const { resources, consumeResource } = useGameStore.getState();
 
     let breadAvailable = resources.bread || 0;
+    let vegetablesAvailable = resources.vegetables || 0;
+    let eggsAvailable = resources.eggs || 0;
+    let meatAvailable = resources.meat || 0;
+    let fishAvailable = resources.fish || 0;
+    let berriesAvailable = resources.berries || 0;
     let aleAvailable = resources.ale || 0;
-    let breadConsumed = 0;
-    let aleConsumed = 0;
+
+    let distinctFoodCount = 0;
+    if (breadAvailable > 0) distinctFoodCount++;
+    if (vegetablesAvailable > 0) distinctFoodCount++;
+    if (eggsAvailable > 0) distinctFoodCount++;
+    if (meatAvailable > 0) distinctFoodCount++;
+    if (fishAvailable > 0) distinctFoodCount++;
+    if (berriesAvailable > 0) distinctFoodCount++;
 
     for (const unit of characterEntities) {
       if (!unit.needs || unit.factionId === 'bandit') continue;
@@ -57,20 +68,79 @@ export class NeedsSystem {
 
       const isPlayerUnit = unit.factionId === 'player' || unit.factionId === undefined;
 
-      if (isPlayerUnit && unit.needs.hunger < HUNGER_EAT_THRESHOLD && breadAvailable > 0) {
-        breadAvailable--;
-        breadConsumed++;
-        unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE);
-        unit.speechBubble = {
-          text: 'Смачний хліб!',
-          expiresAtTick: currentTick + 20,
-          type: 'mood',
-        };
+      if (isPlayerUnit && unit.needs.hunger < HUNGER_EAT_THRESHOLD) {
+        if (vegetablesAvailable > 0) {
+          vegetablesAvailable--;
+          consumeResource('vegetables', 1);
+          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE);
+          unit.speechBubble = {
+            text: 'Свіжі овочі з городу!',
+            expiresAtTick: currentTick + 20,
+            type: 'mood',
+          };
+        } else if (eggsAvailable > 0) {
+          eggsAvailable--;
+          consumeResource('eggs', 1);
+          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE);
+          unit.speechBubble = {
+            text: 'Свіжі сільські яйця!',
+            expiresAtTick: currentTick + 20,
+            type: 'mood',
+          };
+        } else if (breadAvailable > 0) {
+          breadAvailable--;
+          consumeResource('bread', 1);
+          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE);
+          unit.speechBubble = {
+            text: 'Смачний хліб!',
+            expiresAtTick: currentTick + 20,
+            type: 'mood',
+          };
+        } else if (meatAvailable > 0) {
+          meatAvailable--;
+          consumeResource('meat', 1);
+          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE + 10);
+          unit.speechBubble = {
+            text: 'Ситне м’ясо!',
+            expiresAtTick: currentTick + 20,
+            type: 'mood',
+          };
+        } else if (fishAvailable > 0) {
+          fishAvailable--;
+          consumeResource('fish', 1);
+          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE);
+          unit.speechBubble = {
+            text: 'Добра риба!',
+            expiresAtTick: currentTick + 20,
+            type: 'mood',
+          };
+        } else if (berriesAvailable > 0) {
+          berriesAvailable--;
+          consumeResource('berries', 1);
+          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE - 5);
+          unit.speechBubble = {
+            text: 'Солодкі лісові ягоди!',
+            expiresAtTick: currentTick + 20,
+            type: 'mood',
+          };
+        }
+
+        if (distinctFoodCount >= 2) {
+          if (!unit.thoughts) unit.thoughts = [];
+          if (!unit.thoughts.some((t) => t.id === 'varied_diet')) {
+            unit.thoughts.push({
+              id: 'varied_diet',
+              text: 'Різноманітний раціон (+12)',
+              modifier: 12,
+              durationTicks: 800,
+            });
+          }
+        }
       }
 
       if (isPlayerUnit && unit.needs.ale < ALE_DRINK_THRESHOLD && aleAvailable > 0 && Math.random() < ALE_CONSUME_CHANCE) {
         aleAvailable--;
-        aleConsumed++;
+        consumeResource('ale', 1);
         unit.needs.ale = Math.min(MAX_ALE, unit.needs.ale + ALE_RESTORE_AMOUNT);
         unit.needs.mood = Math.min(MAX_MOOD, unit.needs.mood + ALE_MOOD_RESTORE);
         unit.speechBubble = {
@@ -117,8 +187,5 @@ export class NeedsSystem {
         unit.speechBubble = undefined;
       }
     }
-
-    if (breadConsumed > 0) consumeResource('bread', breadConsumed);
-    if (aleConsumed > 0) consumeResource('ale', aleConsumed);
   }
 }

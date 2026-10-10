@@ -553,17 +553,15 @@ export class HaulingJobHandler {
             if (stillNeed > 0) {
               let availableAmt = 0;
               if (isPlayerStorage) {
-                const availableInStockpile = storageHub.localInventory?.[res] || 0;
-                const availableGlobal = useGameStore.getState().resources[res] || 0;
-                availableAmt = Math.max(availableInStockpile, availableGlobal);
+                availableAmt = useGameStore.getState().resources[res] || 0;
               } else {
                 availableAmt = storageHub.localInventory?.[res] || 20;
               }
 
-              const loadAmt = Math.min(stillNeed, availableAmt > 0 ? availableAmt : stillNeed);
+              const loadAmt = Math.min(stillNeed, availableAmt);
 
               if (loadAmt > 0) {
-                if (storageHub.localInventory && storageHub.localInventory[res]) {
+                if (!isPlayerStorage && storageHub.localInventory && storageHub.localInventory[res]) {
                   storageHub.localInventory[res] = Math.max(0, (storageHub.localInventory[res] || 0) - loadAmt);
                 }
                 if (isPlayerStorage) {

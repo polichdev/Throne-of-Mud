@@ -16,6 +16,8 @@ export const INITIAL_RESOURCES: ResourceInventory = {
   salt: 1000,
   meat: 500,
   hides: 500,
+  vegetables: 500,
+  eggs: 500,
   iron_ore: 500,
   coal: 500,
   cut_stone: 500,

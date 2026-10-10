@@ -971,3 +971,137 @@ export const PlayCrestIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-
     <polygon points="7 4 19 12 7 20 7 4" />
   </svg>
 );
+
+export const CarrotIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4', size, color }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ width: size, height: size, color }}
+  >
+    <path d="M14 6 C17 3 19 3 20 4 C21 5 21 7 18 10 L8 20 C6 22 4 21 3 20 C2 19 2 17 4 15 Z" fill="currentColor" fillOpacity="0.25" />
+    <path d="M17 7 L21 3" />
+    <path d="M19 5 L22 6" />
+    <path d="M18 4 L19 1" />
+    <line x1="7" y1="14" x2="10" y2="17" opacity="0.6" />
+    <line x1="11" y1="10" x2="14" y2="13" opacity="0.6" />
+  </svg>
+);
+
+export const ChickenIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4', size, color }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ width: size, height: size, color }}
+  >
+    <path d="M15 7 C15 4.5 13 3 10.5 3 C9.5 3 8.5 3.5 8 4.5 C7.5 4 6.5 4 6 4.5 C5.5 5 5.5 6 6 6.5 L4 7 L5.5 8.5 C4.5 10 4.5 12 5.5 13.5 C4 15 3.5 17 4 18.5 C4.5 20 6 21 8 21 L14 21 C17 21 19 19 19 16 C19 14 18 12.5 16.5 11.5 C16.8 10 16.5 8.5 15 7 Z" fill="currentColor" fillOpacity="0.2" />
+    <circle cx="9" cy="6" r="0.75" fill="currentColor" />
+    <path d="M9 21 L8 23" />
+    <path d="M13 21 L14 23" />
+    <path d="M11 12 C13 12 14.5 13.5 14.5 15.5" strokeDasharray="1 1" />
+  </svg>
+);
+
+export const GoatIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4', size, color }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ width: size, height: size, color }}
+  >
+    <path d="M5 8 L8 6 L10 9 L7 11 Z" fill="currentColor" fillOpacity="0.2" />
+    <path d="M8 6 C9 4 11 3 13 4 C14 4.5 14.5 6 14 7.5 L12 8" />
+    <path d="M6 8 C5 6 4 4 2 4 C1 4 0.5 5 1 6.5 L3 8" />
+    <path d="M7 11 L10 13 L17 13 C19 13 20 14 20 16 L20 19 L18 19 L18 16 L12 16 L11 20 L9 20 L9 15 L7 13 Z" fill="currentColor" fillOpacity="0.15" />
+    <circle cx="8" cy="8.5" r="0.75" fill="currentColor" />
+  </svg>
+);
+
+export const BowIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4', size, color }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ width: size, height: size, color }}
+  >
+    <path d="M5 4 C14 7 14 17 5 20" strokeWidth="2" stroke="currentColor" fill="none" />
+    <line x1="5" y1="4" x2="5" y2="20" strokeWidth="1" strokeDasharray="2 1" />
+    <line x1="3" y1="12" x2="19" y2="12" strokeWidth="1.6" />
+    <polyline points="15,9 19,12 15,15" fill="currentColor" fillOpacity="0.3" />
+    <polyline points="4,11 2,12 4,13" />
+  </svg>
+);
+
+export const BeerKegIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4', size, color }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ width: size, height: size, color }}
+  >
+    <ellipse cx="12" cy="5" rx="7" ry="2.5" fill="currentColor" fillOpacity="0.25" />
+    <path d="M5 5 C3.5 10 3.5 14 5 19 C7 21 17 21 19 19 C20.5 14 20.5 10 19 5" fill="currentColor" fillOpacity="0.15" />
+    <ellipse cx="12" cy="19" rx="7" ry="2.5" />
+    <path d="M4 10 C8 11.5 16 11.5 20 10" />
+    <path d="M4 14 C8 15.5 16 15.5 20 14" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" />
+  </svg>
+);
+
+export const HouseTierIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4', size, color }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ width: size, height: size, color }}
+  >
+    <path d="M3 10 L12 3 L21 10 L21 20 C21 20.6 20.6 21 20 21 L4 21 C3.4 21 3 20.6 3 20 Z" fill="currentColor" fillOpacity="0.2" />
+    <path d="M9 21 L9 14 L15 14 L15 21" fill="currentColor" fillOpacity="0.4" />
+    <line x1="17" y1="7" x2="17" y2="4" />
+    <line x1="17" y1="4" x2="19" y2="4" />
+    <line x1="19" y1="4" x2="19" y2="8.5" />
+  </svg>
+);
+
+export const CrestBadgeIcon: React.FC<MedievalIconProps> = ({ className = 'w-4 h-4', size, color }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ width: size, height: size, color }}
+  >
+    <path d="M12 2 L4 5 L4 12 C4 17.5 7.5 21.5 12 23 C16.5 21.5 20 17.5 20 12 L20 5 Z" fill="currentColor" fillOpacity="0.25" />
+    <path d="M12 6 L12 18" strokeWidth="1.2" opacity="0.6" />
+    <path d="M6 12 L18 12" strokeWidth="1.2" opacity="0.6" />
+  </svg>
+);
+

@@ -8,6 +8,9 @@ import { useGameStore } from '../../store/useGameStore';
 import { GridMap } from '../../engine/grid/GridMap';
 import { audioManager } from '../../engine/audio/AudioManager';
 import { getUnitAppearance } from './units/unitMaterials';
+import { isHouseSleeperVisible } from './units/houseFloorVisibility';
+import { createUnitHeadGeometry } from './units/unitHeadGeometry';
+import { useHiddenGroupCulling } from './performance/hiddenGroupCulling';
 
 const SHARED_STATIC_MATS = {
   ironSteel: new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.3, metalness: 0.6, flatShading: true }),
@@ -39,7 +42,7 @@ const SHARED_GEOS = {
   apronLeather: new THREE.BoxGeometry(0.26, 0.32, 0.02),
   apronLinen: new THREE.BoxGeometry(0.28, 0.34, 0.02),
   apronVest: new THREE.BoxGeometry(0.35, 0.32, 0.23),
-  head: new THREE.BoxGeometry(0.22, 0.22, 0.22),
+  head: createUnitHeadGeometry(),
   shadowDisc: new THREE.CircleGeometry(0.26, 16),
   muleShadowDisc: new THREE.CircleGeometry(0.32, 16),
   selectionRing: new THREE.RingGeometry(0.42, 0.5, 24),
@@ -92,6 +95,8 @@ const SHARED_GEOS = {
 };
 
 export function UnitsRenderer({ grid }: { grid?: GridMap }) {
+  const unitsRootRef = useRef<THREE.Group>(null);
+  useHiddenGroupCulling(unitsRootRef);
   const selectedEntityId = useGameStore((state) => state.selectedEntityId);
   const setSelectedEntityId = useGameStore((state) => state.setSelectedEntityId);
   const setSelectedMilitiaSquadId = useGameStore((state) => state.setSelectedMilitiaSquadId);
@@ -112,7 +117,7 @@ export function UnitsRenderer({ grid }: { grid?: GridMap }) {
   });
 
   return (
-    <group visible={!isStrategicView}>
+    <group ref={unitsRootRef} visible={!isStrategicView}>
       {units.map((unit) => {
         return (
           <Unit3DMemo
@@ -161,7 +166,7 @@ function ActiveSpeechBubblesRenderer() {
       return;
     }
 
-    const { time } = useGameStore.getState();
+    const { time, selectedEntityId, houseFloorView } = useGameStore.getState();
     const curTick = time?.tick ?? 0;
     const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
     const zoom = (window as any).__lastCameraZoom ?? 38;
@@ -174,6 +179,16 @@ function ActiveSpeechBubblesRenderer() {
     for (const unit of characterEntities) {
       const bubble = unit.speechBubble;
       if (bubble && bubble.text && curTick < (bubble.expiresAtTick || 0) && unit.position) {
+        let sleepingBuildingType: string | undefined;
+        if (unit.currentJob?.type === 'sleep' && (unit.currentJob.bedIndex ?? 0) >= 2 && !unit.path?.length) {
+          for (const building of buildingEntities) {
+            if (building.id === unit.currentJob.targetBuildingId) {
+              sleepingBuildingType = building.buildingType;
+              break;
+            }
+          }
+        }
+        if (!isHouseSleeperVisible(unit.currentJob, Boolean(unit.path?.length), sleepingBuildingType, selectedEntityId, houseFloorView)) continue;
         const ux = unit.position[0];
         const uz = unit.position[2];
 
@@ -254,6 +269,7 @@ function Unit3D({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const characterBodyRef = useRef<THREE.Group>(null);
+  useHiddenGroupCulling(groupRef);
   const torsoRef = useRef<THREE.Group>(null);
   const leftLegRef = useRef<THREE.Group>(null);
   const rightLegRef = useRef<THREE.Group>(null);
@@ -283,11 +299,7 @@ function Unit3D({
   const app = useMemo(() => getUnitAppearance(unit.id, characterClass, Boolean(unit.isLevy)), [unit.id, characterClass, unit.isLevy]);
   const multiHeadMats = useMemo(() => [
     app.skinMat,
-    app.skinMat,
-    app.skinMat,
-    app.skinMat,
     app.faceMat,
-    app.skinMat,
   ], [app.skinMat, app.faceMat]);
   const staticMats = SHARED_STATIC_MATS;
 
@@ -357,6 +369,11 @@ function Unit3D({
       }
     }
     const targetBuildingType = targetBuildingTypeRef.current;
+    const { selectedEntityId, houseFloorView } = useGameStore.getState();
+    if (!isHouseSleeperVisible(curJob, Boolean(curPath?.length), targetBuildingType, selectedEntityId, houseFloorView)) {
+      groupRef.current.visible = false;
+      return;
+    }
 
     const isFarmingNow =
       isActivelyWorkingNow &&
@@ -1059,10 +1076,12 @@ function Unit3D({
       <mesh
         position={[0, 0.65, 0]}
         onClick={(e) => {
+          if (!groupRef.current?.visible) return;
           e.stopPropagation();
           onSelect();
         }}
         onContextMenu={(e) => {
+          if (!groupRef.current?.visible) return;
           if (useGameStore.getState().selectedMilitiaSquadId) {
             e.stopPropagation();
             e.nativeEvent?.preventDefault?.();

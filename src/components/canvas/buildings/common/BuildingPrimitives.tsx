@@ -5,6 +5,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { characterEntities } from '../../../../engine/ecs/world';
 import { SHARED_BUILDING_MATS } from '../buildingMaterials';
 import { useGameStore } from '../../../../store/useGameStore';
+import { ResidentialSmokeState } from '../residentialSmoke';
+
+const residentialSmokeState = new ResidentialSmokeState();
 
 export function isObjectEffectivelyVisible(obj: THREE.Object3D | null): boolean {
   let curr = obj;
@@ -436,29 +439,37 @@ const smokeClumpGeometry = (() => {
 
 export function ChimneySmoke({
   position = [0, 0, 0],
+  residentialBuildingId,
 }: {
   position?: [number, number, number];
+  residentialBuildingId?: string | null;
 }) {
   const mats = SHARED_BUILDING_MATS;
   const groupRef = useRef<THREE.Group>(null);
   const frameCount = useRef(0);
   const worldPos = useMemo(() => new THREE.Vector3(), []);
   const cachedPos = useRef<[number, number] | null>(null);
+  const wasEnabled = useRef(false);
 
   const materials = [mats.smokeWhite, mats.smokeWhite];
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
     const currentZoom = (window as any).__lastCameraZoom ?? 38;
-    const isStrat = useGameStore.getState().isStrategicView;
-    if (isStrat || currentZoom <= 18.5) {
+    const state = useGameStore.getState();
+    const hasSmoke = residentialBuildingId === undefined || residentialSmokeState.hasSleepingResident(
+      residentialBuildingId, Math.floor(clock.elapsedTime * 10), state.time?.hour ?? 12, characterEntities,
+    );
+    if (!hasSmoke || state.isStrategicView || currentZoom <= 18.5) {
       if (groupRef.current.visible) groupRef.current.visible = false;
+      wasEnabled.current = false;
       return;
     }
 
     frameCount.current++;
 
-    if (frameCount.current % 30 === 0) {
+    if (!wasEnabled.current || frameCount.current % 30 === 0) {
+      wasEnabled.current = true;
       const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
       if (camTarget) {
         if (!cachedPos.current) {
@@ -467,7 +478,7 @@ export function ChimneySmoke({
         }
         const distSq = (cachedPos.current[0] - camTarget[0]) ** 2 + (cachedPos.current[1] - camTarget[1]) ** 2;
         groupRef.current.visible = distSq < 26 * 26;
-      }
+      } else groupRef.current.visible = true;
     }
 
     if (!groupRef.current.visible) return;
@@ -512,7 +523,7 @@ export function ChimneySmoke({
   });
 
   return (
-    <group ref={groupRef} position={position}>
+    <group ref={groupRef} position={position} visible={false}>
       {materials.map((mat, i) => (
         <mesh key={`cs-${i}`} geometry={smokeClumpGeometry} material={mat} />
       ))}

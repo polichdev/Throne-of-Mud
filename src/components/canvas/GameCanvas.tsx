@@ -1,5 +1,5 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { Canvas, useFrame, useThree, addEffect, addAfterEffect } from '@react-three/fiber';
+import { useMemo, useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { GridMap } from '../../engine/grid/GridMap';
 import { GameLoop } from '../../engine/time/GameLoop';
@@ -20,6 +20,7 @@ import { MenuAmbientWalkers } from './MenuAmbientWalkers';
 import { WeatherRenderer } from './WeatherRenderer';
 import { SpatialAudioListener } from './SpatialAudioListener';
 import { AmbientFaunaRenderer } from './fauna/AmbientFaunaRenderer';
+import { GpuFrameTimer } from './performance/GpuFrameTimer';
 
 import { useGameStore } from '../../store/useGameStore';
 import { audioManager } from '../../engine/audio/AudioManager';
@@ -48,18 +49,44 @@ function GameLoopSync({ grid }: { grid: GridMap }) {
 
 function RendererMetrics() {
   const { gl } = useThree();
-  const frameRef = useRef(0);
-
-  useFrame(() => {
-    if (++frameRef.current % 30 !== 0) return;
-    (window as any).__renderMetrics = {
-      calls: gl.info.render.calls,
-      triangles: gl.info.render.triangles,
-      geometries: gl.info.memory.geometries,
-      textures: gl.info.memory.textures,
-      programs: gl.info.programs?.length ?? 0,
+  useEffect(() => {
+    const timer = new GpuFrameTimer(gl.getContext());
+    const originalRender = gl.render;
+    let frame = 0, frameStarted = 0, cpuRenderMs = 0, lastPublish = 0;
+    let rendered = false;
+    let gpuMs: number | null = null;
+    const before = addEffect(() => { frameStarted = performance.now(); cpuRenderMs = 0; rendered = false; });
+    const measuredRender: typeof gl.render = function (scene, camera) {
+      const started = performance.now();
+      gpuMs = timer.poll(++frame, started);
+      timer.begin(frame);
+      try { originalRender.call(gl, scene, camera); }
+      finally { timer.end(); cpuRenderMs += performance.now() - started; rendered = true; }
     };
-  });
+    gl.render = measuredRender;
+    const after = addAfterEffect(() => {
+      const now = performance.now();
+      if (!rendered || !frameStarted || now - lastPublish < 200) return;
+      lastPublish = now;
+      (window as any).__renderMetrics = {
+        calls: gl.info.render.calls,
+        triangles: gl.info.render.triangles,
+        geometries: gl.info.memory.geometries,
+        textures: gl.info.memory.textures,
+        programs: gl.info.programs?.length ?? 0,
+        cpuFrameMs: now - frameStarted,
+        cpuRenderMs,
+        gpuMs,
+        gpuSupported: timer.supported,
+      };
+    });
+    return () => {
+      before(); after();
+      if (gl.render === measuredRender) gl.render = originalRender;
+      timer.dispose();
+      delete (window as any).__renderMetrics;
+    };
+  }, [gl]);
 
   return null;
 }

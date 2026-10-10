@@ -43,6 +43,8 @@ import {
   TradingPostModel,
 } from './buildings/models';
 import { InstancedWallsRenderer } from './buildings/InstancedWallsRenderer';
+import { InstancedHousesRenderer } from './buildings/InstancedHousesRenderer';
+import { useHiddenGroupCulling } from './performance/hiddenGroupCulling';
 
 const UNIT_BOX_GEO = new THREE.BoxGeometry(1, 1, 1);
 const SELECT_RING_GEO = new THREE.RingGeometry(0.52, 0.6, 32);
@@ -55,9 +57,11 @@ interface BuildingFrameState {
   centerZ: number;
 }
 const _buildingFrameStates = new Map<string, BuildingFrameState>();
+let buildingFrameVersion = 0;
 
 export function clearBuildingFrameStates() {
   _buildingFrameStates.clear();
+  buildingFrameVersion++;
 }
 
 export function BuildingsRenderer() {
@@ -65,11 +69,15 @@ export function BuildingsRenderer() {
   const setSelectedEntityId = useGameStore((state) => state.setSelectedEntityId);
   const buildingVersion = useGameStore((state) => state.buildingVersion);
   const isStrategicView = useGameStore((state) => state.isStrategicView);
+  const [batchRevision, setBatchRevision] = useState(0);
+  const buildingsRootRef = useRef<THREE.Group>(null);
+  useHiddenGroupCulling(buildingsRootRef);
 
-  const { completedWoodenWalls, completedStoneWalls, standardBuildings } = useMemo(() => {
+  const { completedWoodenWalls, completedStoneWalls, completedHouses, standardBuildings } = useMemo(() => {
     const wooden: GameEntity[] = [];
     const stone: GameEntity[] = [];
     const standard: GameEntity[] = [];
+    const houses: GameEntity[] = [];
 
     for (const b of buildingEntities) {
       const isSelected = selectedEntityId === b.id;
@@ -80,6 +88,8 @@ export function BuildingsRenderer() {
         wooden.push(b);
       } else if (b.buildingType === 'stone_wall' && isCompleted && !isSelected && !isDemolishing) {
         stone.push(b);
+      } else if (b.buildingType === 'peasant_house' && isCompleted && !isSelected && !isDemolishing && !b.pendingHouseTier && !b.pendingBackyardExtension) {
+        houses.push(b);
       } else {
         standard.push(b);
       }
@@ -87,22 +97,26 @@ export function BuildingsRenderer() {
     return {
       completedWoodenWalls: wooden,
       completedStoneWalls: stone,
+      completedHouses: houses,
       standardBuildings: standard,
     };
-  }, [buildingVersion, selectedEntityId]);
+  }, [buildingVersion, selectedEntityId, batchRevision]);
 
   const statesArrayRef = useRef<BuildingFrameState[]>([]);
-  const lastStatesSize = useRef(0);
+  const lastStatesVersion = useRef(-1);
 
   useFrame(() => {
+    if (completedHouses.some(b => b.isDemolishing || !(b.isCompleted || (b.constructionProgress || 0) >= 100) || b.pendingHouseTier || b.pendingBackyardExtension)) {
+      setBatchRevision(value => value + 1);
+    }
     const camTarget = (window as any).__lastCameraTarget;
     const zoom = (window as any).__lastCameraZoom || 38;
     const maxDist = Math.max(38, Math.min(50, (1200 / zoom) + 12));
     const maxDistSq = maxDist * maxDist;
 
-    if (_buildingFrameStates.size !== lastStatesSize.current) {
+    if (buildingFrameVersion !== lastStatesVersion.current) {
       statesArrayRef.current = Array.from(_buildingFrameStates.values());
-      lastStatesSize.current = _buildingFrameStates.size;
+      lastStatesVersion.current = buildingFrameVersion;
     }
     const states = statesArrayRef.current;
     if (states.length === 0) return;
@@ -122,12 +136,13 @@ export function BuildingsRenderer() {
   });
 
   return (
-    <group visible={!isStrategicView}>
+    <group ref={buildingsRootRef} visible={!isStrategicView}>
       <InstancedWallsRenderer
         woodenWalls={completedWoodenWalls}
         stoneWalls={completedStoneWalls}
         onSelect={setSelectedEntityId}
       />
+      <InstancedHousesRenderer buildings={completedHouses} onSelect={setSelectedEntityId} />
       {standardBuildings.map((building) => (
         <Building3DMemo
           key={`${building.id}_${building.gridPosition?.[0] ?? 0}_${building.gridPosition?.[1] ?? 0}_${building.position?.[0] ?? 0}`}
@@ -155,10 +170,12 @@ function Building3D({
   const [completed, setCompleted] = useState(() => Boolean(building.isCompleted || (building.constructionProgress || 0) >= 100));
   const progress = building.constructionProgress || 0;
   const type = building.buildingType || 'peasant_house';
+  const houseFloorView = useGameStore((state) => state.houseFloorView);
 
   const groupRef = useRef<THREE.Group>(null);
   const roofRef = useRef<THREE.Group>(null);
   const interiorRef = useRef<THREE.Group>(null);
+  useHiddenGroupCulling(groupRef);
   const progressTextRef = useRef<HTMLSpanElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
 
@@ -184,22 +201,23 @@ function Building3D({
       centerX,
       centerZ,
     };
-    _buildingFrameStates.set(building.id, frameStateRef.current);
   }
   frameStateRef.current.centerX = centerX;
   frameStateRef.current.centerZ = centerZ;
 
   useEffect(() => {
     _buildingFrameStates.set(building.id, frameStateRef.current!);
+    buildingFrameVersion++;
     return () => {
       _buildingFrameStates.delete(building.id);
+      buildingFrameVersion++;
     };
   }, [building.id]);
 
   useEffect(() => {
     if (roofRef.current) roofRef.current.visible = !isSelected;
-    if (interiorRef.current) interiorRef.current.visible = isSelected;
-  }, [isSelected]);
+    if (interiorRef.current) interiorRef.current.visible = isSelected && (type !== 'peasant_house' || (building.houseTier || 1) === 1 || houseFloorView === 1);
+  }, [isSelected, type, building.houseTier, houseFloorView, completed]);
 
   const posY = pos[1] !== undefined ? pos[1] : 0.05;
 
@@ -227,7 +245,12 @@ function Building3D({
   ]);
 
   useFrame(() => {
-    if (completed && !building.isDemolishing && !isSelected) return;
+    if (completed && building.isCompleted && !building.isDemolishing && !isSelected) return;
+
+    if (completed && !building.isCompleted) {
+      setCompleted(false);
+      return;
+    }
 
     if (!completed && (building.isCompleted || (building.constructionProgress || 0) >= 100)) {
       setCompleted(true);
@@ -256,11 +279,22 @@ function Building3D({
       case 'hitching_post':
         return <HitchingPostModel isLightOn={isLightOn} building={building} roofRef={roofRef} />;
       case 'peasant_house':
-        return <PeasantHouseModel isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
+        return (
+          <PeasantHouseModel
+            buildingId={building.id}
+            isLightOn={isLightOn}
+            roofRef={roofRef}
+            interiorRef={interiorRef}
+            tier={building.houseTier || 1}
+            backyard={building.backyardExtension || 'none'}
+            selected={isSelected}
+            floorView={houseFloorView}
+          />
+        );
       case 'market':
         return <MarketModel roofRef={roofRef} />;
       case 'manor':
-        return <ManorModel isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
+        return <ManorModel buildingId={building.id} isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
       case 'stockpile':
         return <StockpileModel isLightOn={isLightOn} roofRef={roofRef} />;
       case 'wheat_farm':
@@ -314,7 +348,7 @@ function Building3D({
       case 'trading_post':
         return <TradingPostModel isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
       default:
-        return <PeasantHouseModel isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
+        return <PeasantHouseModel buildingId={building.id} isLightOn={isLightOn} roofRef={roofRef} interiorRef={interiorRef} />;
     }
   }
 
@@ -337,14 +371,18 @@ function Building3D({
         {completed ? (
           renderBuildingModel()
         ) : (
-          <ConstructionScaffold
-            type={type}
-            width={baseW}
-            height={baseH}
-            progress={progress}
-            progressTextRef={progressTextRef}
-            progressBarRef={progressBarRef}
-          />
+          <>
+            {(building.pendingHouseTier || building.pendingBackyardExtension) && renderBuildingModel()}
+            <ConstructionScaffold
+              type={type}
+              width={baseW}
+              height={baseH}
+              progress={progress}
+              isUpgrade={Boolean(building.pendingHouseTier || building.pendingBackyardExtension)}
+              progressTextRef={progressTextRef}
+              progressBarRef={progressBarRef}
+            />
+          </>
         )}
       </group>
 
@@ -396,6 +434,10 @@ const Building3DMemo = memo(Building3D, (prev, next) => {
     prev.building.buildingHeight === next.building.buildingHeight &&
     prev.building.isCompleted === next.building.isCompleted &&
     prev.building.constructionProgress === next.building.constructionProgress &&
+    prev.building.houseTier === next.building.houseTier &&
+    prev.building.backyardExtension === next.building.backyardExtension &&
+    prev.building.pendingHouseTier === next.building.pendingHouseTier &&
+    prev.building.pendingBackyardExtension === next.building.pendingBackyardExtension &&
     prev.building.isDemolishing === next.building.isDemolishing &&
     prev.building.mulesCount === next.building.mulesCount &&
     prev.building.gridPosition?.[0] === next.building.gridPosition?.[0] &&
