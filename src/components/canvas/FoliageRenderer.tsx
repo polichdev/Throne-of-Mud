@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useLayoutEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GridMap } from '../../engine/grid/GridMap';
@@ -6,6 +6,9 @@ import { useGameStore } from '../../store/useGameStore';
 import type { ResourceDeposit } from '../../types/game';
 import { getTreeProceduralData } from '../../engine/world/foliageGeneration';
 import { pseudoRandom, distanceSq2D } from '../../utils/mathUtils';
+import { isBucketInBounds, markInstancePrefixForUpload } from './performance/instanceUploads';
+import { optimizePointLightMaterial } from './performance/pointLightRange';
+import { PackedMatrixList } from './performance/PackedMatrixList';
 
 interface Props {
   grid: GridMap;
@@ -205,6 +208,8 @@ const FALLING_TREE_MATS = {
   autumnCanopy: new THREE.MeshLambertMaterial({ color: '#c2410c' }),
 };
 
+for (const material of Object.values(FALLING_TREE_MATS)) optimizePointLightMaterial(material);
+
 function FallingTreeItem({
   tree,
   grid,
@@ -287,29 +292,29 @@ function FallingTreeItem({
 interface FoliageBucket {
   cx: number;
   cz: number;
-  bareTrees: THREE.Matrix4[];
-  treeTrunks: THREE.Matrix4[];
-  oakCanopies: THREE.Matrix4[];
-  autumnCanopies: THREE.Matrix4[];
-  pineTrunks: THREE.Matrix4[];
-  pineCanopies: THREE.Matrix4[];
-  stumps: THREE.Matrix4[];
-  fallenLogs: THREE.Matrix4[];
-  fallenOakCanopies: THREE.Matrix4[];
-  fallenAutumnCanopies: THREE.Matrix4[];
-  fallenPineCanopies: THREE.Matrix4[];
-  rocks: THREE.Matrix4[];
-  bareBushes: THREE.Matrix4[];
-  bushes: THREE.Matrix4[];
-  tallGrass: THREE.Matrix4[];
-  medGrass: THREE.Matrix4[];
-  shortGrass: THREE.Matrix4[];
-  reeds: THREE.Matrix4[];
-  lilies: THREE.Matrix4[];
-  flowers: THREE.Matrix4[];
+  bareTrees: PackedMatrixList;
+  treeTrunks: PackedMatrixList;
+  oakCanopies: PackedMatrixList;
+  autumnCanopies: PackedMatrixList;
+  pineTrunks: PackedMatrixList;
+  pineCanopies: PackedMatrixList;
+  stumps: PackedMatrixList;
+  fallenLogs: PackedMatrixList;
+  fallenOakCanopies: PackedMatrixList;
+  fallenAutumnCanopies: PackedMatrixList;
+  fallenPineCanopies: PackedMatrixList;
+  rocks: PackedMatrixList;
+  bareBushes: PackedMatrixList;
+  bushes: PackedMatrixList;
+  tallGrass: PackedMatrixList;
+  medGrass: PackedMatrixList;
+  shortGrass: PackedMatrixList;
+  reeds: PackedMatrixList;
+  lilies: PackedMatrixList;
+  flowers: PackedMatrixList;
   flowerColors: number[];
-  pebbles: THREE.Matrix4[];
-  mushrooms: THREE.Matrix4[];
+  pebbles: PackedMatrixList;
+  mushrooms: PackedMatrixList;
 }
 
 const BUCKET_SIZE = 16;
@@ -397,29 +402,29 @@ function populateBucketFoliage(
   dummy: THREE.Object3D,
   resourceDeposits?: ResourceDeposit[]
 ) {
-  bucket.bareTrees.length = 0;
-  bucket.treeTrunks.length = 0;
-  bucket.oakCanopies.length = 0;
-  bucket.autumnCanopies.length = 0;
-  bucket.pineTrunks.length = 0;
-  bucket.pineCanopies.length = 0;
-  bucket.stumps.length = 0;
-  bucket.fallenLogs.length = 0;
-  bucket.fallenOakCanopies.length = 0;
-  bucket.fallenAutumnCanopies.length = 0;
-  bucket.fallenPineCanopies.length = 0;
-  bucket.rocks.length = 0;
-  bucket.bareBushes.length = 0;
-  bucket.bushes.length = 0;
-  bucket.tallGrass.length = 0;
-  bucket.medGrass.length = 0;
-  bucket.shortGrass.length = 0;
-  bucket.reeds.length = 0;
-  bucket.lilies.length = 0;
-  bucket.flowers.length = 0;
+  bucket.bareTrees.clear();
+  bucket.treeTrunks.clear();
+  bucket.oakCanopies.clear();
+  bucket.autumnCanopies.clear();
+  bucket.pineTrunks.clear();
+  bucket.pineCanopies.clear();
+  bucket.stumps.clear();
+  bucket.fallenLogs.clear();
+  bucket.fallenOakCanopies.clear();
+  bucket.fallenAutumnCanopies.clear();
+  bucket.fallenPineCanopies.clear();
+  bucket.rocks.clear();
+  bucket.bareBushes.clear();
+  bucket.bushes.clear();
+  bucket.tallGrass.clear();
+  bucket.medGrass.clear();
+  bucket.shortGrass.clear();
+  bucket.reeds.clear();
+  bucket.lilies.clear();
+  bucket.flowers.clear();
   bucket.flowerColors.length = 0;
-  bucket.pebbles.length = 0;
-  bucket.mushrooms.length = 0;
+  bucket.pebbles.clear();
+  bucket.mushrooms.clear();
 
   const minX = bx * BUCKET_SIZE;
   const maxX = Math.min(grid.width, minX + BUCKET_SIZE);
@@ -467,47 +472,47 @@ function populateBucketFoliage(
             dummy.rotation.set(0, rotY, 0);
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
-            bucket.pineTrunks.push(dummy.matrix.clone());
+            bucket.pineTrunks.push(dummy.matrix);
 
             dummy.position.set(posX, tileH, posZ);
             dummy.rotation.set(0, rotY, 0);
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
-            bucket.pineCanopies.push(dummy.matrix.clone());
+            bucket.pineCanopies.push(dummy.matrix);
           } else if (treeType === 'oak') {
             dummy.position.set(posX, tileH + 0.42 * sc, posZ);
             dummy.rotation.set(0, rotY, 0);
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
-            bucket.treeTrunks.push(dummy.matrix.clone());
+            bucket.treeTrunks.push(dummy.matrix);
 
             dummy.position.set(posX, tileH + 1.25 * sc, posZ);
             dummy.scale.set(sc * 1.1, sc * 1.1, sc * 1.1);
             dummy.updateMatrix();
-            bucket.oakCanopies.push(dummy.matrix.clone());
+            bucket.oakCanopies.push(dummy.matrix);
 
             dummy.position.set(posX, tileH, posZ);
             dummy.rotation.set(0, rotY, 0);
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
-            bucket.bareTrees.push(dummy.matrix.clone());
+            bucket.bareTrees.push(dummy.matrix);
           } else {
             dummy.position.set(posX, tileH + 0.42 * sc, posZ);
             dummy.rotation.set(0, rotY, 0);
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
-            bucket.treeTrunks.push(dummy.matrix.clone());
+            bucket.treeTrunks.push(dummy.matrix);
 
             dummy.position.set(posX, tileH + 1.25 * sc, posZ);
             dummy.scale.set(sc * 1.1, sc * 1.1, sc * 1.1);
             dummy.updateMatrix();
-            bucket.autumnCanopies.push(dummy.matrix.clone());
+            bucket.autumnCanopies.push(dummy.matrix);
 
             dummy.position.set(posX, tileH, posZ);
             dummy.rotation.set(0, rotY, 0);
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
-            bucket.bareTrees.push(dummy.matrix.clone());
+            bucket.bareTrees.push(dummy.matrix);
           }
         } else if (tile.foliageType === 'fallen_tree') {
           const proc = getTreeProceduralData(x, z);
@@ -521,14 +526,14 @@ function populateBucketFoliage(
           dummy.rotation.set(0, logAngle, 0);
           dummy.scale.set(sc, sc, sc);
           dummy.updateMatrix();
-          bucket.stumps.push(dummy.matrix.clone());
+          bucket.stumps.push(dummy.matrix);
 
           dummy.position.set(posX + sinA * 0.42 * sc, tileH + 0.09 * sc, posZ + cosA * 0.42 * sc);
           dummy.rotation.set(0, logAngle, 0);
           dummy.rotateX(Math.PI / 2);
           dummy.scale.set(sc, sc, sc);
           dummy.updateMatrix();
-          bucket.fallenLogs.push(dummy.matrix.clone());
+          bucket.fallenLogs.push(dummy.matrix);
 
           if (treeType === 'pine') {
             dummy.position.set(posX, tileH + 0.16 * sc, posZ);
@@ -536,21 +541,21 @@ function populateBucketFoliage(
             dummy.rotateX(Math.PI / 2);
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
-            bucket.fallenPineCanopies.push(dummy.matrix.clone());
+            bucket.fallenPineCanopies.push(dummy.matrix);
           } else if (treeType === 'oak') {
             dummy.position.set(posX + sinA * 1.25 * sc, tileH + 0.32 * sc, posZ + cosA * 1.25 * sc);
             dummy.rotation.set(0, logAngle, 0);
             dummy.rotateX(Math.PI / 2);
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
-            bucket.fallenOakCanopies.push(dummy.matrix.clone());
+            bucket.fallenOakCanopies.push(dummy.matrix);
           } else {
             dummy.position.set(posX + sinA * 1.25 * sc, tileH + 0.32 * sc, posZ + cosA * 1.25 * sc);
             dummy.rotation.set(0, logAngle, 0);
             dummy.rotateX(Math.PI / 2);
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
-            bucket.fallenAutumnCanopies.push(dummy.matrix.clone());
+            bucket.fallenAutumnCanopies.push(dummy.matrix);
           }
         } else if (tile.foliageType === 'rock') {
           const sc = 0.95 + (pseudoRandom(x + 13, z + 7) - 0.5) * 0.25;
@@ -558,20 +563,20 @@ function populateBucketFoliage(
           dummy.rotation.set(0.1, rotY, 0.05);
           dummy.scale.set(sc * 1.2, sc * 0.8, sc * 1.05);
           dummy.updateMatrix();
-          bucket.rocks.push(dummy.matrix.clone());
+          bucket.rocks.push(dummy.matrix);
         } else if (tile.foliageType === 'bush') {
           const sc = 0.85 + (pseudoRandom(x * 7, z * 13) - 0.5) * 0.35;
           dummy.position.set(posX, tileH + 0.15 * sc, posZ);
           dummy.rotation.set(0, rotY, 0);
           dummy.scale.set(sc, sc, sc);
           dummy.updateMatrix();
-          bucket.bushes.push(dummy.matrix.clone());
+          bucket.bushes.push(dummy.matrix);
 
           dummy.position.set(posX, tileH, posZ);
           dummy.rotation.set(0, rotY, 0);
           dummy.scale.set(sc, sc, sc);
           dummy.updateMatrix();
-          bucket.bareBushes.push(dummy.matrix.clone());
+          bucket.bareBushes.push(dummy.matrix);
         }
       }
 
@@ -582,7 +587,7 @@ function populateBucketFoliage(
           dummy.rotation.set(0, rotY, 0);
           dummy.scale.set(sc, sc, sc);
           dummy.updateMatrix();
-          bucket.lilies.push(dummy.matrix.clone());
+          bucket.lilies.push(dummy.matrix);
         }
       } else if (tile.terrain === 'fertile_soil' || tile.terrain === 'mud') {
         if (pseudoRandom(x + 11, z + 89) > 0.55) {
@@ -591,7 +596,7 @@ function populateBucketFoliage(
           dummy.rotation.set(0, rotY, 0);
           dummy.scale.set(sc, sc, sc);
           dummy.updateMatrix();
-          bucket.reeds.push(dummy.matrix.clone());
+          bucket.reeds.push(dummy.matrix);
         }
         if (pseudoRandom(x * 37, z * 29) > 0.40) {
           const sc = 0.65 + pseudoRandom(x, z) * 0.35;
@@ -599,7 +604,7 @@ function populateBucketFoliage(
           dummy.rotation.set(0.1, rotY, 0.05);
           dummy.scale.set(sc * 1.3, sc * 0.5, sc * 1.1);
           dummy.updateMatrix();
-          bucket.pebbles.push(dummy.matrix.clone());
+          bucket.pebbles.push(dummy.matrix);
         }
       } else if (tile.terrain === 'grass') {
         const patchNoise = Math.sin(x * 0.24 + z * 0.16) * 0.55 + Math.cos(x * 0.12 - z * 0.26) * 0.45;
@@ -617,9 +622,9 @@ function populateBucketFoliage(
             dummy.scale.set(subScale, subScale, subScale);
             dummy.updateMatrix();
 
-            if (k < 1) bucket.tallGrass.push(dummy.matrix.clone());
-            else if (k < 2) bucket.medGrass.push(dummy.matrix.clone());
-            else bucket.shortGrass.push(dummy.matrix.clone());
+            if (k < 1) bucket.tallGrass.push(dummy.matrix);
+            else if (k < 2) bucket.medGrass.push(dummy.matrix);
+            else bucket.shortGrass.push(dummy.matrix);
           }
 
           const randFlower = pseudoRandom(x * 19 + 5, z * 23 + 17);
@@ -634,7 +639,7 @@ function populateBucketFoliage(
             dummy.scale.set(sc, sc, sc);
             dummy.updateMatrix();
 
-            bucket.flowers.push(dummy.matrix.clone());
+            bucket.flowers.push(dummy.matrix);
             if (fType < 0.28) {
               bucket.flowerColors.push(0.937, 0.267, 0.267);
             } else if (fType < 0.56) {
@@ -652,7 +657,7 @@ function populateBucketFoliage(
             dummy.rotation.set(0, rotY, 0);
             dummy.scale.set(scM, scM, scM);
             dummy.updateMatrix();
-            bucket.mushrooms.push(dummy.matrix.clone());
+            bucket.mushrooms.push(dummy.matrix);
           }
         } else if (patchNoise > -0.20) {
           const tuftCount = 1 + Math.floor(pseudoRandom(x * 5, z * 11) * 1.5);
@@ -667,8 +672,8 @@ function populateBucketFoliage(
             dummy.scale.set(subScale, subScale, subScale);
             dummy.updateMatrix();
 
-            if (k < 1) bucket.medGrass.push(dummy.matrix.clone());
-            else bucket.shortGrass.push(dummy.matrix.clone());
+            if (k < 1) bucket.medGrass.push(dummy.matrix);
+            else bucket.shortGrass.push(dummy.matrix);
           }
         } else {
           if (pseudoRandom(x * 23 + 7, z * 17 + 11) > 0.60) {
@@ -682,7 +687,7 @@ function populateBucketFoliage(
             dummy.scale.set(subScale, subScale, subScale);
             dummy.updateMatrix();
 
-            bucket.shortGrass.push(dummy.matrix.clone());
+            bucket.shortGrass.push(dummy.matrix);
           }
         }
       }
@@ -764,7 +769,7 @@ function populateBucketFoliage(
         );
       };
 
-      return mat;
+      return optimizePointLightMaterial(mat);
     };
   }, []);
 
@@ -840,7 +845,7 @@ function populateBucketFoliage(
         );
       };
 
-      return mat;
+      return optimizePointLightMaterial(mat);
     };
   }, []);
 
@@ -849,7 +854,7 @@ function populateBucketFoliage(
     oak: createTreeMaterial('#22c55e', 0.8, true),
     autumn: createTreeMaterial('#ea580c', 0.8, true),
     pine: createTreeMaterial('#1c4a28', 0.85, true),
-    rock: new THREE.MeshLambertMaterial({ color: '#4b5563' }),
+    rock: optimizePointLightMaterial(new THREE.MeshLambertMaterial({ color: '#4b5563' })),
     bush: createTreeMaterial('#22c55e', 0.85, true),
 
     tallGrassMat: createWindMaterial('#3f782c', 1.35, false),
@@ -857,10 +862,10 @@ function populateBucketFoliage(
     shortGrassMat: createWindMaterial('#5ea338', 0.95, false),
 
     reed: createWindMaterial('#4d7c0f', 1.20, false),
-    lily: new THREE.MeshLambertMaterial({ color: '#166534' }),
+    lily: optimizePointLightMaterial(new THREE.MeshLambertMaterial({ color: '#166534' })),
     flowerMat: createWindMaterial('#ffffff', 0.80, true),
-    pebble: new THREE.MeshLambertMaterial({ color: '#64748b' }),
-    mushroom: new THREE.MeshLambertMaterial({ color: '#dc2626' }),
+    pebble: optimizePointLightMaterial(new THREE.MeshLambertMaterial({ color: '#64748b' })),
+    mushroom: optimizePointLightMaterial(new THREE.MeshLambertMaterial({ color: '#dc2626' })),
   }), [createWindMaterial, createTreeMaterial]);
 
   const targetPalette = useMemo(() => ({
@@ -920,35 +925,36 @@ function populateBucketFoliage(
         const bucket: FoliageBucket = {
           cx: (bx + 0.5) * BUCKET_SIZE,
           cz: (bz + 0.5) * BUCKET_SIZE,
-          bareTrees: [],
-          treeTrunks: [],
-          oakCanopies: [],
-          autumnCanopies: [],
-          pineTrunks: [],
-          pineCanopies: [],
-          stumps: [],
-          fallenLogs: [],
-          fallenOakCanopies: [],
-          fallenAutumnCanopies: [],
-          fallenPineCanopies: [],
-          rocks: [],
-          bareBushes: [],
-          bushes: [],
-          tallGrass: [],
-          medGrass: [],
-          shortGrass: [],
-          reeds: [],
-          lilies: [],
-          flowers: [],
+          bareTrees: new PackedMatrixList(),
+          treeTrunks: new PackedMatrixList(),
+          oakCanopies: new PackedMatrixList(),
+          autumnCanopies: new PackedMatrixList(),
+          pineTrunks: new PackedMatrixList(),
+          pineCanopies: new PackedMatrixList(),
+          stumps: new PackedMatrixList(),
+          fallenLogs: new PackedMatrixList(),
+          fallenOakCanopies: new PackedMatrixList(),
+          fallenAutumnCanopies: new PackedMatrixList(),
+          fallenPineCanopies: new PackedMatrixList(),
+          rocks: new PackedMatrixList(),
+          bareBushes: new PackedMatrixList(),
+          bushes: new PackedMatrixList(),
+          tallGrass: new PackedMatrixList(),
+          medGrass: new PackedMatrixList(),
+          shortGrass: new PackedMatrixList(),
+          reeds: new PackedMatrixList(),
+          lilies: new PackedMatrixList(),
+          flowers: new PackedMatrixList(),
           flowerColors: [],
-          pebbles: [],
-          mushrooms: [],
+          pebbles: new PackedMatrixList(),
+          mushrooms: new PackedMatrixList(),
         };
         populateBucketFoliage(bucket, bx, bz, grid, dummyObjRef.current, resourceDeposits);
         list.push(bucket);
       }
     }
     bucketsRef.current = list;
+    forceUpdateRef.current = true;
     lastProcessedFoliageVersionRef.current = foliageVersion;
     grid.dirtyFoliageBuckets.clear();
   } else if (lastProcessedFoliageVersionRef.current !== foliageVersion) {
@@ -961,15 +967,15 @@ function populateBucketFoliage(
         const b = bucketList[bucketIdx];
         if (b) {
           populateBucketFoliage(b, bx, bz, grid, dummyObjRef.current, resourceDeposits);
+          if (isBucketInBounds(bx, bz, lastUpdateRef.current)) forceUpdateRef.current = true;
         }
       }
       grid.dirtyFoliageBuckets.clear();
-      forceUpdateRef.current = true;
     }
   }
   const buckets = bucketsRef.current;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const allMeshes = [
       bareWinterTreeRef.current,
       treeTrunkRef.current,
@@ -996,12 +1002,13 @@ function populateBucketFoliage(
     ];
     for (const m of allMeshes) {
       if (m) {
+        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         m.count = 0;
         m.visible = false;
       }
     }
     if (flowerRef.current && !flowerRef.current.instanceColor) {
-      flowerRef.current.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CAPACITIES.flower * 3), 3);
+      flowerRef.current.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CAPACITIES.flower * 3), 3).setUsage(THREE.DynamicDrawUsage);
     }
     forceUpdateRef.current = true;
   }, []);
@@ -1037,18 +1044,14 @@ function populateBucketFoliage(
 
     const seasonChanged = curSeason !== lastUpdateRef.current.season;
     const grassToggled = curShowGrass !== lastUpdateRef.current.showGrass;
-    const verChanged = foliageVersion !== lastUpdateRef.current.foliageVersion;
-    const stratChanged = isStrategicView !== lastUpdateRef.current.strategic;
 
     if (
       forceUpdateRef.current ||
       boundsChanged ||
       seasonChanged ||
-      grassToggled ||
-      verChanged ||
-      stratChanged
+      grassToggled
     ) {
-      if (!isStrategicView) {
+      if (!isStrategicView || curZoom >= 14) {
         lastUpdateRef.current = {
           minBx,
           maxBx,
@@ -1095,15 +1098,10 @@ function populateBucketFoliage(
           const array = mesh.instanceMatrix.array as Float32Array;
           let count = 0;
 
-          for (let i = 0; i < visibleBuckets.length; i++) {
-            const list = visibleBuckets[i][key] as THREE.Matrix4[];
+          for (let i = 0; i < visibleBuckets.length && count < capacity; i++) {
+            const list = visibleBuckets[i][key] as PackedMatrixList;
             if (!list || list.length === 0) continue;
-            for (let j = 0; j < list.length; j++) {
-              if (count < capacity) {
-                array.set(list[j].elements, count * 16);
-                count++;
-              }
-            }
+            count += list.copyTo(array, count, capacity - count);
           }
 
           if (count === 0 && mesh.count === 0) {
@@ -1113,7 +1111,7 @@ function populateBucketFoliage(
 
           mesh.count = count;
           mesh.visible = count > 0;
-          mesh.instanceMatrix.needsUpdate = true;
+          markInstancePrefixForUpload(mesh.instanceMatrix, count);
         };
 
         updateMesh(bareWinterTreeRef, 'bareTrees', CAPACITIES.tree, isWinterSeason);
@@ -1152,32 +1150,28 @@ function populateBucketFoliage(
           } else {
             const matArray = flowerMesh.instanceMatrix.array as Float32Array;
             if (!flowerMesh.instanceColor) {
-              flowerMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CAPACITIES.flower * 3), 3);
+              flowerMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CAPACITIES.flower * 3), 3).setUsage(THREE.DynamicDrawUsage);
             }
             const colArray = flowerMesh.instanceColor.array as Float32Array;
             let count = 0;
 
-            for (let i = 0; i < visibleBuckets.length; i++) {
+            for (let i = 0; i < visibleBuckets.length && count < CAPACITIES.flower; i++) {
               const b = visibleBuckets[i];
               const matsList = b.flowers;
               const colsList = b.flowerColors;
               if (!matsList || matsList.length === 0) continue;
-              for (let j = 0; j < matsList.length; j++) {
-                if (count < CAPACITIES.flower) {
-                  matArray.set(matsList[j].elements, count * 16);
-                  colArray[count * 3] = colsList[j * 3];
-                  colArray[count * 3 + 1] = colsList[j * 3 + 1];
-                  colArray[count * 3 + 2] = colsList[j * 3 + 2];
-                  count++;
-                }
+              const copied = matsList.copyTo(matArray, count, CAPACITIES.flower - count);
+              for (let j = 0; j < copied * 3; j++) {
+                colArray[count * 3 + j] = colsList[j];
               }
+              count += copied;
             }
 
             if (count > 0 || flowerMesh.count > 0) {
               flowerMesh.count = count;
               flowerMesh.visible = count > 0;
-              flowerMesh.instanceMatrix.needsUpdate = true;
-              flowerMesh.instanceColor.needsUpdate = true;
+              markInstancePrefixForUpload(flowerMesh.instanceMatrix, count);
+              markInstancePrefixForUpload(flowerMesh.instanceColor, count);
             }
           }
         }

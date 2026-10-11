@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 
+const TARGET_FRAME_MS = 1000 / 165;
+const GOOD_FRAME_MS = TARGET_FRAME_MS * 1.05;
+const WARN_FRAME_MS = TARGET_FRAME_MS * 2.1;
+
 export const FpsMonitor: React.FC = React.memo(() => {
   const selectedEntityId = useGameStore((s) => s.selectedEntityId);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -17,6 +21,16 @@ export const FpsMonitor: React.FC = React.memo(() => {
     simulationMs: 0,
     cpuFrameMs: null as number | null,
     cpuRenderMs: null as number | null,
+    cpuMatrixMs: null as number | null,
+    cpuBatchMs: null as number | null,
+    cpuRenderOtherMs: null as number | null,
+    cpuSubmissionMs: null as number | null,
+    cpuPreparationMs: null as number | null,
+    sampledDrawCalls: 0,
+    cpuFramePeakMs: null as number | null,
+    cpuRenderPeakMs: null as number | null,
+    simulationPeakMs: null as number | null,
+    shadowRefreshes: 0,
     gpuMs: null as number | null,
     gpuSupported: false,
     geometries: 0,
@@ -46,6 +60,16 @@ export const FpsMonitor: React.FC = React.memo(() => {
       simulationMs: 0,
       cpuFrameMs: null,
       cpuRenderMs: null,
+      cpuMatrixMs: null,
+      cpuBatchMs: null,
+      cpuRenderOtherMs: null,
+      cpuSubmissionMs: null,
+      cpuPreparationMs: null,
+      sampledDrawCalls: 0,
+      cpuFramePeakMs: null,
+      cpuRenderPeakMs: null,
+      simulationPeakMs: null,
+      shadowRefreshes: 0,
       gpuMs: null,
       gpuSupported: false,
       geometries: 0,
@@ -113,7 +137,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
           const fps = Math.round(1000 / (currentFt || 16.6));
           const avgFps = Math.round(1000 / (avgFt || 16.6));
           const minFps = Math.round(1000 / (maxFt || 16.6));
-          const renderMetrics = (window as any).__renderMetrics as { calls?: number; triangles?: number; geometries?: number; textures?: number; programs?: number; cpuFrameMs?: number; cpuRenderMs?: number; gpuMs?: number | null; gpuSupported?: boolean } | undefined;
+          const renderMetrics = (window as any).__renderMetrics as { calls?: number; triangles?: number; geometries?: number; textures?: number; programs?: number; cpuFrameMs?: number; cpuRenderMs?: number; cpuMatrixMs?: number; cpuBatchMs?: number; cpuRenderOtherMs?: number; cpuSubmissionMs?: number | null; cpuPreparationMs?: number | null; sampledDrawCalls?: number; cpuFramePeakMs?: number; cpuRenderPeakMs?: number; simulationPeakMs?: number; shadowRefreshes?: number; gpuMs?: number | null; gpuSupported?: boolean } | undefined;
           const simulationMs = Number(((window as any).__simulationMs || 0).toFixed(1));
           const memory = (performance as any).memory;
           const heapMb = memory?.usedJSHeapSize ? Math.round(memory.usedJSHeapSize / (1024 * 1024)) : 0;
@@ -129,6 +153,16 @@ export const FpsMonitor: React.FC = React.memo(() => {
             simulationMs,
             cpuFrameMs: renderMetrics?.cpuFrameMs ?? null,
             cpuRenderMs: renderMetrics?.cpuRenderMs ?? null,
+            cpuMatrixMs: renderMetrics?.cpuMatrixMs ?? null,
+            cpuBatchMs: renderMetrics?.cpuBatchMs ?? null,
+            cpuRenderOtherMs: renderMetrics?.cpuRenderOtherMs ?? null,
+            cpuSubmissionMs: renderMetrics?.cpuSubmissionMs ?? null,
+            cpuPreparationMs: renderMetrics?.cpuPreparationMs ?? null,
+            sampledDrawCalls: renderMetrics?.sampledDrawCalls ?? 0,
+            cpuFramePeakMs: renderMetrics?.cpuFramePeakMs ?? null,
+            cpuRenderPeakMs: renderMetrics?.cpuRenderPeakMs ?? null,
+            simulationPeakMs: renderMetrics?.simulationPeakMs ?? null,
+            shadowRefreshes: renderMetrics?.shadowRefreshes ?? 0,
             gpuMs: renderMetrics?.gpuMs ?? null,
             gpuSupported: renderMetrics?.gpuSupported ?? false,
             geometries: renderMetrics?.geometries || 0,
@@ -145,13 +179,13 @@ export const FpsMonitor: React.FC = React.memo(() => {
               const height = canvas.height;
               ctx.clearRect(0, 0, width, height);
 
-              const line16 = height - (16.6 / 50) * height;
+              const targetLine = height - (TARGET_FRAME_MS / 50) * height;
               ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
               ctx.setLineDash([2, 2]);
               ctx.lineWidth = 1;
               ctx.beginPath();
-              ctx.moveTo(0, line16);
-              ctx.lineTo(width, line16);
+              ctx.moveTo(0, targetLine);
+              ctx.lineTo(width, targetLine);
               ctx.stroke();
               ctx.setLineDash([]);
 
@@ -163,9 +197,9 @@ export const FpsMonitor: React.FC = React.memo(() => {
                 const x = i * barWidth;
                 const y = height - barHeight;
 
-                if (ft <= 18) {
+                if (ft <= GOOD_FRAME_MS) {
                   ctx.fillStyle = '#22c55e';
-                } else if (ft <= 33.3) {
+                } else if (ft <= WARN_FRAME_MS) {
                   ctx.fillStyle = '#eab308';
                 } else {
                   ctx.fillStyle = '#ef4444';
@@ -186,23 +220,23 @@ export const FpsMonitor: React.FC = React.memo(() => {
   }, []);
 
   const fpsColor =
-    stats.fps >= 55
+    stats.frameTime <= GOOD_FRAME_MS
       ? 'text-emerald-400'
-      : stats.fps >= 30
+      : stats.frameTime <= WARN_FRAME_MS
       ? 'text-amber-400'
       : 'text-rose-500';
 
   const frameTimeColor =
-    stats.frameTime <= 18.0
+    stats.frameTime <= GOOD_FRAME_MS
       ? 'text-emerald-400'
-      : stats.frameTime <= 33.3
+      : stats.frameTime <= WARN_FRAME_MS
       ? 'text-amber-400'
       : 'text-rose-500';
 
   const statusBg =
-    stats.fps >= 55
+    stats.frameTime <= GOOD_FRAME_MS
       ? 'bg-emerald-500'
-      : stats.fps >= 30
+      : stats.frameTime <= WARN_FRAME_MS
       ? 'bg-amber-500'
       : 'bg-rose-500';
 
@@ -213,8 +247,8 @@ export const FpsMonitor: React.FC = React.memo(() => {
   const positionClass = pos
     ? ''
     : selectedEntityId
-    ? 'right-92 top-20'
-    : 'right-4 top-20';
+    ? 'right-92 top-48'
+    : 'right-4 top-48';
 
   if (isCollapsed) {
     return (
@@ -369,6 +403,47 @@ export const FpsMonitor: React.FC = React.memo(() => {
             </div>
           </div>
 
+          <div className="grid grid-cols-3 gap-1 bg-black/20 border border-stone-800/40 rounded-lg px-1.5 py-1 text-center font-mono">
+            <div title="Частина CPU рендеру: автоматичне оновлення світових матриць сцени.">
+              <div className="text-[8px] text-stone-400">Матриці</div>
+              <div className="text-[10px] text-stone-200">{stats.cpuMatrixMs === null ? '—' : `${stats.cpuMatrixMs.toFixed(1)} ms`}</div>
+            </div>
+            <div title="Частина CPU рендеру: підготовка пакетів будівель і селян, включно з оновленням моделей після змін.">
+              <div className="text-[8px] text-stone-400">Пакети</div>
+              <div className="text-[10px] text-stone-200">{stats.cpuBatchMs === null ? '—' : `${stats.cpuBatchMs.toFixed(1)} ms`}</div>
+            </div>
+            <div title="Решта CPU рендеру: списки видимості, освітлення, тіні, команди GPU та очікування драйвера.">
+              <div className="text-[8px] text-stone-400">Решта</div>
+              <div className="text-[10px] text-stone-200">{stats.cpuRenderOtherMs === null ? '—' : `${stats.cpuRenderOtherMs.toFixed(1)} ms`}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1 bg-black/20 border border-stone-800/40 rounded-lg px-1.5 py-1 text-center font-mono">
+            <div title={`CPU: шейдери, uniforms, буфери, команди WebGL та можливе очікування драйвера; це не час виконання GPU. Замір кожного 16-го рендеру, останній мав ${stats.sampledDrawCalls} подань. Обидва значення цього рядка належать одному заміру.`}>
+              <div className="text-[8px] text-stone-400">Подання CPU</div>
+              <div className="text-[10px] text-stone-200">{stats.cpuSubmissionMs === null ? '—' : `${stats.cpuSubmissionMs.toFixed(1)} ms`}</div>
+            </div>
+            <div title="Решта того самого вибіркового заміру після віднімання матриць, пакетів і подання WebGL: обхід сцени, списки видимості, сортування, підготовка BatchedMesh, освітлення та службові витрати. Може відрізнятися від поточного кадру у рядку вище.">
+              <div className="text-[8px] text-stone-400">Підготовка CPU</div>
+              <div className="text-[10px] text-stone-200">{stats.cpuPreparationMs === null ? '—' : `${stats.cpuPreparationMs.toFixed(1)} ms`}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1 bg-black/20 border border-stone-800/40 rounded-lg px-1.5 py-1 text-center font-mono">
+            <div title={`Найдовший CPU кадр за останній інтервал вимірювання (200 мс). Пік CPU рендеру: ${stats.cpuRenderPeakMs?.toFixed(1) ?? '—'} мс.`}>
+              <div className="text-[8px] text-stone-400">Пік CPU</div>
+              <div className="text-[10px] text-stone-200">{stats.cpuFramePeakMs === null ? '—' : `${stats.cpuFramePeakMs.toFixed(1)} ms`}</div>
+            </div>
+            <div title="Найдовше оновлення симуляції за останній інтервал вимірювання (200 мс).">
+              <div className="text-[8px] text-stone-400">Пік сим.</div>
+              <div className="text-[10px] text-stone-200">{stats.simulationPeakMs === null ? '—' : `${stats.simulationPeakMs.toFixed(1)} ms`}</div>
+            </div>
+            <div title="Кількість рендерів із запитом оновлення карти тіней за останній інтервал вимірювання (200 мс).">
+              <div className="text-[8px] text-stone-400">Оновл. тіней</div>
+              <div className="text-[10px] text-stone-200">{stats.shadowRefreshes}</div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-4 gap-0.5 bg-black/20 border border-stone-800/40 rounded-lg px-1.5 py-1 text-center text-[9px] font-mono">
             <div title="Geometries">
               <span className="text-stone-500">Geo:</span> <span className="text-stone-300 font-bold">{stats.geometries}</span>
@@ -387,7 +462,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-[8px] text-stone-400 font-mono px-0.5">
               <span>Графік frame time</span>
-              <span>Ціль: 16.6ms</span>
+              <span>Ціль: 6.06ms · 165 FPS</span>
             </div>
             <div className="w-full h-9 bg-black/60 rounded-lg border border-stone-800/90 overflow-hidden relative">
               <canvas

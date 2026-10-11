@@ -11,6 +11,8 @@ import { getUnitAppearance } from './units/unitMaterials';
 import { isHouseSleeperVisible } from './units/houseFloorVisibility';
 import { createUnitHeadGeometry } from './units/unitHeadGeometry';
 import { useHiddenGroupCulling } from './performance/hiddenGroupCulling';
+import { useAnimatedMeshBatches } from './units/useAnimatedMeshBatches';
+import { optimizePointLightMaterial } from './performance/pointLightRange';
 
 const SHARED_STATIC_MATS = {
   ironSteel: new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.3, metalness: 0.6, flatShading: true }),
@@ -31,6 +33,8 @@ const SHARED_STATIC_MATS = {
   invisibleMat: new THREE.MeshBasicMaterial({ visible: false }),
   selectionRingMat: new THREE.MeshBasicMaterial({ color: '#38bdf8', side: THREE.DoubleSide }),
 };
+
+for (const material of Object.values(SHARED_STATIC_MATS)) if (material instanceof THREE.MeshStandardMaterial) optimizePointLightMaterial(material);
 
 const SHARED_GEOS = {
   leg: new THREE.BoxGeometry(0.11, 0.32, 0.12),
@@ -89,6 +93,8 @@ const SHARED_GEOS = {
   spearShaft: new THREE.CylinderGeometry(0.016, 0.019, 1.45, 6),
   spearTip: new THREE.ConeGeometry(0.042, 0.22, 5),
   spearCrossguard: new THREE.BoxGeometry(0.07, 0.02, 0.03),
+  bowLimb: new THREE.TorusGeometry(0.29, 0.018, 5, 18, Math.PI),
+  bowString: new THREE.CylinderGeometry(0.005, 0.005, 0.58, 4),
   scepterHandle: new THREE.CylinderGeometry(0.02, 0.02, 0.35, 4),
   scepterHead: new THREE.DodecahedronGeometry(0.05, 0),
   unitCollider: new THREE.CylinderGeometry(0.35, 0.35, 1.3, 6),
@@ -97,6 +103,7 @@ const SHARED_GEOS = {
 export function UnitsRenderer({ grid }: { grid?: GridMap }) {
   const unitsRootRef = useRef<THREE.Group>(null);
   useHiddenGroupCulling(unitsRootRef);
+  useAnimatedMeshBatches(unitsRootRef);
   const selectedEntityId = useGameStore((state) => state.selectedEntityId);
   const setSelectedEntityId = useGameStore((state) => state.setSelectedEntityId);
   const setSelectedMilitiaSquadId = useGameStore((state) => state.setSelectedMilitiaSquadId);
@@ -281,6 +288,7 @@ function Unit3D({
   const pickaxeRef = useRef<THREE.Group>(null);
   const swordRef = useRef<THREE.Group>(null);
   const spearRef = useRef<THREE.Group>(null);
+  const bowRef = useRef<THREE.Group>(null);
   const scepterRef = useRef<THREE.Group>(null);
   const shadowDiscRef = useRef<THREE.Mesh>(null);
   const detailsRef = useRef<THREE.Group>(null);
@@ -406,14 +414,16 @@ function Unit3D({
       !isCalmBuilding &&
       targetBuildingType !== 'wheat_farm';
 
-    const isMilitiaSpear = Boolean(unit.isLevy && unit.militiaWeapon !== 'sword');
+    const isMilitiaSpear = Boolean(unit.isLevy && (!unit.militiaWeapon || unit.militiaWeapon === 'spear' || unit.militiaWeapon === 'pike'));
     const isMilitiaSword = Boolean(unit.isLevy && unit.militiaWeapon === 'sword');
+    const isMilitiaBow = Boolean(unit.isLevy && unit.militiaWeapon === 'bow');
 
     if (twoHandedRigRef.current) twoHandedRigRef.current.visible = isActivelyChoppingNow;
     if (standardArmsRef.current) standardArmsRef.current.visible = !isActivelyChoppingNow;
     if (hammerRef.current) hammerRef.current.visible = isActivelyBuildingNow;
     if (pickaxeRef.current) pickaxeRef.current.visible = isActivelyMiningNow;
     if (spearRef.current) spearRef.current.visible = isMilitiaSpear && !isSleepingNow && !isSittingNow;
+    if (bowRef.current) bowRef.current.visible = isMilitiaBow && !isSleepingNow && !isSittingNow;
     if (swordRef.current) swordRef.current.visible = (isActivelyFightingNow || isMilitiaSword || (isBandit && !isSleepingNow && !isSittingNow));
     if (scepterRef.current) scepterRef.current.visible = isLord && !isMovingNow && !isSleepingNow && !isSittingNow;
     if (shadowDiscRef.current) shadowDiscRef.current.visible = !isSleepingNow;
@@ -1027,7 +1037,7 @@ function Unit3D({
             <group ref={leftArmRef} position={[-0.22, 0.52, 0]}>
               <mesh material={app.tunicMat} position={[0, -0.06, 0]} geometry={SHARED_GEOS.armSleeveStandard} />
               <mesh material={app.skinMat} position={[0, -0.18, 0]} geometry={SHARED_GEOS.armHandStandard} />
-              {(isKnight || isBandit || unit.isLevy) && app.shieldMat && (
+              {(isKnight || isBandit || (unit.isLevy && unit.militiaWeapon !== 'bow' && unit.militiaWeapon !== 'pike')) && app.shieldMat && (
                 <mesh material={app.shieldMat} position={[-0.08, -0.12, 0.08]} rotation={[0, 0.3, 0]}>
                   <boxGeometry args={[0.04, 0.38, 0.26]} />
                 </mesh>
@@ -1048,10 +1058,15 @@ function Unit3D({
                 <mesh material={staticMats.ironSteel} position={[0, 0.15, 0]} geometry={SHARED_GEOS.pickaxeHead} />
               </group>
 
-              <group ref={spearRef} position={[0, 0.22, 0.12]} rotation={[-Math.PI / 16, 0, 0]} visible={false}>
+              <group ref={spearRef} position={[0, 0.22, 0.12]} rotation={[-Math.PI / 16, 0, 0]} scale={unit.militiaWeapon === 'pike' ? [1, 1.45, 1] : [1, 1, 1]} visible={false}>
                 <mesh material={staticMats.woodHandle} geometry={SHARED_GEOS.spearShaft} />
                 <mesh material={staticMats.ironSteel} position={[0, 0.78, 0]} geometry={SHARED_GEOS.spearTip} />
                 <mesh material={staticMats.darkIron} position={[0, 0.65, 0]} geometry={SHARED_GEOS.spearCrossguard} />
+              </group>
+
+              <group ref={bowRef} position={[0.08, -0.12, 0.16]} rotation={[0, 0, -Math.PI / 2]} visible={false}>
+                <mesh material={staticMats.woodHandle} geometry={SHARED_GEOS.bowLimb} />
+                <mesh material={staticMats.ironSteel} geometry={SHARED_GEOS.bowString} position={[0, 0.28, 0]} />
               </group>
 
               <group ref={swordRef} position={[0, -0.22, 0.15]} rotation={[-Math.PI / 4, 0, 0]} visible={false}>

@@ -2,6 +2,8 @@ import { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
+import { buildingEntities } from '../../engine/ecs/world';
+import { BuildingShadowState } from './performance/BuildingShadowState';
 
 interface LightingKey {
   hour: number;
@@ -17,7 +19,10 @@ const SHADOW_RECENTER_DISTANCE = 10;
 
 export function DayNightLighting() {
   const { gl } = useThree();
-  const buildingVersion = useGameStore((s) => s.buildingVersion);
+  const isStrategicView = useGameStore((state) => state.isStrategicView);
+  const pendingShadowRef = useRef(true);
+  const shadowState = useMemo(() => new BuildingShadowState(), []);
+  const shadowRevisionRef = useRef({ version: -1, selectedId: null as string | null, floor: -1 });
 
   const sunLightRef = useRef<THREE.DirectionalLight>(null);
   const ambientLightRef = useRef<THREE.AmbientLight>(null);
@@ -28,10 +33,6 @@ export function DayNightLighting() {
     gl.shadowMap.autoUpdate = false;
     gl.shadowMap.needsUpdate = true;
   }, [gl]);
-
-  useEffect(() => {
-    gl.shadowMap.needsUpdate = true;
-  }, [buildingVersion, gl]);
 
   const lightTarget = useMemo(() => {
     const obj = new THREE.Object3D();
@@ -156,7 +157,15 @@ export function DayNightLighting() {
   });
 
   useFrame(() => {
-    const { time } = useGameStore.getState();
+    const { time, buildingVersion, selectedEntityId, houseFloorView, isStrategicView: strategicNow } = useGameStore.getState();
+    if (gl.shadowMap.needsUpdate) pendingShadowRef.current = true;
+    const lastRevision = shadowRevisionRef.current;
+    if (lastRevision.version !== buildingVersion || lastRevision.selectedId !== selectedEntityId || lastRevision.floor !== houseFloorView) {
+      if (shadowState.update(buildingEntities, selectedEntityId, houseFloorView)) pendingShadowRef.current = true;
+      lastRevision.version = buildingVersion;
+      lastRevision.selectedId = selectedEntityId;
+      lastRevision.floor = houseFloorView;
+    }
     const currentHour = (time.hour + time.minute / 60) % 24;
 
     const timeChanged =
@@ -279,9 +288,15 @@ export function DayNightLighting() {
           lastLightPosRef.current = [camTarget[0], camTarget[1]];
           lightTarget.position.set(camTarget[0], 0, camTarget[1]);
           sunLightRef.current.position.set(camTarget[0] + 18, 36, camTarget[1] + 20);
-          gl.shadowMap.needsUpdate = true;
+          pendingShadowRef.current = true;
         }
       }
+    }
+    if (isStrategicView || strategicNow) {
+      gl.shadowMap.needsUpdate = false;
+    } else if (pendingShadowRef.current) {
+      gl.shadowMap.needsUpdate = true;
+      pendingShadowRef.current = false;
     }
   });
 

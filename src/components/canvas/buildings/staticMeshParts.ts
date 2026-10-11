@@ -45,6 +45,9 @@ export function mergeStaticMeshParts(
         if (child.type === 'boxGeometry') geometry = new THREE.BoxGeometry(...args);
         else if (child.type === 'torusGeometry') geometry = new THREE.TorusGeometry(...args);
         else if (child.type === 'cylinderGeometry') geometry = new THREE.CylinderGeometry(...args);
+        else if (child.type === 'sphereGeometry') geometry = new THREE.SphereGeometry(...args);
+        else if (child.type === 'dodecahedronGeometry') geometry = new THREE.DodecahedronGeometry(...args);
+        else if (child.type === 'circleGeometry') geometry = new THREE.CircleGeometry(...args);
         else throw new Error(`Unsupported static geometry: ${String(child.type)}`);
         ownsGeometry = true;
         break;

@@ -1,4 +1,4 @@
-import { useRef, memo, useState, useMemo, useEffect } from 'react';
+import { useRef, memo, useState, useMemo, useEffect, useLayoutEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { buildingEntities } from '../../engine/ecs/world';
@@ -45,6 +45,7 @@ import {
 import { InstancedWallsRenderer } from './buildings/InstancedWallsRenderer';
 import { InstancedHousesRenderer } from './buildings/InstancedHousesRenderer';
 import { useHiddenGroupCulling } from './performance/hiddenGroupCulling';
+import { useBuildingMeshBatches } from './buildings/useBuildingMeshBatches';
 
 const UNIT_BOX_GEO = new THREE.BoxGeometry(1, 1, 1);
 const SELECT_RING_GEO = new THREE.RingGeometry(0.52, 0.6, 32);
@@ -72,6 +73,7 @@ export function BuildingsRenderer() {
   const [batchRevision, setBatchRevision] = useState(0);
   const buildingsRootRef = useRef<THREE.Group>(null);
   useHiddenGroupCulling(buildingsRootRef);
+  const syncMeshBatches = useBuildingMeshBatches(buildingsRootRef);
 
   const { completedWoodenWalls, completedStoneWalls, completedHouses, standardBuildings } = useMemo(() => {
     const wooden: GameEntity[] = [];
@@ -149,6 +151,7 @@ export function BuildingsRenderer() {
           building={building}
           isSelected={selectedEntityId === building.id}
           onSelect={setSelectedEntityId}
+          onModelCommit={syncMeshBatches}
         />
       ))}
     </group>
@@ -159,10 +162,12 @@ function Building3D({
   building,
   isSelected,
   onSelect,
+  onModelCommit,
 }: {
   building: GameEntity;
   isSelected: boolean;
   onSelect: (id: string) => void;
+  onModelCommit: () => void;
 }) {
   const pos = building.position || [0, 0, 0];
   const width = building.buildingWidth || 1;
@@ -185,6 +190,7 @@ function Building3D({
   });
   const isLightOn = isNight && completed;
   const isWorking = !isNight && completed;
+  useLayoutEffect(onModelCommit);
 
   const [centerX, centerZ] = useMemo(() => {
     const bx = building.gridPosition ? building.gridPosition[0] : pos[0] - width / 2;

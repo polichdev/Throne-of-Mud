@@ -3,6 +3,7 @@ import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 import { buildingEntities } from '../../engine/ecs/world';
+import { GridMap } from '../../engine/grid/GridMap';
 
 import { MAP_SIZE } from '../../constants/world';
 import {
@@ -241,9 +242,10 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
       useGameStore.getState().setCameraAngleTarget(null);
     }
 
+    const isPauseMenuOpen = useGameStore.getState().activeMenuTab === 'settings' || useGameStore.getState().activeMenuTab === 'codex';
     const isBuildMode = useGameStore.getState().activeTool === 'build' || Boolean(useGameStore.getState().activeBuildType);
     const rotSpeed = 2.4 * delta;
-    if (!isBuildMode) {
+    if (!isBuildMode && !isPauseMenuOpen) {
       if (keysPressed.current['keyq']) {
         targetAngle.current -= rotSpeed;
       }
@@ -273,7 +275,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
     if (keysPressed.current['keya'] || keysPressed.current['arrowleft'])  moveRight -= 1;
     if (keysPressed.current['keyd'] || keysPressed.current['arrowright']) moveRight += 1;
 
-    if (moveFwd !== 0 || moveRight !== 0) {
+    if (!isPauseMenuOpen && (moveFwd !== 0 || moveRight !== 0)) {
       const len = Math.hypot(moveFwd, moveRight);
       const normFwd = (moveFwd / len) * speed;
       const normRight = (moveRight / len) * speed;
@@ -289,6 +291,14 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
 
     const curX = currentPos.current.x;
     const curZ = currentPos.current.z;
+
+    if (currentGameMode === 'playing') {
+      const viewedRegionId = GridMap.getRegionIdForCoord(curX, curZ);
+      const state = useGameStore.getState();
+      if (state.viewedRegionId !== viewedRegionId) {
+        state.setViewedRegionId(viewedRegionId);
+      }
+    }
 
     camera.position.set(curX + D * Math.sin(curAngle), H, curZ + D * Math.cos(curAngle));
     camera.lookAt(curX, 0, curZ);

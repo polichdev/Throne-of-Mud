@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BUILDING_TEXTURES } from './buildingTextures';
+import { optimizePointLightMaterial } from '../performance/pointLightRange';
 
 export const SHARED_BUILDING_MATS = {
   timberDark: new THREE.MeshStandardMaterial({
@@ -399,3 +400,7 @@ export const SHARED_BUILDING_MATS = {
     metalness: 0.85,
   }),
 };
+
+for (const material of Object.values(SHARED_BUILDING_MATS)) {
+  if (material instanceof THREE.MeshStandardMaterial) optimizePointLightMaterial(material);
+}

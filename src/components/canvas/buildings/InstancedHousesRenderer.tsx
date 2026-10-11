@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { GameEntity } from '../../../engine/ecs/world';
@@ -8,24 +8,14 @@ import { useGameStore } from '../../../store/useGameStore';
 import { BUILDING_BLUEPRINTS } from '../../../engine/buildings/blueprints';
 import type { StaticMeshPart } from './staticMeshParts';
 import { getPeasantHouseExteriorParts, getPeasantHouseExteriorMaterial, getPeasantBackyardParts, PeasantHouseEffects } from './models/PeasantHouseModel';
+import { getHouseWorldMatrix } from './houseTransforms';
+import { HouseMultiDrawBatches } from './HouseMultiDrawBatches';
+export { getHouseWorldMatrix } from './houseTransforms';
 
 const CHUNK_SIZE = 32;
 const COLLIDER_GEOMETRY = new THREE.BoxGeometry(1, 1, 1);
 const COLLIDER_MATERIAL = new THREE.MeshBasicMaterial({ visible: false });
 const NO_RAYCAST = () => {};
-
-export function getHouseWorldMatrix(building: GameEntity): THREE.Matrix4 {
-  const width = building.buildingWidth || 1, height = building.buildingHeight || 1;
-  return new THREE.Matrix4().compose(
-    new THREE.Vector3(
-      building.position?.[0] ?? (building.gridPosition?.[0] ?? 0) + width / 2,
-      building.position?.[1] ?? 0,
-      building.position?.[2] ?? (building.gridPosition?.[1] ?? 0) + height / 2,
-    ),
-    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), building.rotationAngle || 0),
-    new THREE.Vector3(1, 1, 1),
-  );
-}
 
 export interface HouseBatch {
   key: string;
@@ -55,6 +45,25 @@ export function makeHouseBatches(buildings: GameEntity[]): HouseBatch[] {
     if (building.backyardExtension && building.backyardExtension !== 'none') add(building, 'yard');
   }
   return [...batches.values()];
+}
+
+export class HouseBatchCache {
+  private entities: GameEntity[] = [];
+  private layouts: string[] = [];
+  private batches: HouseBatch[] = [];
+
+  get(buildings: GameEntity[]): HouseBatch[] {
+    const layouts = buildings.map(building => [building.id, building.houseTier, building.backyardExtension,
+      building.position?.[0], building.position?.[1], building.position?.[2],
+      building.gridPosition?.[0], building.gridPosition?.[1], building.buildingWidth, building.buildingHeight,
+      building.rotationAngle].join('|'));
+    if (buildings.length === this.entities.length && buildings.every((building, i) =>
+      building === this.entities[i] && layouts[i] === this.layouts[i])) return this.batches;
+    this.entities = buildings.slice();
+    this.layouts = layouts;
+    this.batches = makeHouseBatches(buildings);
+    return this.batches;
+  }
 }
 
 function InstancePart({ part, matrices, isNight }: { part: StaticMeshPart; matrices: THREE.Matrix4[]; isNight: boolean }) {
@@ -116,6 +125,36 @@ function HouseColliders({ buildings, onSelect }: { buildings: GameEntity[]; onSe
     matrixAutoUpdate={false} onPointerDown={select} onClick={select} />;
 }
 
+function HouseColliderChunk({ batch, onSelect }: { batch: HouseBatch; onSelect: (id: string) => void }) {
+  const ref = useRef<THREE.Group>(null);
+  const matrices = useMemo(() => batch.buildings.map(getHouseWorldMatrix), [batch]);
+  useFrame(() => {
+    if (!ref.current) return;
+    const target = (window as any).__lastCameraTarget;
+    if (!target) return;
+    const distance = Math.max(38, Math.min(50, 1200 / ((window as any).__lastCameraZoom || 38) + 12));
+    ref.current.visible = matrices.some(matrix => (matrix.elements[12] - target[0]) ** 2 + (matrix.elements[14] - target[1]) ** 2 < distance ** 2);
+  });
+  return <group ref={ref}><HouseColliders buildings={batch.buildings} onSelect={onSelect} /></group>;
+}
+
+function HouseMultiDrawRenderer({ batches, isNight, onSelect }: { batches: HouseBatch[]; isNight: boolean; onSelect: (id: string) => void }) {
+  const ref = useRef<THREE.Group>(null);
+  const meshes = useMemo(() => new HouseMultiDrawBatches(), []);
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    meshes.sync(batches, isNight);
+    meshes.update((window as any).__lastCameraTarget, (window as any).__lastCameraZoom || 38);
+    root.add(meshes.group);
+    return () => { root.remove(meshes.group); meshes.dispose(); };
+  }, [meshes, batches, isNight]);
+  useFrame(() => meshes.update((window as any).__lastCameraTarget, (window as any).__lastCameraZoom || 38));
+  return <group ref={ref} dispose={null}>
+    {batches.filter(batch => batch.kind === 'house').map(batch => <HouseColliderChunk key={batch.key} batch={batch} onSelect={onSelect} />)}
+  </group>;
+}
+
 function HouseEffects({ building }: { building: GameEntity }) {
   const ref = useRef<THREE.Group>(null);
   const matrix = getHouseWorldMatrix(building);
@@ -133,10 +172,14 @@ function HouseEffects({ building }: { building: GameEntity }) {
 }
 
 export function InstancedHousesRenderer({ buildings, onSelect }: { buildings: GameEntity[]; onSelect: (id: string) => void }) {
-  const batches = useMemo(() => makeHouseBatches(buildings), [buildings]);
+  const gl = useThree(state => state.gl);
+  const multiDraw = gl.extensions?.has('WEBGL_multi_draw') ?? false;
+  const batchCache = useMemo(() => new HouseBatchCache(), []);
+  const batches = useMemo(() => batchCache.get(buildings), [buildings, batchCache]);
   const isNight = useGameStore(state => (state.time?.hour ?? 12) >= 20 || (state.time?.hour ?? 12) < 6);
   return <group>
-    {batches.map(batch => <HouseBatchMeshes key={batch.key} batch={batch} isNight={isNight} onSelect={onSelect} />)}
+    {multiDraw ? <HouseMultiDrawRenderer batches={batches} isNight={isNight} onSelect={onSelect} />
+      : batches.map(batch => <HouseBatchMeshes key={batch.key} batch={batch} isNight={isNight} onSelect={onSelect} />)}
     {buildings.map(building => <HouseEffects key={building.id} building={building} />)}
   </group>;
 }

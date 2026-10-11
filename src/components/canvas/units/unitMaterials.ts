@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { optimizePointLightMaterial } from '../performance/pointLightRange';
 import {
   createTunicCanvas,
   createTrousersCanvas,
@@ -362,6 +363,7 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant', is
     shieldMat,
   };
 
+  for (const value of Object.values(app)) if (value instanceof THREE.MeshStandardMaterial) optimizePointLightMaterial(value);
   unitAppearanceCache.set(cacheKey, app);
   return app;
 }

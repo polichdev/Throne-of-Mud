@@ -21,6 +21,9 @@ import { WeatherRenderer } from './WeatherRenderer';
 import { SpatialAudioListener } from './SpatialAudioListener';
 import { AmbientFaunaRenderer } from './fauna/AmbientFaunaRenderer';
 import { GpuFrameTimer } from './performance/GpuFrameTimer';
+import { getSceneRenderTaskMs } from './performance/sceneRenderTasks';
+import { StablePointLights } from './performance/StablePointLights';
+import { measureRenderSubmission } from './performance/renderSubmission';
 
 import { useGameStore } from '../../store/useGameStore';
 import { audioManager } from '../../engine/audio/AudioManager';
@@ -48,25 +51,53 @@ function GameLoopSync({ grid }: { grid: GridMap }) {
 }
 
 function RendererMetrics() {
-  const { gl } = useThree();
+  const { gl, scene: trackedScene } = useThree();
   useEffect(() => {
     const timer = new GpuFrameTimer(gl.getContext());
     const originalRender = gl.render;
     let frame = 0, frameStarted = 0, cpuRenderMs = 0, lastPublish = 0;
     let rendered = false;
+    let measuring = false, cpuMatrixMs = 0, cpuBatchMs = 0;
+    let submissionSample: { cpuMs: number; preparationMs: number; calls: number; timestamp: number } | null = null;
+    const originalMatrices = trackedScene.updateMatrixWorld;
+    const measuredMatrices: typeof originalMatrices = function (this: THREE.Scene, force) {
+      if (!measuring) return originalMatrices.call(this, force);
+      const started = performance.now();
+      try { originalMatrices.call(this, force); }
+      finally { cpuMatrixMs += performance.now() - started; }
+    };
+    trackedScene.updateMatrixWorld = measuredMatrices;
     let gpuMs: number | null = null;
-    const before = addEffect(() => { frameStarted = performance.now(); cpuRenderMs = 0; rendered = false; });
+    let cpuFramePeakMs = 0, cpuRenderPeakMs = 0, simulationPeakMs = 0, shadowRefreshes = 0;
+    const before = addEffect(() => { frameStarted = performance.now(); cpuRenderMs = 0; cpuMatrixMs = 0; cpuBatchMs = 0; rendered = false; });
     const measuredRender: typeof gl.render = function (scene, camera) {
       const started = performance.now();
       gpuMs = timer.poll(++frame, started);
       timer.begin(frame);
-      try { originalRender.call(gl, scene, camera); }
-      finally { timer.end(); cpuRenderMs += performance.now() - started; rendered = true; }
+      if (gl.shadowMap.enabled && (gl.shadowMap.needsUpdate || gl.shadowMap.autoUpdate)) shadowRefreshes++;
+      measuring = true;
+      const matrixBefore = cpuMatrixMs;
+      let submission: { cpuMs: number; calls: number } | null = null;
+      try {
+        if (frame % 16 === 0) submission = measureRenderSubmission(gl, () => originalRender.call(gl, scene, camera));
+        else originalRender.call(gl, scene, camera);
+      } finally {
+        measuring = false; timer.end();
+        const ended = performance.now(), renderMs = ended - started;
+        const batchMs = getSceneRenderTaskMs(scene instanceof THREE.Scene ? scene : trackedScene);
+        cpuRenderMs += renderMs; cpuBatchMs += batchMs; rendered = true;
+        if (submission) submissionSample = { ...submission, timestamp: ended,
+          preparationMs: Math.max(0, renderMs - (cpuMatrixMs - matrixBefore) - batchMs - submission.cpuMs) };
+      }
     };
     gl.render = measuredRender;
     const after = addAfterEffect(() => {
       const now = performance.now();
-      if (!rendered || !frameStarted || now - lastPublish < 200) return;
+      if (!rendered || !frameStarted) return;
+      cpuFramePeakMs = Math.max(cpuFramePeakMs, now - frameStarted);
+      cpuRenderPeakMs = Math.max(cpuRenderPeakMs, cpuRenderMs);
+      simulationPeakMs = Math.max(simulationPeakMs, (window as any).__simulationMs || 0);
+      if (now - lastPublish < 200) return;
       lastPublish = now;
       (window as any).__renderMetrics = {
         calls: gl.info.render.calls,
@@ -76,17 +107,29 @@ function RendererMetrics() {
         programs: gl.info.programs?.length ?? 0,
         cpuFrameMs: now - frameStarted,
         cpuRenderMs,
+        cpuMatrixMs,
+        cpuBatchMs,
+        cpuRenderOtherMs: Math.max(0, cpuRenderMs - cpuMatrixMs - cpuBatchMs),
+        cpuSubmissionMs: submissionSample && now - submissionSample.timestamp < 2000 ? submissionSample.cpuMs : null,
+        cpuPreparationMs: submissionSample && now - submissionSample.timestamp < 2000 ? submissionSample.preparationMs : null,
+        sampledDrawCalls: submissionSample?.calls ?? 0,
+        cpuFramePeakMs,
+        cpuRenderPeakMs,
+        simulationPeakMs,
+        shadowRefreshes,
         gpuMs,
         gpuSupported: timer.supported,
       };
+      cpuFramePeakMs = 0; cpuRenderPeakMs = 0; simulationPeakMs = 0; shadowRefreshes = 0;
     });
     return () => {
       before(); after();
       if (gl.render === measuredRender) gl.render = originalRender;
+      if (trackedScene.updateMatrixWorld === measuredMatrices) trackedScene.updateMatrixWorld = originalMatrices;
       timer.dispose();
       delete (window as any).__renderMetrics;
     };
-  }, [gl]);
+  }, [gl, trackedScene]);
 
   return null;
 }
@@ -161,6 +204,7 @@ export function GameCanvas({ grid }: Props) {
         <BanditsRenderer />
         <MenuAmbientWalkers grid={grid} />
         <AmbientFaunaRenderer grid={grid} />
+        <StablePointLights />
         <SpatialAudioListener />
         <RendererMetrics />
       </Canvas>

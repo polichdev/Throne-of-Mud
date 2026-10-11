@@ -1,8 +1,9 @@
-import { useMemo, useRef } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { GridMap } from '../../../engine/grid/GridMap';
 import { useGameStore } from '../../../store/useGameStore';
+import { useHiddenGroupCulling } from '../performance/hiddenGroupCulling';
 
 interface Props {
   grid: GridMap;
@@ -145,6 +146,7 @@ function BirdFlockGroup({ flock, grid }: { flock: BirdFlock; grid: GridMap }) {
   const rightWingRefs = useRef<THREE.Mesh[]>([]);
 
   useFrame((_, delta) => {
+    if (useGameStore.getState().isStrategicView) return;
     if (!groupRef.current) return;
 
     flock.angle += flock.speed * delta;
@@ -248,6 +250,7 @@ function DeerHerdMember({ deer, grid }: { deer: DeerAnimal; grid: GridMap }) {
   const walkPhase = useRef(Math.random() * Math.PI * 2);
 
   useFrame((_, delta) => {
+    if (useGameStore.getState().isStrategicView) return;
     if (!rootRef.current) return;
 
     const camTarget = (window as any).__lastCameraTarget;
@@ -424,6 +427,7 @@ function HareAnimalMember({ hare, grid }: { hare: HareAnimal; grid: GridMap }) {
   const headRef = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
+    if (useGameStore.getState().isStrategicView) return;
     if (!rootRef.current) return;
 
     const camTarget = (window as any).__lastCameraTarget;
@@ -531,6 +535,7 @@ function FoxAnimalMember({ fox, grid }: { fox: FoxAnimal; grid: GridMap }) {
   const tailRef = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
+    if (useGameStore.getState().isStrategicView) return;
     if (!rootRef.current) return;
 
     const camTarget = (window as any).__lastCameraTarget;
@@ -642,6 +647,7 @@ function BoarAnimalMember({ boar, grid }: { boar: BoarAnimal; grid: GridMap }) {
   const headRef = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
+    if (useGameStore.getState().isStrategicView) return;
     if (!rootRef.current) return;
 
     const camTarget = (window as any).__lastCameraTarget;
@@ -742,7 +748,15 @@ function BoarAnimalMember({ boar, grid }: { boar: BoarAnimal; grid: GridMap }) {
   );
 }
 
+const BirdFlockGroupMemo = memo(BirdFlockGroup);
+const DeerHerdMemberMemo = memo(DeerHerdMember);
+const HareAnimalMemberMemo = memo(HareAnimalMember);
+const FoxAnimalMemberMemo = memo(FoxAnimalMember);
+const BoarAnimalMemberMemo = memo(BoarAnimalMember);
+
 export function AmbientFaunaRenderer({ grid }: Props) {
+  const rootRef = useRef<THREE.Group>(null);
+  useHiddenGroupCulling(rootRef);
   const isStrategicView = useGameStore((s) => s.isStrategicView);
 
   const birdFlocks = useMemo<BirdFlock[]>(() => {
@@ -891,24 +905,22 @@ export function AmbientFaunaRenderer({ grid }: Props) {
     return list;
   }, [grid.width, grid.height]);
 
-  if (isStrategicView) return null;
-
   return (
-    <group>
+    <group ref={rootRef} visible={!isStrategicView} dispose={null}>
       {birdFlocks.map((flock) => (
-        <BirdFlockGroup key={flock.id} flock={flock} grid={grid} />
+        <BirdFlockGroupMemo key={flock.id} flock={flock} grid={grid} />
       ))}
       {deerHerds.map((deer) => (
-        <DeerHerdMember key={deer.id} deer={deer} grid={grid} />
+        <DeerHerdMemberMemo key={deer.id} deer={deer} grid={grid} />
       ))}
       {hares.map((hare) => (
-        <HareAnimalMember key={hare.id} hare={hare} grid={grid} />
+        <HareAnimalMemberMemo key={hare.id} hare={hare} grid={grid} />
       ))}
       {foxes.map((fox) => (
-        <FoxAnimalMember key={fox.id} fox={fox} grid={grid} />
+        <FoxAnimalMemberMemo key={fox.id} fox={fox} grid={grid} />
       ))}
       {boars.map((boar) => (
-        <BoarAnimalMember key={boar.id} boar={boar} grid={grid} />
+        <BoarAnimalMemberMemo key={boar.id} boar={boar} grid={grid} />
       ))}
     </group>
   );

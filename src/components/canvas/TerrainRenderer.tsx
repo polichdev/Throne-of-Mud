@@ -9,6 +9,7 @@ import { BUILDING_BLUEPRINTS } from '../../engine/buildings/blueprints';
 import { world, buildingEntities } from '../../engine/ecs/world';
 import { AssetLoader } from '../../engine/assets/AssetLoader';
 import { audioManager } from '../../engine/audio/AudioManager';
+import { optimizePointLightMaterial } from './performance/pointLightRange';
 import { RoadPlacementPreview, type RoadSnapTarget } from './RoadPlacementPreview';
 import { getSmartRoadPath, isRoadPathValid } from '../../engine/grid/roadGeneration';
 import { getBuildingDoorInfo } from '../../engine/buildings/buildingNavigation';
@@ -353,7 +354,7 @@ export function TerrainRenderer({ grid }: Props) {
       );
     };
 
-    return mat;
+    return optimizePointLightMaterial(mat);
   }, [grassTexture, mudTexture, stoneTexture, waterTexture, gridTexture, grid.width, grid.height]);
 
   const terrainGeometry = useMemo(() => {

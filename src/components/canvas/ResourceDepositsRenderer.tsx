@@ -7,6 +7,11 @@ import { useGameStore } from '../../store/useGameStore';
 import type { ResourceDeposit } from '../../types/game';
 import { GridMap } from '../../engine/grid/GridMap';
 import { BUILDING_TEXTURES } from './buildings/buildingTextures';
+import { mergeStaticMeshParts } from './buildings/staticMeshParts';
+import type { StaticMeshPart } from './buildings/staticMeshParts';
+import { useHiddenGroupCulling } from './performance/hiddenGroupCulling';
+import { optimizePointLightMaterial } from './performance/pointLightRange';
+import { useBuildingMeshBatches } from './buildings/useBuildingMeshBatches';
 
 const DEPOSIT_MATS = {
   waterRipple: new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.55 }),
@@ -106,6 +111,8 @@ const DEPOSIT_MATS = {
   mushroomCap: new THREE.MeshStandardMaterial({ color: '#b91c1c', roughness: 0.6, flatShading: true }),
   mushroomStem: new THREE.MeshStandardMaterial({ color: '#fef3c7', roughness: 0.8, flatShading: true }),
 };
+
+for (const material of Object.values(DEPOSIT_MATS)) if (material instanceof THREE.MeshStandardMaterial) optimizePointLightMaterial(material);
 
 const BERRY_BUSH_CONFIGS = [
   { px: -1.15, pz: -0.75, s: 1.05, mat: DEPOSIT_MATS.berryLeaves1 },
@@ -360,7 +367,92 @@ const fawnBodyGeo = (() => {
   return mergeGeometries(geos) || geos[0];
 })();
 
+function BerryDepositDetails() {
+  return (
+    <group>
+      {BERRY_BUSH_CONFIGS.map((b, i) => (
+        <group key={i} position={[b.px, 0, b.pz]} scale={[b.s, b.s, b.s]}>
+
+          <mesh position={[0, 0.15, 0]} material={DEPOSIT_MATS.berryStem}>
+            <cylinderGeometry args={[0.05, 0.08, 0.35, 5]} />
+          </mesh>
+
+          <mesh position={[0, 0.45, 0]} material={b.mat}>
+            <dodecahedronGeometry args={[0.65, 1]} />
+          </mesh>
+          <mesh position={[0.2, 0.35, 0.15]} material={b.mat}>
+            <dodecahedronGeometry args={[0.48, 1]} />
+          </mesh>
+          <mesh position={[-0.2, 0.32, -0.12]} material={b.mat}>
+            <dodecahedronGeometry args={[0.42, 1]} />
+          </mesh>
+
+          <mesh position={[0.38, 0.54, 0.30]} material={DEPOSIT_MATS.berryDark}>
+            <sphereGeometry args={[0.15, 6, 5]} />
+          </mesh>
+          <mesh position={[-0.34, 0.60, -0.28]} material={DEPOSIT_MATS.berryDark}>
+            <sphereGeometry args={[0.14, 6, 5]} />
+          </mesh>
+          <mesh position={[0.06, 0.80, 0.16]} material={DEPOSIT_MATS.berryDark}>
+            <sphereGeometry args={[0.14, 6, 5]} />
+          </mesh>
+          <mesh position={[-0.42, 0.36, 0.18]} material={DEPOSIT_MATS.berryDark}>
+            <sphereGeometry args={[0.14, 6, 5]} />
+          </mesh>
+
+          <mesh position={[-0.36, 0.46, 0.34]} material={DEPOSIT_MATS.berryBlue}>
+            <sphereGeometry args={[0.15, 6, 5]} />
+          </mesh>
+          <mesh position={[0.44, 0.38, -0.22]} material={DEPOSIT_MATS.berryBlue}>
+            <sphereGeometry args={[0.14, 6, 5]} />
+          </mesh>
+          <mesh position={[-0.10, 0.74, -0.22]} material={DEPOSIT_MATS.berryBlue}>
+            <sphereGeometry args={[0.14, 6, 5]} />
+          </mesh>
+
+          <mesh position={[0.14, 0.78, -0.14]} material={DEPOSIT_MATS.berryGlint}>
+            <sphereGeometry args={[0.14, 6, 5]} />
+          </mesh>
+          <mesh position={[0.36, 0.28, 0.22]} material={DEPOSIT_MATS.berryGlint}>
+            <sphereGeometry args={[0.13, 6, 5]} />
+          </mesh>
+        </group>
+      ))}
+
+      <group position={[-0.25, 0, -0.7]}>
+        <mesh position={[0, 0.18, 0]} material={DEPOSIT_MATS.berryStem}>
+          <cylinderGeometry args={[0.26, 0.3, 0.36, 6]} />
+        </mesh>
+        <mesh position={[0, 0.37, 0]} material={DEPOSIT_MATS.mossGreen}>
+          <circleGeometry args={[0.24, 6]} />
+        </mesh>
+      </group>
+
+      <group position={[0.75, 0, 0.2]} rotation={[0, -0.4, 0.1]}>
+        <mesh position={[0, 0.15, 0]} material={DEPOSIT_MATS.basketWicker}>
+          <cylinderGeometry args={[0.24, 0.18, 0.3, 8]} />
+        </mesh>
+        <mesh position={[-0.04, 0.27, 0]} material={DEPOSIT_MATS.berryDark}>
+          <sphereGeometry args={[0.18, 7, 5]} />
+        </mesh>
+        <mesh position={[0.06, 0.28, 0.04]} material={DEPOSIT_MATS.berryBlue}>
+          <sphereGeometry args={[0.16, 7, 5]} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+let berryDepositParts: StaticMeshPart[] | undefined;
+export function BerryDepositModel() {
+  berryDepositParts ??= mergeStaticMeshParts(BerryDepositDetails(), () => { throw new Error('Berry prefab must contain only static primitives'); });
+  return <group dispose={null}>{berryDepositParts.map((part, i) => <mesh key={i} {...part} />)}</group>;
+}
+
 export function ResourceDepositsRenderer({ grid }: { grid?: GridMap }) {
+  const rootRef = useRef<THREE.Group>(null);
+  useHiddenGroupCulling(rootRef);
+  useBuildingMeshBatches(rootRef);
   const resourceDeposits = useGameStore((state) => state.resourceDeposits);
   const selectedEntityId = useGameStore((state) => state.selectedEntityId);
   const setSelectedEntityId = useGameStore((state) => state.setSelectedEntityId);
@@ -369,14 +461,14 @@ export function ResourceDepositsRenderer({ grid }: { grid?: GridMap }) {
   if (!resourceDeposits || resourceDeposits.length === 0) return null;
 
   return (
-    <group dispose={null} visible={!isStrategicView}>
-      {!isStrategicView && resourceDeposits.map((dep) => (
+    <group ref={rootRef} dispose={null} visible={!isStrategicView}>
+      {resourceDeposits.map((dep) => (
         <DepositNodeMemo
           key={dep.id}
           deposit={dep}
           grid={grid}
           isSelected={selectedEntityId === dep.id}
-          onSelect={() => setSelectedEntityId(dep.id)}
+          onSelect={setSelectedEntityId}
         />
       ))}
     </group>
@@ -394,9 +486,10 @@ function DepositNode({
   deposit: ResourceDeposit;
   grid?: GridMap;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: (id: string) => void;
 }) {
   const nodeRef = useRef<THREE.Group>(null);
+  useHiddenGroupCulling(nodeRef);
   const fishRef = useRef<THREE.Group>(null);
   const stagHeadRef = useRef<THREE.Group>(null);
   const doe1HeadRef = useRef<THREE.Group>(null);
@@ -413,6 +506,10 @@ function DepositNode({
   const y = deposit.type === 'fish' ? 0.05 : Math.max(deposit.position[1] ?? 0.1, groundH + 0.02);
 
   useFrame(({ camera, clock }) => {
+    if (useGameStore.getState().isStrategicView) {
+      frameCount.current = 0;
+      return;
+    }
     frameCount.current++;
 
     if (frameCount.current % 15 === 0 || frameCount.current === 1) {
@@ -534,79 +631,7 @@ function DepositNode({
         </group>
       )}
 
-      {deposit.type === 'berries' && (
-        <group>
-          {BERRY_BUSH_CONFIGS.map((b, i) => (
-            <group key={i} position={[b.px, 0, b.pz]} scale={[b.s, b.s, b.s]}>
-
-              <mesh position={[0, 0.15, 0]} material={DEPOSIT_MATS.berryStem}>
-                <cylinderGeometry args={[0.05, 0.08, 0.35, 5]} />
-              </mesh>
-
-              <mesh position={[0, 0.45, 0]} material={b.mat}>
-                <dodecahedronGeometry args={[0.65, 1]} />
-              </mesh>
-              <mesh position={[0.2, 0.35, 0.15]} material={b.mat}>
-                <dodecahedronGeometry args={[0.48, 1]} />
-              </mesh>
-              <mesh position={[-0.2, 0.32, -0.12]} material={b.mat}>
-                <dodecahedronGeometry args={[0.42, 1]} />
-              </mesh>
-
-              <mesh position={[0.38, 0.54, 0.30]} material={DEPOSIT_MATS.berryDark}>
-                <sphereGeometry args={[0.15, 6, 5]} />
-              </mesh>
-              <mesh position={[-0.34, 0.60, -0.28]} material={DEPOSIT_MATS.berryDark}>
-                <sphereGeometry args={[0.14, 6, 5]} />
-              </mesh>
-              <mesh position={[0.06, 0.80, 0.16]} material={DEPOSIT_MATS.berryDark}>
-                <sphereGeometry args={[0.14, 6, 5]} />
-              </mesh>
-              <mesh position={[-0.42, 0.36, 0.18]} material={DEPOSIT_MATS.berryDark}>
-                <sphereGeometry args={[0.14, 6, 5]} />
-              </mesh>
-
-              <mesh position={[-0.36, 0.46, 0.34]} material={DEPOSIT_MATS.berryBlue}>
-                <sphereGeometry args={[0.15, 6, 5]} />
-              </mesh>
-              <mesh position={[0.44, 0.38, -0.22]} material={DEPOSIT_MATS.berryBlue}>
-                <sphereGeometry args={[0.14, 6, 5]} />
-              </mesh>
-              <mesh position={[-0.10, 0.74, -0.22]} material={DEPOSIT_MATS.berryBlue}>
-                <sphereGeometry args={[0.14, 6, 5]} />
-              </mesh>
-
-              <mesh position={[0.14, 0.78, -0.14]} material={DEPOSIT_MATS.berryGlint}>
-                <sphereGeometry args={[0.14, 6, 5]} />
-              </mesh>
-              <mesh position={[0.36, 0.28, 0.22]} material={DEPOSIT_MATS.berryGlint}>
-                <sphereGeometry args={[0.13, 6, 5]} />
-              </mesh>
-            </group>
-          ))}
-
-          <group position={[-0.25, 0, -0.7]}>
-            <mesh position={[0, 0.18, 0]} material={DEPOSIT_MATS.berryStem}>
-              <cylinderGeometry args={[0.26, 0.3, 0.36, 6]} />
-            </mesh>
-            <mesh position={[0, 0.37, 0]} material={DEPOSIT_MATS.mossGreen}>
-              <circleGeometry args={[0.24, 6]} />
-            </mesh>
-          </group>
-
-          <group position={[0.75, 0, 0.2]} rotation={[0, -0.4, 0.1]}>
-            <mesh position={[0, 0.15, 0]} material={DEPOSIT_MATS.basketWicker}>
-              <cylinderGeometry args={[0.24, 0.18, 0.3, 8]} />
-            </mesh>
-            <mesh position={[-0.04, 0.27, 0]} material={DEPOSIT_MATS.berryDark}>
-              <sphereGeometry args={[0.18, 7, 5]} />
-            </mesh>
-            <mesh position={[0.06, 0.28, 0.04]} material={DEPOSIT_MATS.berryBlue}>
-              <sphereGeometry args={[0.16, 7, 5]} />
-            </mesh>
-          </group>
-        </group>
-      )}
+      {deposit.type === 'berries' && <BerryDepositModel />}
 
       {deposit.type === 'stone' && (
         <group>
@@ -771,7 +796,7 @@ function DepositNode({
         position={[0, 0.75, 0]}
         onClick={(e) => {
           e.stopPropagation();
-          onSelect();
+          onSelect(deposit.id);
         }}
       >
         <cylinderGeometry args={[2.0, 2.0, 1.5, 8]} />
@@ -785,66 +810,78 @@ function DepositNode({
         </mesh>
       )}
 
-      {showBadge && (
-        <Html
-          position={[0, badgeY, 0]}
-          center
-          zIndexRange={[10, 0]}
-          style={{
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        >
-          <div
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect();
-            }}
-            className={`group flex flex-col items-center select-none pointer-events-auto cursor-pointer ${
-              isSelected ? 'scale-110 -translate-y-1' : 'opacity-95'
-            }`}
-          >
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-lg ${
-                deposit.isRich
-                  ? 'bg-amber-950 border-2 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.4)]'
-                  : 'bg-stone-950 border border-amber-600/70 shadow-[0_2px_8px_rgba(0,0,0,0.8)]'
-              }`}
-            >
-              {deposit.isRich && (
-                <span className="text-amber-400 text-xs font-bold -ml-0.5" title="Багате родовище">
-                  👑
-                </span>
-              )}
-
-              <span className="text-sm leading-none drop-shadow">{deposit.icon}</span>
-
-              <div className="flex items-baseline gap-0.5 text-xs font-bold tracking-tight">
-                <span className={deposit.currentAmount > 0 ? (deposit.isRich ? 'text-amber-300' : 'text-stone-100') : 'text-red-400'}>
-                  {deposit.currentAmount}
-                </span>
-                <span className="text-[10px] text-stone-400 font-normal">/</span>
-                <span className="text-[10px] text-stone-400 font-normal">{deposit.maxAmount}</span>
-              </div>
-            </div>
-
-            <div className="w-10 h-1 bg-stone-900 rounded-full mt-0.5 overflow-hidden border border-stone-800">
-              <div
-                className={`h-full ${
-                  deposit.isRich ? 'bg-gradient-to-r from-amber-500 to-yellow-300' : 'bg-amber-500'
-                }`}
-                style={{ width: `${fillPercent}%` }}
-              />
-            </div>
-
-            {isSelected && (
-              <div className="mt-1 px-2 py-0.5 bg-stone-950 border border-amber-500/70 rounded text-[10px] font-medium text-amber-200 shadow-xl whitespace-nowrap">
-                {deposit.name}
-              </div>
-            )}
-          </div>
-        </Html>
-      )}
+      {showBadge && <DepositBadge deposit={deposit} isSelected={isSelected} onSelect={onSelect} badgeY={badgeY} fillPercent={fillPercent} />}
     </group>
+  );
+}
+
+function DepositBadge({ deposit, isSelected, onSelect, badgeY, fillPercent }: {
+  deposit: ResourceDeposit;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+  badgeY: number;
+  fillPercent: number;
+}) {
+  const isStrategicView = useGameStore((state) => state.isStrategicView);
+  if (isStrategicView) return null;
+  return (
+    <Html
+      position={[0, badgeY, 0]}
+      center
+      zIndexRange={[10, 0]}
+      style={{
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}
+    >
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(deposit.id);
+        }}
+        className={`group flex flex-col items-center select-none pointer-events-auto cursor-pointer ${
+          isSelected ? 'scale-110 -translate-y-1' : 'opacity-95'
+        }`}
+      >
+        <div
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-lg ${
+            deposit.isRich
+              ? 'bg-amber-950 border-2 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.4)]'
+              : 'bg-stone-950 border border-amber-600/70 shadow-[0_2px_8px_rgba(0,0,0,0.8)]'
+          }`}
+        >
+          {deposit.isRich && (
+            <span className="text-amber-400 text-xs font-bold -ml-0.5" title="Багате родовище">
+              👑
+            </span>
+          )}
+
+          <span className="text-sm leading-none drop-shadow">{deposit.icon}</span>
+
+          <div className="flex items-baseline gap-0.5 text-xs font-bold tracking-tight">
+            <span className={deposit.currentAmount > 0 ? (deposit.isRich ? 'text-amber-300' : 'text-stone-100') : 'text-red-400'}>
+              {deposit.currentAmount}
+            </span>
+            <span className="text-[10px] text-stone-400 font-normal">/</span>
+            <span className="text-[10px] text-stone-400 font-normal">{deposit.maxAmount}</span>
+          </div>
+        </div>
+
+        <div className="w-10 h-1 bg-stone-900 rounded-full mt-0.5 overflow-hidden border border-stone-800">
+          <div
+            className={`h-full ${
+              deposit.isRich ? 'bg-gradient-to-r from-amber-500 to-yellow-300' : 'bg-amber-500'
+            }`}
+            style={{ width: `${fillPercent}%` }}
+          />
+        </div>
+
+        {isSelected && (
+          <div className="mt-1 px-2 py-0.5 bg-stone-950 border border-amber-500/70 rounded text-[10px] font-medium text-amber-200 shadow-xl whitespace-nowrap">
+            {deposit.name}
+          </div>
+        )}
+      </div>
+    </Html>
   );
 }
