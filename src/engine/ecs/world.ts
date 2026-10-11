@@ -61,7 +61,7 @@ export interface GameEntity {
   isLevy?: boolean;
   commandingLordId?: string;
   militiaSquadId?: string;
-  militiaWeapon?: 'spear' | 'sword';
+  militiaWeapon?: 'spear' | 'sword' | 'bow' | 'pike';
   formationIndex?: number;
   hasMule?: boolean;
   isHaulingLog?: boolean;

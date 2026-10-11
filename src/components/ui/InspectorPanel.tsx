@@ -80,7 +80,7 @@ export function InspectorPanel() {
   );
 
   return (
-    <aside className="absolute top-18 right-3 w-88 max-h-[calc(100vh-5.5rem)] overflow-y-auto bg-[#121418]/98 backdrop-blur-xl p-4 rounded-2xl border-2 border-[#5a4830] shadow-[0_15px_40px_rgba(0,0,0,0.95)] flex flex-col gap-3 pointer-events-auto z-30 animate-in fade-in slide-in-from-right-4 duration-200 custom-scrollbar select-none">
+    <aside className="realm-paper-panel absolute top-18 right-3 w-88 max-h-[calc(100vh-5.5rem)] overflow-y-auto bg-[#121418]/98 backdrop-blur-xl p-4 rounded-2xl border-2 border-[#5a4830] shadow-[0_15px_40px_rgba(0,0,0,0.95)] flex flex-col gap-3 pointer-events-auto z-30 animate-in fade-in slide-in-from-right-4 duration-200 custom-scrollbar select-none">
       <div className="flex justify-between items-start border-b border-[#5a4830]/60 pb-3">
         <div className="flex items-center gap-2.5">
           <div

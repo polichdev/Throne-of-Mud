@@ -23,6 +23,10 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
   const togglePause = useGameStore((s) => s.togglePause);
   const season = useGameStore((s) => s.time.season);
   const month = useGameStore((s) => s.time.month);
+  const dayOfMonth = useGameStore((s) => s.time.dayOfMonth);
+  const day = useGameStore((s) => s.time.day);
+  const hour = useGameStore((s) => s.time.hour);
+  const minute = useGameStore((s) => s.time.minute);
   const weather = useGameStore((s) => s.time.weather);
   const nextWeather = useGameStore((s) => s.time.nextWeather);
   const setIsWeatherDebugOpen = useGameStore((s) => s.setIsWeatherDebugOpen);
@@ -49,7 +53,7 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
 
   return (
     <div className="absolute bottom-3 right-3 flex items-center gap-2 pointer-events-auto z-20 select-none">
-      <div className="flex items-center gap-2 bg-[#121418]/95 backdrop-blur-md px-2.5 py-1 rounded-xl border border-[#52422d]/80 shadow-2xl">
+      <div className="realm-paper-panel flex items-center gap-2 bg-[#121418]/95 backdrop-blur-md px-2.5 py-1 rounded-xl border border-[#52422d]/80 shadow-2xl">
         <div
           onClick={() => setIsWeatherDebugOpen(true)}
           className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/80 px-1.5 py-0.5 rounded-lg transition"
@@ -79,6 +83,14 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
           </span>
         </div>
 
+        <div className="w-[1px] h-3.5 bg-[#4a3b26]" />
+
+        <div className="flex items-center gap-2 px-1 whitespace-nowrap text-[11px] font-cinzel font-semibold text-[#c8b58e]" title={`${dict.common.day} ${dayOfMonth || day}, ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`}>
+          <span>{dict.common.day} {dayOfMonth || day}</span>
+          <span className="text-[#77674c]">·</span>
+          <span className="font-mono tabular-nums text-[#d6c6a8]">{String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')}</span>
+        </div>
+
         <button
           onClick={() => setIsWeatherDebugOpen(true)}
           className="p-1 rounded-lg text-amber-400 hover:text-amber-200 hover:bg-amber-950/70 transition border border-transparent hover:border-amber-600/50 ml-0.5 cursor-pointer"
@@ -88,7 +100,7 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
         </button>
       </div>
 
-      <div className="flex items-center gap-1 bg-[#121418]/95 backdrop-blur-md p-1 rounded-xl border border-[#52422d]/80 shadow-2xl">
+      <div className="realm-paper-panel flex items-center gap-1 bg-[#121418]/95 backdrop-blur-md p-1 rounded-xl border border-[#52422d]/80 shadow-2xl">
         <button
           onClick={togglePause}
           className={`p-1.5 rounded-lg transition cursor-pointer ${

@@ -111,6 +111,7 @@ export interface TranslationDictionary {
   };
   settings: {
     title: string;
+    pauseTitle: string;
     audio: string;
     language: string;
     ukrainian: string;

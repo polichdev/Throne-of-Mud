@@ -4,7 +4,7 @@ import { AStar } from '../../pathfinding/AStar';
 import { getBuildingDoorInfo } from '../../buildings/buildingNavigation';
 import { useGameStore } from '../../../store/useGameStore';
 import { distance2D } from '../../../utils/mathUtils';
-import { TRADE_ITEMS_CONFIG } from '../../trade/tradeConfig';
+import { TRADE_ITEMS_CONFIG, getTradePrices } from '../../trade/tradeConfig';
 import { audioManager } from '../../audio/AudioManager';
 
 interface MerchantState {
@@ -508,8 +508,7 @@ export class TradeSystem {
 
         const botStock = botInv[res] || 0;
         const targetStock = rule.targetStock;
-        const buyPrice = rule.customPrice ?? item.baseBuyPrice;
-        const sellPrice = Math.max(1, (rule.customPrice ? Math.floor(rule.customPrice * 0.6) : item.baseSellPrice));
+        const { importPrice: buyPrice, exportPrice: sellPrice } = getTradePrices(item, rule.customPrice);
 
         if (rule.mode === 'import' && botStock < targetStock) {
           const needed = targetStock - botStock;
@@ -551,8 +550,7 @@ export class TradeSystem {
 
       const playerStock = resources[res] || 0;
       const targetStock = rule.targetStock;
-      const buyPrice = rule.customPrice ?? item.baseBuyPrice;
-      const sellPrice = Math.max(1, (rule.customPrice ? Math.floor(rule.customPrice * 0.6) : item.baseSellPrice));
+      const { importPrice: buyPrice, exportPrice: sellPrice } = getTradePrices(item, rule.customPrice);
 
       if (rule.mode === 'import' && playerStock < targetStock) {
         const needed = targetStock - playerStock;

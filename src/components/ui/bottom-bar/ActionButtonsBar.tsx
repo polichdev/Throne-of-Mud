@@ -22,6 +22,8 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
 
   const activeTool = useGameStore((s) => s.activeTool);
   const activeMenuTab = useGameStore((s) => s.activeMenuTab);
+  const viewedRegionId = useGameStore((s) => s.viewedRegionId);
+  const playerRegionId = useGameStore((s) => s.playerRegionId);
   const lordDiplomacy = useGameStore((s) => s.lordDiplomacy);
 
   const unreadLettersCount = React.useMemo(() => {
@@ -37,7 +39,7 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
 
   return (
     <footer className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 pointer-events-auto z-40 select-none">
-      {!activeMenuTab && (
+      {!activeMenuTab && viewedRegionId !== null && viewedRegionId !== playerRegionId && (
         <div className="flex items-center gap-2">
           <div
             onClick={focusTownCenter}
@@ -48,7 +50,7 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-[#14161b]/98 via-[#1c1f28]/98 to-[#14161b]/98 backdrop-blur-md px-3 py-1.5 rounded-2xl border-2 border-[#5a4830] shadow-[0_10px_35px_rgba(0,0,0,0.95)] flex items-center gap-2.5">
+      <div className="realm-action-dock bg-gradient-to-r from-[#14161b]/98 via-[#1c1f28]/98 to-[#14161b]/98 backdrop-blur-md px-3 py-1.5 rounded-2xl border-2 border-[#5a4830] shadow-[0_10px_35px_rgba(0,0,0,0.95)] flex items-center gap-2.5">
         <button
           onClick={() => {
             audioManager.playUIClick();

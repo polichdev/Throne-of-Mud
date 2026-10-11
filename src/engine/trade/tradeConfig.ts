@@ -234,3 +234,9 @@ export const DEFAULT_TRADE_RULES: Record<ResourceType, TradeRule> = (TRADE_ITEMS
 export function getTradeItemMeta(resource: ResourceType): TradeItemMeta | undefined {
   return TRADE_ITEMS_CONFIG.find((i) => i.resource === resource);
 }
+
+export function getTradePrices(item: TradeItemMeta, customPrice?: number) {
+  const exportPrice = customPrice ?? item.baseBuyPrice;
+  const importMargin = Math.max(1, Math.min(10, Math.round(item.baseBuyPrice * 0.6)));
+  return { exportPrice, importPrice: exportPrice + importMargin };
+}

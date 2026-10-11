@@ -20,12 +20,12 @@ export const EventLog: React.FC = React.memo(() => {
         <button
           onClick={() => setIsExpanded(true)}
           title={dict.chronicle.title}
-          className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-b from-[#2d2116] via-[#1c140d] to-[#0e0b07] border-2 border-[#8a6838] hover:border-amber-400 shadow-[0_8px_25px_rgba(0,0,0,0.9)] hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center group cursor-pointer"
+          className="realm-chronicle-trigger relative w-14 h-14 flex items-center justify-center group cursor-pointer transition-transform duration-200 hover:-translate-y-1 active:translate-y-0"
         >
-          <ScrollIcon size={26} className="text-amber-300 group-hover:text-amber-100 transition-colors drop-shadow" />
+          <ScrollIcon size={26} className="realm-chronicle-glyph transition-colors" />
 
           {chronicle.length > 0 && (
-            <span className="absolute -top-1 -right-1 px-2 py-0.5 min-w-[22px] text-[11px] font-mono font-bold leading-none bg-gradient-to-b from-amber-700 to-amber-950 text-amber-200 rounded-full border border-amber-400 shadow-md">
+            <span className="realm-chronicle-count absolute -top-1 -right-1 px-2 py-0.5 min-w-[22px] text-[11px] font-mono font-bold leading-none rounded-full shadow-md">
               {chronicle.length}
             </span>
           )}
@@ -36,7 +36,7 @@ export const EventLog: React.FC = React.memo(() => {
 
   return (
     <div className="absolute bottom-4 left-6 sm:bottom-5 sm:left-7 flex flex-col gap-1 pointer-events-auto z-20 max-w-sm w-96 animate-in fade-in zoom-in-95 duration-200 font-cinzel">
-      <div className="bg-[#12141a]/95 backdrop-blur-md rounded-2xl border-2 border-[#6a4f28] shadow-[0_16px_40px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col">
+      <div className="realm-paper-panel bg-[#12141a]/95 backdrop-blur-md rounded-2xl border-2 border-[#6a4f28] shadow-[0_16px_40px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-[#261b11] via-[#18120b] to-[#12141a] border-b border-[#523d1f]">
           <div className="flex items-center gap-2">
             <ScrollIcon size={16} className="text-amber-400" />

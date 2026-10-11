@@ -147,3 +147,507 @@
   box-shadow: 0 0 14px rgba(245, 158, 11, 0.5), inset 0 1px 2px rgba(254, 240, 138, 0.6);
 }
 
+.game-ui {
+  --hud-ink: #171613;
+  --hud-edge: #6e5b3f;
+  --hud-gold: #aa8d5b;
+  --hud-text: #d1c2a6;
+}
+
+.game-ui button:focus-visible,
+.game-ui input:focus-visible,
+.game-ui select:focus-visible {
+  outline: 2px solid #a58a5d;
+  outline-offset: 2px;
+}
+
+.game-ui .manor-spear-outer {
+  position: relative;
+  clip-path: none;
+  padding: 0 8px;
+  border: 1px solid #78634591;
+  border-radius: 4px 4px 7px 7px;
+  background: #171613e8;
+  box-shadow: 0 3px 12px #0009, inset 0 -1px #aa8e5b66;
+  filter: none;
+}
+.game-ui .realm-resource-ribbon { width: min(62vw, 1120px); max-width: calc(100vw - 300px); }
+.game-ui .manor-spear-outer::before,
+.game-ui .manor-spear-outer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: -2px;
+  width: 7px;
+  pointer-events: none;
+  background: linear-gradient(90deg, #0f0f0e, #6b5435 48%, #29231a);
+  border-bottom: 1px solid #9a8055;
+  border-radius: 0 0 3px 3px;
+}
+.game-ui .manor-spear-outer::before { left: 0; }
+.game-ui .manor-spear-outer::after { right: 0; transform: scaleX(-1); }
+.game-ui .manor-spear-inner {
+  clip-path: none;
+  min-height: 48px;
+  padding: 3px 17px;
+  gap: 9px;
+  background: url('/assets/ui/parchment-grain.svg') repeat,
+    linear-gradient(180deg, #292720ed, #171715f7 75%);
+  color: var(--hud-text);
+  border-bottom: 1px solid #6e583a5c;
+}
+.game-ui .manor-spear-inner > div[class*="font-mono"] { gap: 9px; font-size: 13px; }
+.game-ui .manor-spear-inner svg[class*="w-3"] { width: 14px; height: 14px; }
+.game-ui .manor-spear-inner svg[class*="w-3.5"] { width: 16px; height: 16px; }
+.game-ui .manor-spear-inner span[class*="text-[9px]"] { font-size: 10.5px; }
+.game-ui .manor-spear-inner span[class*="text-[10px]"] { font-size: 11.5px; }
+.game-ui .manor-spear-inner span[class*="text-[11px]"] { font-size: 12.5px; }
+.game-ui .manor-spear-inner span[class*="text-xs"] { font-size: 13px; }
+.game-ui .manor-spear-inner span[class*="text-amber-"],
+.game-ui .manor-spear-inner span[class*="text-slate-"],
+.game-ui .manor-spear-inner span[class*="text-white"] { color: var(--hud-text); }
+.game-ui .manor-spear-inner svg { color: #b29a70; filter: none; }
+.game-ui .manor-spear-inner div[class*="bg-[#4a3b26]"] { background: #78644975; }
+.game-ui .manor-center-plaque {
+  min-height: 48px;
+  background: linear-gradient(#292720, #1c1c19);
+  border: 0;
+  border-left: 1px solid #5c513e;
+  border-right: 1px solid #5c513e;
+  border-radius: 0;
+  box-shadow: inset 0 1px #8c78552b;
+}
+.game-ui .manor-settlement-slot { margin-top: -3px; margin-bottom: -3px; }
+.game-ui .manor-center-plaque:hover { background: linear-gradient(#343028, #24221e); }
+.game-ui .manor-center-plaque span,
+.game-ui .manor-center-plaque input { color: #c4b491 !important; }
+.game-ui .manor-center-plaque span { font-size: 14px; }
+.game-ui .manor-center-plaque input { font-size: 13px; }
+
+.game-ui .realm-action-dock {
+  background: #141513c9;
+  border: 1px solid #7160448c;
+  border-radius: 25px;
+  padding: 3px 6px;
+  gap: 4px;
+  box-shadow: 0 3px 12px #0009, inset 0 1px #b39a6452;
+}
+.game-ui .manor-square-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid #817256;
+  background: radial-gradient(circle at 42% 26%, #393930, #191a18 78%);
+  box-shadow: inset 0 1px #d1bf9b3b, 0 2px 4px #0009;
+}
+.game-ui .manor-square-btn svg { width: 18px; height: 18px; color: #c3b396; stroke-width: 1.65; }
+.game-ui .manor-square-btn:hover {
+  background: radial-gradient(circle at 42% 26%, #4c493d, #22221e 78%);
+  border-color: #baa477;
+  box-shadow: inset 0 1px #e2d1ac55, 0 0 7px #b0965d55;
+}
+.game-ui .manor-square-btn.active {
+  background: radial-gradient(circle at 42% 26%, #655739, #2d271d 78%);
+  border-color: #c4a775;
+  box-shadow: inset 0 1px #e0c58d66, 0 0 7px #a4874c77;
+}
+.game-ui .manor-square-btn.active svg { color: #e2d0a7; }
+.game-ui .manor-circle-btn {
+  background: radial-gradient(circle at 40% 30%, #414036, #191a18 78%);
+  border-color: #867454;
+  color: #d2bea0;
+}
+
+.game-ui .realm-paper-panel,
+.game-ui .realm-building-tray {
+  color: #d5c8af;
+  background: url('/assets/ui/parchment-grain.svg') repeat,
+    linear-gradient(150deg, #292820f7, #171815f8 72%);
+  border: 1px solid #756447;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px #a38a5a45, 0 10px 30px #000c;
+}
+.game-ui .realm-building-tray { padding: 12px 16px 5px; max-width: min(94vw, 955px); }
+.game-ui .realm-paper-panel > div[class*="border-b"]:first-child {
+  background: linear-gradient(90deg, #393329, #26241f 52%, #393329);
+  border-bottom-color: #7b6847;
+}
+.game-ui .realm-paper-panel button[class*="bg-amber-600"],
+.game-ui .realm-paper-panel button[class*="from-amber-600"] {
+  background: linear-gradient(#75603e, #493b29);
+  border-color: #9a8056;
+  color: #eee0bf;
+}
+.game-ui .realm-paper-panel :is(input, select, textarea) {
+  background: #26251f;
+  border-color: #746347;
+  color: #e5d7b9;
+}
+.game-ui .realm-paper-panel [class*="rounded-xl"],
+.game-ui .realm-paper-panel [class*="rounded-2xl"] { border-radius: 5px; }
+.game-ui .realm-large-modal > div[class*="flex-1"] > div:last-child { background: #1d1c19; }
+
+.game-ui .realm-building-tray button[class*="bg-gradient-to-b"] {
+  background: linear-gradient(#5b4930, #30271b);
+  border-radius: 4px;
+}
+.game-ui .realm-building-tray div[class*="bg-[#ded5c2]"] { background: #ab9776; }
+.game-ui .realm-building-tray div[class*="from-[#f0e7d8]"] {
+  background: linear-gradient(#c4ae89, #a58f6e);
+}
+
+.game-ui .realm-chronicle-trigger {
+  border: 1px solid #806f51;
+  border-radius: 50%;
+  color: #cbbb9b;
+  background: radial-gradient(circle at 40% 28%, #414038, #181916 76%);
+  box-shadow: inset 0 1px #d4c09b55, 0 4px 12px #000b;
+}
+.game-ui .realm-chronicle-glyph { color: #c7b596; }
+.game-ui .realm-chronicle-trigger:hover { border-color: #bda375; background: #37352b; }
+.game-ui .realm-chronicle-count {
+  color: #eddbb5;
+  background: #6d3e2b;
+  border: 1px solid #ad8158;
+}
+
+.game-ui .realm-pause-screen {
+  background:
+    radial-gradient(ellipse at 50% 45%, #322b2259 0%, transparent 49%),
+    linear-gradient(90deg, #080907ef, #11120ff0 50%, #080907ef);
+  backdrop-filter: blur(8px) saturate(0.55);
+}
+.game-ui .realm-pause-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: url('/assets/ui/parchment-grain.svg') repeat;
+  opacity: 0.16;
+}
+.game-ui .realm-pause-panel {
+  padding: 32px clamp(12px, 4vw, 40px);
+  border-left: 1px solid #7c694550;
+  border-right: 1px solid #7c694550;
+  background: linear-gradient(90deg, transparent, #1b1b17b8 12%, #1b1b17b8 88%, transparent);
+  box-shadow: 0 20px 65px #0009;
+}
+.game-ui .realm-pause-rule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #ad9466;
+  font-size: 9px;
+  line-height: 1;
+}
+.game-ui .realm-pause-rule::before,
+.game-ui .realm-pause-rule::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(90deg, transparent, #8a724a 70%, #b69b68);
+}
+.game-ui .realm-pause-rule::after { transform: scaleX(-1); }
+.game-ui .realm-pause-choice {
+  min-height: 54px;
+  width: 100%;
+  padding: 12px 20px;
+  border-top: 1px solid #7967467d;
+  border-bottom: 1px solid #4c402cbd;
+  background: linear-gradient(90deg, #24221b77, #343025ad 50%, #24221b77);
+  color: #d5c6a7;
+  font-size: clamp(13px, 1.4vw, 17px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: center;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.game-ui .realm-pause-choice:hover,
+.game-ui .realm-pause-choice:focus-visible {
+  border-color: #ad9568;
+  background: linear-gradient(90deg, #312b1daa, #4c4029d9 50%, #312b1daa);
+  color: #fff0cc;
+}
+.game-ui .realm-pause-choice:disabled { opacity: 0.52; cursor: wait; }
+.game-ui .realm-pause-exit { color: #bca684; font-size: clamp(12px, 1.2vw, 15px); }
+.game-ui .realm-pause-settings > div {
+  background: linear-gradient(150deg, #292820, #1b1b19);
+  border: 1px solid #66563d;
+  border-radius: 3px;
+  box-shadow: inset 0 1px #b9a27324;
+}
+.game-ui .realm-pause-settings input[type='range'] { accent-color: #a98d5e; }
+
+.game-ui .realm-militia-panel,
+.game-ui .realm-trade-modal,
+.game-ui .realm-diplomacy-modal {
+  background: url('/assets/ui/parchment-grain.svg') repeat, linear-gradient(145deg, #2a2923, #171916 76%);
+  border: 1px solid #806b4b;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px #b9a1733b, 0 18px 50px #000e;
+}
+.game-ui .realm-militia-choice {
+  background: linear-gradient(155deg, #302e27, #1e211e);
+  border: 1px solid #6e5d42;
+  border-radius: 4px;
+  box-shadow: inset 0 1px #ae976645;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.game-ui .realm-militia-choice:hover { border-color: #b29a70; background: #38352b; }
+.game-ui .realm-militia-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(142px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+}
+.game-ui .realm-militia-card-body { min-height: 104px; }
+@media (max-width: 900px) {
+  .game-ui .realm-militia-choice { min-width: 0; padding: 8px; }
+  .game-ui .realm-militia-card-body { flex-direction: column; align-items: center; gap: 5px; min-height: 150px; text-align: center; }
+  .game-ui .realm-militia-portrait { width: 50px; height: 74px; }
+  .game-ui .realm-militia-card-body > div:last-child { align-items: center; }
+  .game-ui .realm-militia-card-body > div:last-child > div { justify-content: center; }
+  .game-ui .realm-militia-choice > button { font-size: 10px; line-height: 1.2; }
+}
+.game-ui .realm-militia-manpower {
+  background: #151714ab;
+  border: 1px solid #64553e;
+  border-radius: 3px;
+}
+.game-ui .realm-militia-panel .realm-militia-choice > button {
+  background: linear-gradient(#66583b, #403522);
+  border: 1px solid #ac9160;
+  border-radius: 3px;
+  color: #e9ddbd;
+  box-shadow: inset 0 1px #d1b77e52;
+}
+.game-ui .realm-militia-panel .realm-militia-choice > button:hover:not(:disabled) { background: linear-gradient(#826b46, #514029); }
+.game-ui .realm-militia-panel .realm-militia-choice > button:disabled { opacity: 0.48; cursor: not-allowed; }
+.game-ui .realm-trade-modal > div:first-child,
+.game-ui .realm-diplomacy-modal > div:first-child {
+  background: linear-gradient(90deg, #29261e, #343026 52%, #29261e);
+  border-bottom: 1px solid #8a744e;
+}
+.game-ui .realm-trade-tabs { background: #191b18; }
+.game-ui .realm-trade-modal {
+  width: min(820px, 94vw, 92vh);
+  height: min(820px, 94vw, 92vh);
+  flex-shrink: 0;
+}
+.game-ui .realm-trade-tab { border-radius: 3px; background: transparent; }
+.game-ui .realm-trade-tab.active {
+  background: linear-gradient(#51432d, #332b20);
+  box-shadow: inset 0 1px #c2a8745c;
+}
+.game-ui .realm-trade-ledger { background: #1d1e1a; }
+.game-ui .realm-trade-row {
+  border-radius: 2px;
+  background: #252721bd;
+  border-color: #5d503a9c;
+}
+.game-ui .realm-trade-row:hover { background: #323027; border-color: #96805a; }
+.game-ui .realm-trade-modal select {
+  border-radius: 2px;
+  background: #1b1d19;
+  border-color: #796747;
+  color: #d9c8a7;
+}
+.game-ui .realm-diplomacy-lords { background: #171916; }
+.game-ui .realm-diplomacy-screen {
+  background: #171916;
+}
+.game-ui .realm-diplomacy-screen .realm-diplomacy-modal {
+  border: 0;
+  border-radius: 0;
+  background: #1b1d19;
+  box-shadow: none;
+}
+.game-ui .realm-diplomacy-layout {
+  background: #1b1d19;
+}
+.game-ui .realm-diplomacy-lords { width: clamp(280px, 20vw, 360px); }
+.game-ui .realm-diplomacy-content { padding: clamp(16px, 2.5vw, 38px); }
+.game-ui .realm-diplomacy-lord {
+  border-radius: 3px;
+  background: linear-gradient(145deg, #292b25, #1e211d);
+  border-color: #5f523a;
+}
+.game-ui .realm-diplomacy-lord:hover { background: #33342a; border-color: #a58d61; }
+.game-ui .realm-diplomacy-modal .realm-diplomacy-content,
+.game-ui .realm-diplomacy-modal > div[class*="flex-1"] > div:last-child { background: #1d1e1a; }
+.game-ui .realm-diplomacy-profile {
+  background: linear-gradient(100deg, #363127, #24261f);
+  border-color: #786546;
+  border-radius: 3px;
+}
+.game-ui .realm-diplomacy-actions button {
+  background: linear-gradient(#343126, #24241f);
+  border-color: #776345;
+  border-radius: 3px;
+  color: #ddcba9;
+}
+.game-ui .realm-diplomacy-actions button:hover { background: #443b2c; border-color: #b39a69; }
+.game-ui .realm-diplomacy-letter {
+  background: url('/assets/ui/parchment-grain.svg') repeat, linear-gradient(#c2af8b, #aa956f);
+  border-color: #59492f;
+  border-radius: 3px;
+  width: 100%;
+  max-width: none;
+  align-self: stretch;
+}
+.game-ui .realm-diplomacy-letter button {
+  background: #c9b48b;
+  border-color: #796444;
+  border-radius: 2px;
+}
+.game-ui .realm-diplomacy-letter button:hover { background: #dbc6a0; }
+
+@media (max-width: 840px) {
+  .game-ui .manor-spear-inner { padding-inline: 12px; gap: 6px; }
+  .game-ui .realm-action-dock { gap: 2px; padding: 2px 4px; }
+  .game-ui .manor-square-btn { width: 34px; height: 34px; }
+}
+
+@media (max-width: 700px) {
+  .game-ui .realm-diplomacy-modal > div[class*="flex-1"] { flex-direction: column; }
+  .game-ui .realm-diplomacy-lords { width: 100%; max-height: 128px; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid #655338; }
+  .game-ui .realm-diplomacy-lords > span { display: none; }
+  .game-ui .realm-diplomacy-lords > div { display: flex; flex-direction: row; }
+  .game-ui .realm-diplomacy-lord { min-width: 190px; }
+  .game-ui .realm-trade-ledger { overflow-x: auto; }
+  .game-ui .realm-trade-ledger > div { min-width: 740px; }
+}
+
+.game-ui .realm-newgame-screen {
+  background: #171713;
+  color: #e4d6b7;
+}
+.game-ui .realm-newgame-header,
+.game-ui .realm-newgame-footer {
+  background: linear-gradient(90deg, #211f1a, #302b22 50%, #211f1a);
+  border-color: #6c593b;
+}
+.game-ui .realm-newgame-header { border-bottom: 1px solid #6c593b; }
+.game-ui .realm-newgame-footer { border-top: 1px solid #6c593b; }
+.game-ui .realm-newgame-close,
+.game-ui .realm-newgame-secondary {
+  background: #24231f;
+  border: 1px solid #6e6048;
+  border-radius: 3px;
+  color: #d7c5a4;
+  cursor: pointer;
+}
+.game-ui .realm-newgame-secondary { padding: 9px 14px; font-size: 12px; }
+.game-ui .realm-newgame-close:hover,
+.game-ui .realm-newgame-secondary:hover { border-color: #b79b67; background: #383228; }
+.game-ui .realm-newgame-primary {
+  padding: 10px 17px;
+  background: linear-gradient(#715b38, #473920);
+  border: 1px solid #ac8f5c;
+  border-radius: 3px;
+  color: #f3e3bd;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.game-ui .realm-newgame-primary:hover:not(:disabled) { background: linear-gradient(#887047, #59472a); }
+.game-ui .realm-newgame-primary:disabled { opacity: .45; cursor: not-allowed; }
+.game-ui .realm-newgame-column { background: #1c1d19; }
+.game-ui .realm-newgame-arms { background: #20211c; border-left: 1px solid #67563d; }
+.game-ui .realm-newgame-eyebrow { color: #b59c69; font-size: 10px; font-weight: 700; letter-spacing: .2em; }
+.game-ui .realm-newgame-label { display: block; color: #cbb98e; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+.game-ui .realm-newgame-input,
+.game-ui .realm-newgame-select {
+  width: 100%;
+  padding: 11px 12px;
+  background: #131512;
+  border: 1px solid #716044;
+  border-radius: 3px;
+  color: #efe0bf;
+  outline: none;
+  font: inherit;
+}
+.game-ui .realm-newgame-input:focus,
+.game-ui .realm-newgame-select:focus { border-color: #c1a36a; box-shadow: 0 0 0 2px #b5964830; }
+.game-ui .realm-newgame-select { display: block; font-size: 12px; margin-top: 7px; }
+.game-ui .realm-newgame-portrait,
+.game-ui .realm-newgame-emblem {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #292923;
+  border: 2px solid #65573e;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.game-ui .realm-newgame-portrait { aspect-ratio: 1; overflow: hidden; }
+.game-ui .realm-newgame-portrait > div { width: 100% !important; height: 100% !important; }
+.game-ui .realm-newgame-emblem { min-height: 73px; }
+.game-ui .realm-newgame-portrait:hover,
+.game-ui .realm-newgame-emblem:hover,
+.game-ui .realm-newgame-portrait.selected,
+.game-ui .realm-newgame-emblem.selected { border-color: #d1b374; box-shadow: 0 0 0 1px #8e764c, 0 0 15px #c3a36a25; }
+.game-ui .realm-newgame-selected { position: absolute; bottom: 4px; right: 4px; color: #e7d2a5; background: #171713e8; border: 1px solid #b29865; border-radius: 100%; padding: 3px; }
+.game-ui .realm-newgame-shield-preview { background: linear-gradient(125deg, #302e25, #22241f); border: 1px solid #746245; border-radius: 3px; }
+.game-ui .realm-newgame-color { width: 38px; height: 38px; border: 2px solid #94815b; border-radius: 50%; cursor: pointer; }
+.game-ui .realm-newgame-color.selected { outline: 2px solid #dfc790; outline-offset: 3px; }
+.game-ui .realm-newgame-options { background: #1b1c18; border-right: 1px solid #746144; }
+.game-ui .realm-newgame-section { border-top: 1px solid #605039; padding-top: 16px; margin-bottom: 18px; }
+.game-ui .realm-newgame-section h3 { display: flex; align-items: center; color: #e1cfaa; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 10px; }
+.game-ui .realm-newgame-scenario,
+.game-ui .realm-newgame-region,
+.game-ui .realm-newgame-spawn,
+.game-ui .realm-newgame-count { background: #24251f; border: 1px solid #65583f; border-radius: 3px; color: #d7c9a9; cursor: pointer; }
+.game-ui .realm-newgame-scenario:hover,
+.game-ui .realm-newgame-region:hover,
+.game-ui .realm-newgame-spawn:hover,
+.game-ui .realm-newgame-count:hover { border-color: #a58c5c; }
+.game-ui .realm-newgame-scenario.selected,
+.game-ui .realm-newgame-region.selected,
+.game-ui .realm-newgame-spawn.selected,
+.game-ui .realm-newgame-count.selected { background: #433823; border-color: #c0a067; color: #f1dfb6; box-shadow: inset 0 1px #c8ab6c35; }
+.game-ui .realm-newgame-scenario { padding: 10px 5px; min-height: 70px; font-size: 10px; font-weight: 700; text-align: center; }
+.game-ui .realm-newgame-scenario small { display: block; color: #a99a7a; font-size: 9px; line-height: 1.3; margin-top: 5px; }
+.game-ui .realm-newgame-region { padding: 8px; display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; text-align: left; }
+.game-ui .realm-newgame-spawn { width: 100%; display: flex; align-items: center; gap: 9px; padding: 9px; text-align: left; }
+.game-ui .realm-newgame-spawn-number { display: flex; align-items: center; justify-content: center; min-width: 23px; height: 23px; background: #181914; border: 1px solid #7f6b48; border-radius: 3px; font-size: 11px; }
+.game-ui .realm-newgame-spawn strong { display: block; font-size: 11px; }
+.game-ui .realm-newgame-spawn small { display: block; color: #a8997b; font-size: 9px; line-height: 1.3; margin-top: 3px; }
+.game-ui .realm-newgame-count { padding: 8px 0; font-size: 14px; font-weight: 700; }
+.game-ui .realm-newgame-map { background: radial-gradient(ellipse at center, #353225, #171813 80%); }
+.game-ui .realm-setup-map-canvas { display: block; width: min(100%, calc((100vh - 180px) * 1.58)); height: auto; aspect-ratio: 30 / 19; max-height: 100%; border: 7px solid #63543d; border-radius: 2px; box-shadow: 0 18px 45px #000b, 0 0 0 1px #aa9978; }
+.game-ui .realm-newgame-map-title,
+.game-ui .realm-newgame-map-hint { padding: 6px 10px; background: #1c1b16e8; border: 1px solid #84704d; border-radius: 3px; color: #dfc893; font-size: 10px; font-weight: 700; }
+.game-ui .realm-player-widget {
+  display: flex;
+  align-items: center;
+  width: 312px;
+  height: 104px;
+  padding: 0 12px 0 0;
+  background: linear-gradient(90deg, #171815ad, #1d1e19a6);
+  border: 1px solid #665b485c;
+  border-radius: 52px 4px 4px 52px;
+  box-shadow: 0 6px 18px #0005;
+}
+.game-ui .realm-player-avatar { transform: translateX(-5px); }
+.game-ui .realm-player-portrait { width: 104px; height: 104px; border: 3px solid #af9664; box-shadow: 0 0 0 3px #1a1a16, 0 4px 12px #000b; }
+.game-ui .realm-player-portrait > div { width: 100% !important; height: 100% !important; }
+.game-ui .realm-avatar-shield { filter: drop-shadow(0 3px 5px #000c); }
+.game-ui .realm-player-card-details { position: relative; flex: 1; align-self: stretch; align-content: center; font-size: 15px; column-gap: 15px; row-gap: 10px; text-shadow: 0 1px 2px #000c; }
+.game-ui .realm-player-card-details::after { content: ''; position: absolute; pointer-events: none; background: #bca77c52; height: 1px; left: 20px; right: 3px; top: 50%; }
+.game-ui .realm-player-card-details svg { width: 19px; height: 19px; color: #bca77c; flex-shrink: 0; }
+@media (max-width: 1100px) {
+  .game-ui .realm-resource-ribbon { width: calc(100vw - 150px); max-width: none; margin-right: 110px; }
+  .game-ui .realm-player-widget { width: 94px; padding-right: 4px; }
+  .game-ui .realm-player-card-details { display: none; }
+}
+@media (max-width: 1023px) {
+  .game-ui .realm-newgame-arms { border-left: 0; border-top: 1px solid #67563d; }
+  .game-ui .realm-newgame-options { width: 100%; max-height: 40vh; border-right: 0; border-bottom: 1px solid #746144; }
+  .game-ui .realm-setup-map-canvas { width: min(100%, 75vh); }
+}
+

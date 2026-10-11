@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useGameStore } from '../../../store/useGameStore';
 import { useTranslation } from '../../../i18n';
-import { TRADE_ITEMS_CONFIG, type TradeItemMeta } from '../../../engine/trade/tradeConfig';
+import { TRADE_ITEMS_CONFIG, getTradePrices, type TradeItemMeta } from '../../../engine/trade/tradeConfig';
 import type { TradeCategory, TradeMode, ResourceType } from '../../../types/game';
 import {
   CrossCloseIcon,
@@ -14,9 +14,11 @@ import {
   AleIcon,
   WeaponsIcon,
   ScalesIcon,
+  HammerIcon,
+  StorageIcon,
 } from '../MedievalIcons';
 import { audioManager } from '../../../engine/audio/AudioManager';
-import { Plus, Minus, ArrowRight, Check, Package, Sparkles } from 'lucide-react';
+import { Plus, Minus, ArrowRight } from 'lucide-react';
 
 interface TradePostModalProps {
   onClose: () => void;
@@ -28,18 +30,16 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
   const resources = useGameStore((s) => s.resources);
   const tradeRules = useGameStore((s) => s.tradeRules);
   const setTradeRule = useGameStore((s) => s.setTradeRule);
-  const caravanStatus = useGameStore((s) => s.caravanStatus);
 
   const [activeCategory, setActiveCategory] = useState<TradeCategory | 'all'>('all');
-  const [justSaved, setJustSaved] = useState(false);
 
-  const categories: Array<{ id: TradeCategory | 'all'; label: string; icon: string }> = [
-    { id: 'all', label: dict.tradePost.categories.all, icon: '📦' },
-    { id: 'construction', label: dict.tradePost.categories.construction, icon: '🔨' },
-    { id: 'agriculture', label: dict.tradePost.categories.agriculture, icon: '🌾' },
-    { id: 'food', label: dict.tradePost.categories.food, icon: '🍞' },
-    { id: 'materials', label: dict.tradePost.categories.materials, icon: '🪓' },
-    { id: 'military', label: dict.tradePost.categories.military, icon: '⚔️' },
+  const categories: Array<{ id: TradeCategory | 'all'; label: string; icon: React.ReactNode }> = [
+    { id: 'all', label: dict.tradePost.categories.all, icon: <StorageIcon className="w-4 h-4" /> },
+    { id: 'construction', label: dict.tradePost.categories.construction, icon: <HammerIcon className="w-4 h-4" /> },
+    { id: 'agriculture', label: dict.tradePost.categories.agriculture, icon: <WheatIcon className="w-4 h-4" /> },
+    { id: 'food', label: dict.tradePost.categories.food, icon: <BreadIcon className="w-4 h-4" /> },
+    { id: 'materials', label: dict.tradePost.categories.materials, icon: <WoodIcon className="w-4 h-4" /> },
+    { id: 'military', label: dict.tradePost.categories.military, icon: <WeaponsIcon className="w-4 h-4" /> },
   ];
 
   const filteredItems = useMemo(() => {
@@ -66,12 +66,6 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
     setTradeRule(item.resource, { customPrice: nextVal });
   };
 
-  const handleSave = () => {
-    audioManager.playUIClick();
-    setJustSaved(true);
-    setTimeout(() => setJustSaved(false), 2000);
-  };
-
   const renderResourceIcon = (res: ResourceType) => {
     switch (res) {
       case 'wood':
@@ -92,13 +86,13 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
       case 'iron':
         return <WeaponsIcon className="w-4 h-4 text-rose-400" />;
       default:
-        return <Package className="w-4 h-4 text-amber-200" />;
+        return <StorageIcon className="w-4 h-4 text-amber-200" />;
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 pointer-events-none select-none animate-in fade-in duration-150">
-      <div className="relative w-full max-w-[620px] max-h-[75vh] bg-[#14161b]/95 border-2 border-[#5a4830]/90 rounded-xl shadow-[0_15px_40px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden text-slate-200 pointer-events-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/45 backdrop-blur-[2px] pointer-events-auto select-none animate-in fade-in duration-150">
+      <div className="realm-paper-panel realm-trade-modal relative shadow-[0_15px_40px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden text-slate-200 pointer-events-auto">
         <div className="relative flex items-center justify-between px-4 py-2.5 border-b border-[#5a4830]/60 bg-gradient-to-r from-stone-900 via-[#1c1813] to-stone-900 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-amber-950/80 border border-amber-600/70 flex items-center justify-center text-amber-300 shadow-md">
@@ -109,13 +103,10 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                 <h2 className="font-cinzel font-bold text-sm text-amber-200 tracking-wider">
                   {dict.tradePost.title}
                 </h2>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-950/60 border border-amber-700/50 text-amber-300 font-mono font-bold">
+                <span className="text-[10px] px-1.5 py-0.5 border-l border-[#7c6847] pl-2 text-[#bba782] font-cinzel font-bold">
                   {settlementName}
                 </span>
               </div>
-              <p className="text-[10px] text-stone-400">
-                {dict.tradePost.subtitle}
-              </p>
             </div>
           </div>
 
@@ -123,7 +114,6 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/50 border border-amber-900/60 text-amber-300 font-mono font-bold text-xs">
               <GoldIcon className="w-3.5 h-3.5 text-yellow-400" />
               <span>{resources.gold || 0}</span>
-              <span className="text-[9px] text-stone-400 uppercase">{dict.common.gold}</span>
             </div>
 
             <button
@@ -132,14 +122,14 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                 onClose();
               }}
               className="p-1 rounded-md bg-stone-800/80 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-600/50 transition cursor-pointer"
-              title="Закрити"
+              title={dict.common.close}
             >
               <CrossCloseIcon className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 px-3 py-1.5 bg-black/40 border-b border-stone-800/80 overflow-x-auto custom-scrollbar shrink-0">
+        <div className="realm-trade-tabs flex items-center gap-1 px-3 py-2 border-b border-[#66563c] overflow-x-auto custom-scrollbar shrink-0">
           {categories.map((cat) => {
             const isActive = activeCategory === cat.id;
             return (
@@ -149,26 +139,27 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                   audioManager.playUIClick();
                   setActiveCategory(cat.id);
                 }}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer border shrink-0 ${
+                className={`realm-trade-tab px-2.5 py-1.5 text-[11px] font-cinzel font-semibold flex items-center gap-1.5 transition cursor-pointer border shrink-0 ${
                   isActive
-                    ? 'bg-amber-950/80 border-amber-500/80 text-amber-200 shadow-sm scale-102'
-                    : 'bg-stone-900/60 hover:bg-stone-800/80 border-stone-800 text-stone-400 hover:text-stone-200'
+                    ? 'active border-[#a58a5e] text-[#ead9b5]'
+                    : 'border-transparent text-[#ab9c81] hover:text-[#ead9b5]'
                 }`}
               >
-                <span>{cat.icon}</span>
+                {cat.icon}
                 <span>{cat.label}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 py-2.5 custom-scrollbar flex flex-col gap-1.5">
+        <div className="realm-trade-ledger flex-1 overflow-y-auto px-3 py-2.5 custom-scrollbar flex flex-col gap-1.5">
           <div className="grid grid-cols-12 text-[10px] font-bold text-stone-400 uppercase tracking-wider px-2.5 py-1 bg-black/30 rounded border border-stone-800/60">
-            <span className="col-span-3">{dict.tradePost.headers.tradeRule}</span>
+            <span className="col-span-2">{dict.tradePost.headers.tradeRule}</span>
             <span className="col-span-3">{dict.tradePost.headers.item}</span>
-            <span className="col-span-2 text-center">{dict.tradePost.headers.currentStock}</span>
+            <span className="col-span-1 text-center">{dict.tradePost.headers.currentStock}</span>
             <span className="col-span-2 text-center">{dict.tradePost.headers.targetStock}</span>
-            <span className="col-span-2 text-right">{dict.tradePost.headers.unitPrice}</span>
+            <span className="col-span-2 text-center">{language === 'uk' ? 'Експорт' : 'Export'}</span>
+            <span className="col-span-2 text-center">{language === 'uk' ? 'Імпорт' : 'Import'}</span>
           </div>
 
           {filteredItems.map((item) => {
@@ -180,7 +171,7 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
             };
             const currentStock = resources[item.resource] || 0;
             const targetStock = rule.targetStock;
-            const price = rule.customPrice ?? item.baseBuyPrice;
+            const { exportPrice, importPrice } = getTradePrices(item, rule.customPrice);
 
             const isImport = rule.mode === 'import';
             const isExport = rule.mode === 'export';
@@ -189,7 +180,7 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
             return (
               <div
                 key={item.resource}
-                className={`grid grid-cols-12 items-center px-2.5 py-1.5 rounded-lg border transition-all ${
+                className={`realm-trade-row grid grid-cols-12 items-center px-2.5 py-2 border transition-all ${
                   isImport
                     ? 'bg-emerald-950/25 border-emerald-800/50 hover:bg-emerald-950/40'
                     : isExport
@@ -197,7 +188,7 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                     : 'bg-stone-900/40 border-stone-800/70 hover:bg-stone-900/70'
                 }`}
               >
-                <div className="col-span-3 flex items-center pr-1">
+                <div className="col-span-2 flex items-center pr-1">
                   <select
                     value={rule.mode}
                     onChange={(e) => handleModeChange(item.resource, e.target.value as TradeMode)}
@@ -223,13 +214,10 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                     <span className="text-[11px] font-bold text-stone-200 truncate leading-tight">
                       {language === 'uk' ? item.nameUk : item.nameEn}
                     </span>
-                    <span className="text-[8px] text-stone-500 uppercase tracking-wider leading-none">
-                      {item.category}
-                    </span>
                   </div>
                 </div>
 
-                <div className="col-span-2 flex items-center justify-center gap-1 font-mono text-[11px]">
+                <div className="col-span-1 flex items-center justify-center gap-1 font-mono text-[11px]">
                   <span
                     className={`font-bold ${
                       currentStock === 0
@@ -274,7 +262,7 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                   )}
                 </div>
 
-                <div className="col-span-2 flex items-center justify-end">
+                <div className="col-span-2 flex items-center justify-center">
                   <div className="flex items-center bg-black/40 px-1 py-0.5 rounded border border-stone-700/50">
                     <button
                       onClick={() => handlePriceChange(item, -1)}
@@ -284,7 +272,7 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                       <Minus className="w-2.5 h-2.5" />
                     </button>
                     <span className="font-mono text-[11px] font-bold text-amber-300 flex items-center gap-0.5 px-0.5 min-w-[1.6rem] justify-center">
-                      {price}
+                      {exportPrice}
                       <GoldIcon className="w-2.5 h-2.5 text-yellow-400" />
                     </span>
                     <button
@@ -296,53 +284,15 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                     </button>
                   </div>
                 </div>
+                <div className="col-span-2 flex items-center justify-center gap-1 font-mono text-[11px] font-bold text-[#c7d8b5]" title={language === 'uk' ? 'Ціна купівлі в купця' : 'Price paid to the merchant'}>
+                  <span>{importPrice}</span>
+                  <GoldIcon className="w-2.5 h-2.5 text-yellow-400" />
+                </div>
               </div>
             );
           })}
         </div>
 
-        <div className="px-4 py-2 border-t border-[#5a4830]/60 bg-gradient-to-r from-stone-900 via-stone-950 to-stone-900 flex items-center justify-between gap-2 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-amber-950/60 border border-amber-700/60 flex items-center justify-center text-sm shrink-0">
-              {caravanStatus.state === 'trading' ? '🪙' : caravanStatus.state === 'approaching' ? '🐴' : '📜'}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-amber-300 truncate">
-                  {caravanStatus.merchantName || 'Мандрівний купець'}
-                </span>
-                <span
-                  className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
-                    caravanStatus.state === 'trading'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-600 animate-pulse'
-                      : caravanStatus.state === 'approaching'
-                      ? 'bg-amber-950 text-amber-300 border border-amber-600'
-                      : 'bg-stone-900 text-stone-400 border border-stone-700'
-                  }`}
-                >
-                  {caravanStatus.state === 'trading'
-                    ? dict.tradePost.caravan.atPost
-                    : caravanStatus.state === 'approaching'
-                    ? dict.tradePost.caravan.approaching
-                    : dict.tradePost.caravan.waiting}
-                </span>
-              </div>
-              <span className="text-[9px] text-stone-400 truncate">
-                {caravanStatus.lastTradeSummary
-                  ? `${language === 'uk' ? 'Угода:' : 'Trade:'} ${caravanStatus.lastTradeSummary}`
-                  : `${dict.tradePost.caravan.nextScheduled} (${caravanStatus.nextArrivalHour ?? 12}:${String(caravanStatus.nextArrivalMinute ?? 0).padStart(2, '0')})`}
-              </span>
-            </div>
-          </div>
-
-          <button
-            onClick={handleSave}
-            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold text-[11px] shadow-md flex items-center gap-1 transition cursor-pointer active:scale-98 shrink-0"
-          >
-            {justSaved ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Sparkles className="w-3.5 h-3.5" />}
-            <span>{justSaved ? (language === 'uk' ? 'Збережено!' : 'Saved!') : dict.tradePost.saveSettings}</span>
-          </button>
-        </div>
       </div>
     </div>
   );

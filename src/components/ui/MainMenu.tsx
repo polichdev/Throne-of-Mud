@@ -341,12 +341,14 @@ export function MainMenu({ grid }: MainMenuProps) {
         </div>
       )}
 
-      <NewGameSetupModal
-        isOpen={showSetupModal}
-        onClose={() => setShowSetupModal(false)}
-        onConfirm={handleSetupConfirm}
-        grid={grid}
-      />
+      {showSetupModal && (
+        <NewGameSetupModal
+          isOpen={true}
+          onClose={() => setShowSetupModal(false)}
+          onConfirm={handleSetupConfirm}
+          grid={grid}
+        />
+      )}
 
     </div>
   );

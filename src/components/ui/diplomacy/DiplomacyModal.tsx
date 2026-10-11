@@ -30,8 +30,6 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
   const isUkr = language === 'uk';
 
   const lordDiplomacy = useGameStore((s) => s.lordDiplomacy);
-  const selectedDiplomacyLordId = useGameStore((s) => s.selectedDiplomacyLordId);
-  const setSelectedDiplomacyLordId = useGameStore((s) => s.setSelectedDiplomacyLordId);
   const sendDiplomaticReply = useGameStore((s) => s.sendDiplomaticReply);
   const offerPeace = useGameStore((s) => s.offerPeace);
   const toggleRightOfPassage = useGameStore((s) => s.toggleRightOfPassage);
@@ -40,6 +38,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
   const influence = useGameStore((s) => s.influence);
 
   const [confirmWar, setConfirmWar] = useState(false);
+  const [selectedLordId, setSelectedLordId] = useState<string | null>(null);
 
   const realBotLords = useMemo(() => {
     return ['bot-1', 'bot-2', 'bot-3']
@@ -48,15 +47,12 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
   }, [lordDiplomacy]);
 
   const activeLord = useMemo(() => {
-    if (selectedDiplomacyLordId && lordDiplomacy[selectedDiplomacyLordId]) {
-      return lordDiplomacy[selectedDiplomacyLordId];
-    }
-    return realBotLords[0] || null;
-  }, [selectedDiplomacyLordId, lordDiplomacy, realBotLords]);
+    return selectedLordId ? lordDiplomacy[selectedLordId] ?? null : null;
+  }, [selectedLordId, lordDiplomacy]);
 
   const handleSelectLord = (id: string) => {
     audioManager.playUIClick();
-    setSelectedDiplomacyLordId(id);
+    setSelectedLordId(id);
     setConfirmWar(false);
   };
 
@@ -114,8 +110,8 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/45 pointer-events-auto select-none font-sans">
-      <div className="relative w-[960px] max-w-[96vw] h-[640px] max-h-[92vh] bg-[#14161f] rounded-2xl border-2 border-[#5a4830] shadow-[0_15px_50px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden text-stone-200">
+    <div className="realm-diplomacy-screen fixed inset-0 z-[100] pointer-events-auto select-none font-sans" role="dialog" aria-modal="true" aria-label={isUkr ? 'Дипломатія' : 'Diplomacy'}>
+      <div className="realm-paper-panel realm-large-modal realm-diplomacy-modal relative w-full h-full flex flex-col overflow-hidden text-stone-200">
         
         <div className="flex items-center justify-between px-5 py-3 border-b border-[#3d3222] bg-[#11131a]">
           <div className="flex items-center gap-2.5">
@@ -124,7 +120,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
             </div>
             <div>
               <h2 className="text-sm font-cinzel font-bold text-amber-100 tracking-wider">
-                {isUkr ? 'ДИПЛОМАТІЯ ТА КОРОЛІВСЬКІ ГРАМОТИ' : 'DIPLOMACY & ROYAL LETTERS'}
+                {isUkr ? 'ДИПЛОМАТІЯ' : 'DIPLOMACY'}
               </h2>
             </div>
           </div>
@@ -148,9 +144,9 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
           </div>
         </div>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="realm-diplomacy-layout flex-1 min-h-0 flex overflow-hidden w-full">
           
-          <div className="w-[280px] shrink-0 border-r border-[#382f23] bg-[#0e1017] flex flex-col p-3 gap-2">
+          <div className="realm-diplomacy-lords shrink-0 border-r border-[#655338] flex flex-col p-4 gap-3 overflow-y-auto">
             <span className="text-[10px] font-cinzel font-bold text-amber-300/80 px-1 tracking-wider uppercase">
               {isUkr ? 'Правителі на карті' : 'Lords on Map'}
             </span>
@@ -165,19 +161,19 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                   <button
                     key={lord.lordId}
                     onClick={() => handleSelectLord(lord.lordId)}
-                    className={`w-full text-left p-2 rounded-xl border transition-all flex items-center gap-3 cursor-pointer relative ${
+                    className={`realm-diplomacy-lord w-full text-left p-3 border transition-all flex items-center gap-3 cursor-pointer relative ${
                       isSelected
                         ? 'bg-[#201d18] border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
                         : 'bg-[#151722] border-[#2e261d] hover:border-amber-700/80 hover:bg-[#1a1c28]'
                     }`}
                   >
                     <div className="shrink-0 rounded-lg overflow-hidden border border-amber-500/40 shadow">
-                      {renderLordAvatar(lord.lordId, 44)}
+                      {renderLordAvatar(lord.lordId, 56)}
                     </div>
 
                     <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-cinzel font-bold text-stone-100 truncate">
+                        <span className="text-sm font-cinzel font-bold text-stone-100 truncate">
                           {lord.lordName}
                         </span>
                         {unread && (
@@ -185,11 +181,11 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                         )}
                       </div>
 
-                      <span className="text-[10px] text-amber-300/80 truncate">
+                      <span className="text-xs text-amber-300/80 truncate">
                         {lord.regionName}
                       </span>
 
-                      <div className="flex items-center justify-between mt-1 text-[10px]">
+                      <div className="flex items-center justify-between mt-1 text-xs">
                         <span className={`font-semibold ${op.color}`}>
                           {op.text}
                         </span>
@@ -202,10 +198,10 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col overflow-y-auto bg-[#13151e] p-5 gap-4">
+          <div className="realm-diplomacy-content flex-1 flex flex-col overflow-y-auto p-5 gap-4">
             {activeLord ? (
               <>
-                <div className="flex items-center justify-between bg-[#191b26] p-3.5 rounded-xl border border-[#3d3222] shadow">
+                <div className="realm-diplomacy-profile flex items-center justify-between p-3.5 border shadow">
                   <div className="flex items-center gap-3.5">
                     <div className="shrink-0 rounded-xl overflow-hidden border-2 border-amber-400 shadow-md">
                       {renderLordAvatar(activeLord.lordId, 56)}
@@ -221,7 +217,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                         {getStatusBadge(activeLord.status, activeLord.hasRightOfPassage)}
                       </div>
                       <p className="text-[11px] text-stone-400 mt-0.5">
-                        {activeLord.lordTitle} • {isUkr ? 'Відносини:' : 'Attitude:'}{' '}
+                        {activeLord.lordTitle} ·{' '}
                         <span className={`font-bold ${getOpinionInfo(activeLord.opinion).color}`}>
                           {activeLord.opinion > 0 ? `+${activeLord.opinion}` : activeLord.opinion} ({getOpinionInfo(activeLord.opinion).text})
                         </span>
@@ -230,7 +226,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="realm-diplomacy-actions grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <button
                     onClick={() => offerPeace(activeLord.lordId)}
                     className="py-2.5 px-3 rounded-xl border transition-all flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-[#181a24] hover:bg-[#1f2332] border-emerald-700/60 hover:border-emerald-400 shadow group"
@@ -311,7 +307,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                 </div>
 
                 {currentLetter && (
-                  <div className="bg-[#f5eedc] text-[#2c2219] rounded-xl p-5 border-2 border-[#8c734b] shadow-[0_8px_25px_rgba(0,0,0,0.5)] flex flex-col gap-3 font-serif">
+                  <div className="realm-diplomacy-letter text-[#2c2219] p-5 border shadow-[0_8px_25px_rgba(0,0,0,0.5)] flex flex-col gap-3 font-serif">
                     <div className="flex items-center justify-between border-b border-[#a89066] pb-2">
                       <div className="flex items-center gap-2">
                         <WaxSealStampIcon className="w-5 h-5 text-[#8c2222]" />

@@ -16,6 +16,8 @@ export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
       if (gameMode !== 'playing') return;
 
+      if ((useGameStore.getState().activeMenuTab === 'settings' || useGameStore.getState().activeMenuTab === 'codex') && e.key !== 'Escape') return;
+
       if (e.code === 'Space') {
         e.preventDefault();
         togglePause();

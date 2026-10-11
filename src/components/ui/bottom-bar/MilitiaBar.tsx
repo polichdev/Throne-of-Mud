@@ -8,9 +8,11 @@ import type { MilitiaUnitType } from '../../../types/game';
 import {
   SpearmanIllustration,
   SwordsmanIllustration,
+  ArcherIllustration,
+  PikemanIllustration,
   AddSquadCardIllustration,
 } from './MilitiaCardIllustrations';
-import { WeaponsIcon } from '../MedievalIcons';
+import { WeaponsIcon, PeasantsIcon, ClarionHornIcon, CompassIcon, CrossCloseIcon, MedievalInfoIcon } from '../MedievalIcons';
 
 interface MilitiaBarProps {
   grid: GridMap;
@@ -37,24 +39,15 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
 
   const [showFormPanel, setShowFormPanel] = useState<boolean>(() => militiaSquads.length === 0);
 
-  const { idlePeasantsCount, workingPeasantsCount, totalAvailableCount } = useMemo(() => {
-    let idle = 0;
-    let working = 0;
-    for (const c of characterEntities) {
-      if (c.isCharacter && c.characterClass === 'peasant' && (!c.factionId || c.factionId === 'player') && !c.isLevy) {
-        if (!c.workBuildingId) {
-          idle++;
-        } else {
-          working++;
-        }
-      }
+  let idlePeasantsCount = 0;
+  let workingPeasantsCount = 0;
+  for (const c of characterEntities) {
+    if (c.isCharacter && c.characterClass === 'peasant' && (!c.factionId || c.factionId === 'player') && !c.isLevy) {
+      if (!c.workBuildingId) idlePeasantsCount++;
+      else workingPeasantsCount++;
     }
-    return {
-      idlePeasantsCount: idle,
-      workingPeasantsCount: working,
-      totalAvailableCount: idle + working,
-    };
-  }, [militiaSquads]);
+  }
+  const totalAvailableCount = idlePeasantsCount + workingPeasantsCount;
 
   const selectedSquad = useMemo(() => {
     return militiaSquads.find((sq) => sq.id === selectedMilitiaSquadId) || null;
@@ -100,10 +93,10 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
   }, [selectedSquad, setCameraFocusTarget]);
 
   return (
-    <div className="absolute bottom-[72px] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-auto z-40 select-none">
+    <div className="absolute bottom-[72px] left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-auto z-40 select-none max-h-[calc(100vh-92px)] max-w-[98vw] overflow-y-auto">
       {selectedSquad && (
         <div className="flex flex-col items-center gap-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#14161b]/95 backdrop-blur-md rounded-xl border border-[#5a4830] shadow-[0_8px_25px_rgba(0,0,0,0.85)]">
+          <div className="realm-paper-panel flex items-center gap-1.5 px-3 py-1.5 shadow-[0_8px_25px_rgba(0,0,0,0.85)]">
             <span className="text-[11px] font-cinzel font-bold text-amber-300 pr-2 border-r border-amber-900/60">
               {selectedSquad.name}
             </span>
@@ -113,7 +106,7 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
               className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-950/40 hover:bg-amber-900/70 border border-amber-700/60 hover:border-amber-400 rounded-lg text-xs font-semibold text-amber-200 transition cursor-pointer"
               title={isUkr ? 'Наказати зібратися у шеренгу' : 'Order squad to assemble in formation'}
             >
-              <span>🚩</span>
+              <ClarionHornIcon className="w-4 h-4" />
               <span>{isUkr ? 'До строю' : 'Rally'}</span>
             </button>
 
@@ -122,7 +115,7 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
               className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-850 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 rounded-lg text-xs font-semibold text-slate-200 transition cursor-pointer"
               title={isUkr ? 'Показати загін на карті' : 'Center camera on squad'}
             >
-              <span>🎯</span>
+              <CompassIcon className="w-4 h-4" />
               <span>{isUkr ? 'Огляд' : 'Focus'}</span>
             </button>
 
@@ -131,15 +124,15 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
               className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-700/70 hover:border-rose-400 rounded-lg text-xs font-semibold text-rose-200 transition cursor-pointer"
               title={isUkr ? 'Розпустити загін та повернути селян до роботи' : 'Disband squad and return peasants to work'}
             >
-              <span>🛑</span>
+              <CrossCloseIcon className="w-4 h-4" />
               <span>{isUkr ? 'Розпустити' : 'Disband'}</span>
             </button>
           </div>
 
-          <div className="px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-amber-500/20 text-[10px] text-amber-300/90 font-medium">
+          <div className="realm-paper-panel px-2.5 py-0.5 text-[10px] text-amber-300/90 font-medium">
             {isUkr
-              ? '💡 ЛКМ — відправити загін у точку призначення • ПКМ — скасувати'
-              : '💡 Left Click — march squad to destination • Right Click — cancel'}
+              ? 'ЛКМ — рух загону · ПКМ — скасувати'
+              : 'Left click — march · Right click — cancel'}
           </div>
         </div>
       )}
@@ -153,26 +146,24 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
             onClick={() => syncMilitiaSquadsFromWorld()}
             className="px-2 py-0.5 bg-amber-950 hover:bg-amber-900 border border-amber-600 rounded text-xs text-amber-200 cursor-pointer"
           >
-            🔄 {isUkr ? 'Синхронізувати' : 'Sync'}
+            {isUkr ? 'Оновити' : 'Refresh'}
           </button>
           <button
             onClick={() => disbandMilitiaSquad('all')}
             className="px-2 py-0.5 bg-rose-950 hover:bg-rose-900 border border-rose-600 rounded text-xs text-rose-200 cursor-pointer"
           >
-            🛑 {isUkr ? 'Розпустити всіх' : 'Disband all'}
+            {isUkr ? 'Розпустити всіх' : 'Disband all'}
           </button>
         </div>
       )}
 
       {showFormPanel && (
-        <div className="w-[520px] max-w-[94vw] bg-gradient-to-b from-[#1c1f28]/98 via-[#15171e]/98 to-[#101217]/98 backdrop-blur-md rounded-2xl border-2 border-[#5a4830] shadow-[0_15px_45px_rgba(0,0,0,0.95)] p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150">
+        <div className="realm-paper-panel realm-militia-panel w-[1040px] max-w-[98vw] shrink-0 backdrop-blur-md shadow-[0_15px_45px_rgba(0,0,0,0.95)] p-4 flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-center justify-between border-b border-[#52422d]/60 pb-2">
             <div className="flex items-center gap-2">
+              <ClarionHornIcon className="w-5 h-5 text-[#bea777]" />
               <span className="text-base font-cinzel font-bold text-amber-200 tracking-wider">
                 {isUkr ? 'Скликати ополчення' : 'Form Militia'}
-              </span>
-              <span className="text-[10px] bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded text-amber-300 font-mono">
-                {isUkr ? 'Макс. 5 осіб у загоні' : 'Max 5 per squad'}
               </span>
             </div>
             <button
@@ -182,28 +173,28 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
               }}
               className="w-6 h-6 rounded flex items-center justify-center text-stone-400 hover:text-amber-200 hover:bg-white/5 transition cursor-pointer"
             >
-              ✕
+              <CrossCloseIcon className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-[#181a22] border border-[#52422d]/80 rounded-xl p-3 flex flex-col justify-between hover:border-amber-400 transition group">
-              <div className="flex gap-3 items-start">
-                <div className="w-16 h-24 rounded-lg overflow-hidden border border-[#5a4830] shadow shrink-0">
+          <div className="realm-militia-grid">
+            <div className="realm-militia-choice p-3 flex flex-col justify-between group">
+              <div className="realm-militia-card-body flex gap-3 items-start">
+                <div className="realm-militia-portrait w-16 h-24 rounded-lg overflow-hidden border border-[#5a4830] shadow shrink-0">
                   <SpearmanIllustration />
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="font-cinzel font-bold text-xs text-amber-100 group-hover:text-amber-300 transition">
                     {isUkr ? 'Селянські списники' : 'Peasant Spearmen'}
                   </span>
-                  <p className="text-[10px] text-stone-300 leading-tight">
+                  <p className="text-[10px] text-stone-300 leading-snug">
                     {isUkr
-                      ? 'Списи з міцного ясеня. Базове ополчення (зброя не потрібна).'
-                      : 'Ash wood spears. Standard peasant levy (no weapons required).'}
+                      ? 'Легке ополчення · без зброї зі складу'
+                      : 'Light levy · no stock weapons needed'}
                   </p>
                   <div className="mt-1 flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold">
                     <span>✓</span>
-                    <span>{isUkr ? 'Безкоштовно (тільки люди)' : 'Free (requires only men)'}</span>
+                    <span>{isUkr ? 'Без витрат' : 'No cost'}</span>
                   </div>
                 </div>
               </div>
@@ -223,19 +214,19 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
               </button>
             </div>
 
-            <div className="bg-[#181a22] border border-[#52422d]/80 rounded-xl p-3 flex flex-col justify-between hover:border-amber-400 transition group">
-              <div className="flex gap-3 items-start">
-                <div className="w-16 h-24 rounded-lg overflow-hidden border border-[#5a4830] shadow shrink-0">
+            <div className="realm-militia-choice p-3 flex flex-col justify-between group">
+              <div className="realm-militia-card-body flex gap-3 items-start">
+                <div className="realm-militia-portrait w-16 h-24 rounded-lg overflow-hidden border border-[#5a4830] shadow shrink-0">
                   <SwordsmanIllustration />
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="font-cinzel font-bold text-xs text-amber-100 group-hover:text-amber-300 transition">
                     {isUkr ? 'Ополченці-мечники' : 'Swordsmen Militia'}
                   </span>
-                  <p className="text-[10px] text-stone-300 leading-tight">
+                  <p className="text-[10px] text-stone-300 leading-snug">
                     {isUkr
-                      ? 'Сталеві мечі та щити. Вимагає зброю на складі.'
-                      : 'Steel blades and shields. Requires weapons in storage.'}
+                      ? 'Важче ополчення · потрібна зброя'
+                      : 'Armed levy · stock weapons required'}
                   </p>
                   <div className="mt-1 flex items-center gap-1 text-[10px]">
                     <WeaponsIcon className="w-3.5 h-3.5 text-amber-400" />
@@ -262,42 +253,70 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
                     : (isUkr ? 'Немає людей' : 'No Manpower')}
               </button>
             </div>
+
+            <div className="realm-militia-choice p-3 flex flex-col justify-between group">
+              <div className="realm-militia-card-body flex gap-3 items-start">
+                <div className="realm-militia-portrait w-16 h-24 overflow-hidden border border-[#5a4830] shadow shrink-0"><ArcherIllustration /></div>
+                <div className="flex flex-col gap-1">
+                  <span className="font-cinzel font-bold text-xs text-amber-100 group-hover:text-amber-300 transition">{isUkr ? 'Лучники' : 'Archers'}</span>
+                  <p className="text-[10px] text-stone-300 leading-snug">{isUkr ? 'Луки · розріджений стрій' : 'Bows · loose formation'}</p>
+                  <div className="mt-1 flex items-center gap-1 text-[10px]">
+                    <WeaponsIcon className="w-3.5 h-3.5 text-amber-400" />
+                    <span className={weaponsCount > 0 ? 'text-amber-300 font-semibold' : 'text-rose-400 font-semibold'}>{isUkr ? `Зброя: ${weaponsCount}` : `Weapons: ${weaponsCount}`}</span>
+                  </div>
+                </div>
+              </div>
+              <button disabled={totalAvailableCount === 0 || weaponsCount === 0} onClick={() => handleCreateSquad('archers')}
+                className="realm-militia-recruit mt-2.5 w-full py-1.5 text-xs font-cinzel font-bold transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed">
+                {weaponsCount === 0 ? (isUkr ? 'Потрібна зброя' : 'Weapons Needed') : totalAvailableCount === 0 ? (isUkr ? 'Немає людей' : 'No Manpower') : (isUkr ? `Скликати загін (${Math.min(5, totalAvailableCount, weaponsCount)} чол.)` : `Form Squad (${Math.min(5, totalAvailableCount, weaponsCount)} men)`)}
+              </button>
+            </div>
+
+            <div className="realm-militia-choice p-3 flex flex-col justify-between group">
+              <div className="realm-militia-card-body flex gap-3 items-start">
+                <div className="realm-militia-portrait w-16 h-24 overflow-hidden border border-[#5a4830] shadow shrink-0"><PikemanIllustration /></div>
+                <div className="flex flex-col gap-1">
+                  <span className="font-cinzel font-bold text-xs text-amber-100 group-hover:text-amber-300 transition">{isUkr ? 'Пікінери' : 'Pikemen'}</span>
+                  <p className="text-[10px] text-stone-300 leading-snug">{isUkr ? 'Довгі піки · щільний стрій' : 'Long pikes · close formation'}</p>
+                  <div className="mt-1 flex items-center gap-1 text-[10px]">
+                    <WeaponsIcon className="w-3.5 h-3.5 text-amber-400" />
+                    <span className={weaponsCount > 0 ? 'text-amber-300 font-semibold' : 'text-rose-400 font-semibold'}>{isUkr ? `Зброя: ${weaponsCount}` : `Weapons: ${weaponsCount}`}</span>
+                  </div>
+                </div>
+              </div>
+              <button disabled={totalAvailableCount === 0 || weaponsCount === 0} onClick={() => handleCreateSquad('pikemen')}
+                className="realm-militia-recruit mt-2.5 w-full py-1.5 text-xs font-cinzel font-bold transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed">
+                {weaponsCount === 0 ? (isUkr ? 'Потрібна зброя' : 'Weapons Needed') : totalAvailableCount === 0 ? (isUkr ? 'Немає людей' : 'No Manpower') : (isUkr ? `Скликати загін (${Math.min(5, totalAvailableCount, weaponsCount)} чол.)` : `Form Squad (${Math.min(5, totalAvailableCount, weaponsCount)} men)`)}
+              </button>
+            </div>
           </div>
 
-          <div className="bg-[#12141a] p-2.5 rounded-xl border border-[#3e3223] flex flex-col gap-1 text-[11px]">
+          <div className="realm-militia-manpower p-3 flex flex-col gap-1.5 text-[11px]">
             <div className="flex items-center justify-between text-stone-300">
               <span className="font-semibold text-amber-200">
-                {isUkr ? 'Доступні людські ресурси:' : 'Available Manpower:'}
+                {isUkr ? 'Доступні селяни' : 'Available peasants'}
               </span>
               <span className="font-mono font-bold text-amber-300">
                 {totalAvailableCount} {isUkr ? 'селян' : 'peasants'}
               </span>
             </div>
             <div className="flex items-center justify-between text-[10px] text-stone-400 pl-2">
-              <span>• {isUkr ? 'Вільні безробітні (пріоритет №1):' : 'Idle peasants (1st priority):'}</span>
+              <span><PeasantsIcon className="inline w-3 h-3 mr-1" />{isUkr ? 'Вільні' : 'Idle'}</span>
               <span className="font-mono text-emerald-400 font-semibold">{idlePeasantsCount}</span>
             </div>
             <div className="flex items-center justify-between text-[10px] text-stone-400 pl-2">
-              <span>• {isUkr ? 'Зайняті на будівлях (пріоритет №2):' : 'Working peasants (2nd priority):'}</span>
+              <span><PeasantsIcon className="inline w-3 h-3 mr-1" />{isUkr ? 'Працюють' : 'Working'}</span>
               <span className="font-mono text-amber-400 font-semibold">{workingPeasantsCount}</span>
             </div>
-            <p className="mt-1 pt-1.5 border-t border-[#3e3223]/60 text-[9.5px] text-stone-400 italic">
-              {isUkr
-                ? '💡 Селяни стають у шеренгу з 2 рядів неподалік від табору. Після розпуску повертаються до звичайного життя.'
-                : '💡 Recruits assemble in a 2-rank line near camp. Once dismissed, they return to normal civilian work.'}
+            <p className="mt-1 pt-1.5 border-t border-[#3e3223]/60 text-[10px] text-stone-400 flex items-center gap-1.5">
+              <MedievalInfoIcon className="w-3.5 h-3.5 shrink-0 text-[#a9946f]" />
+              {isUkr ? 'Після розпуску селяни повернуться до роботи.' : 'Peasants return to work after disbanding.'}
             </p>
           </div>
         </div>
       )}
 
-      <div className="relative bg-gradient-to-r from-[#12141a]/98 via-[#181a24]/98 to-[#12141a]/98 backdrop-blur-md px-3.5 py-2.5 rounded-2xl border-2 border-[#5a4830] shadow-[0_12px_40px_rgba(0,0,0,0.95)] flex items-center gap-2">
-        <div className="absolute top-1 left-4 right-4 flex justify-between pointer-events-none opacity-40">
-          <div className="w-1 h-1 rounded-full bg-amber-400 shadow-sm" />
-          <div className="w-1 h-1 rounded-full bg-amber-400 shadow-sm" />
-          <div className="w-1 h-1 rounded-full bg-amber-400 shadow-sm" />
-          <div className="w-1 h-1 rounded-full bg-amber-400 shadow-sm" />
-        </div>
-
+      <div className="realm-paper-panel relative backdrop-blur-md px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.95)] flex items-center gap-2">
         {militiaSquads.map((squad, index) => {
           const isSelected = selectedMilitiaSquadId === squad.id;
           const currentCount = squad.memberIds.length;
@@ -309,7 +328,7 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
                 audioManager.playUIClick();
                 setSelectedMilitiaSquadId(isSelected ? null : squad.id);
               }}
-              className={`relative w-[76px] h-[148px] rounded-lg overflow-hidden border transition-all cursor-pointer flex flex-col justify-between ${
+              className={`relative w-[72px] h-[132px] rounded overflow-hidden border transition-all cursor-pointer flex flex-col justify-between ${
                 isSelected
                   ? 'border-amber-300 ring-2 ring-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.65)] -translate-y-1.5'
                   : 'border-[#5a4830]/90 hover:border-amber-400/80 hover:-translate-y-0.5'
@@ -320,15 +339,11 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
               </div>
 
               <div className="absolute inset-0">
-                {squad.type === 'swordsmen' ? (
-                  <SwordsmanIllustration />
-                ) : (
-                  <SpearmanIllustration />
-                )}
+                {squad.type === 'swordsmen' ? <SwordsmanIllustration /> : squad.type === 'archers' ? <ArcherIllustration /> : squad.type === 'pikemen' ? <PikemanIllustration /> : <SpearmanIllustration />}
               </div>
 
               <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-20 px-2 py-0.5 rounded bg-black/75 backdrop-blur-[1px] border border-amber-950/60 shadow flex items-center justify-center">
-                <span className="text-[12px] font-cinzel font-extrabold text-[#ef4444] tracking-wider drop-shadow-[0_1px_2px_rgba(0,0,0,1)]">
+                <span className="text-[12px] font-cinzel font-extrabold text-[#ead8b2] tracking-wider drop-shadow-[0_1px_2px_rgba(0,0,0,1)]">
                   {currentCount}/{squad.maxMembers}
                 </span>
               </div>
@@ -341,7 +356,7 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
             audioManager.playUIClick();
             setShowFormPanel(!showFormPanel);
           }}
-          className={`relative w-[76px] h-[148px] rounded-lg overflow-hidden border transition-all cursor-pointer flex flex-col items-center justify-center ${
+          className={`relative w-[72px] h-[132px] rounded overflow-hidden border transition-all cursor-pointer flex flex-col items-center justify-center ${
             showFormPanel
               ? 'border-amber-400 ring-2 ring-amber-400/60 shadow-[0_0_16px_rgba(245,158,11,0.5)] -translate-y-1.5'
               : 'border-[#5a4830]/90 hover:border-amber-400/80 hover:-translate-y-0.5'
@@ -358,7 +373,7 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
           className="w-7 h-7 rounded-full bg-[#181a20] border border-[#5a4830] hover:border-amber-400 text-stone-400 hover:text-amber-200 flex items-center justify-center text-xs transition cursor-pointer self-center ml-1"
           title={isUkr ? 'Закрити панель ополчення' : 'Close Militia Bar'}
         >
-          ✕
+          <CrossCloseIcon className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>

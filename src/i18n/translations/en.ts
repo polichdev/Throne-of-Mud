@@ -105,6 +105,7 @@ export const en: TranslationDictionary = {
     },
   },
   settings: {
+    pauseTitle: 'Paused',
     title: 'Realm Settings',
     audio: 'Audio & Music',
     language: 'Interface Language',

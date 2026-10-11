@@ -7,7 +7,7 @@ import { characterEntities } from '../../engine/ecs/world';
 import { GridMap } from '../../engine/grid/GridMap';
 import { audioManager } from '../../engine/audio/AudioManager';
 import { isMilitiaDestinationAllowed } from '../../engine/combat/formationUtils';
-import type { MilitiaSquad } from '../../types/game';
+import type { MilitiaSquad, MilitiaUnitType } from '../../types/game';
 
 interface MilitiaMarchRendererProps {
   grid?: GridMap;
@@ -68,10 +68,10 @@ export const MilitiaMarchRenderer: React.FC<MilitiaMarchRendererProps> = React.m
 MilitiaMarchRenderer.displayName = 'MilitiaMarchRenderer';
 
 function KnightIcon({
-  isSwordsmen,
+  type,
   isSelected,
 }: {
-  isSwordsmen: boolean;
+  type: MilitiaUnitType;
   isSelected?: boolean;
 }) {
   return (
@@ -102,7 +102,7 @@ function KnightIcon({
         </linearGradient>
       </defs>
 
-      {isSwordsmen ? (
+      {type === 'swordsmen' ? (
         <g opacity="0.85">
           <line x1="5" y1="5" x2="27" y2="27" stroke="url(#knightWeapon)" strokeWidth="1.8" strokeLinecap="round" />
           <line x1="7" y1="10" x2="10" y2="7" stroke="url(#knightGold)" strokeWidth="2.2" strokeLinecap="round" />
@@ -111,6 +111,17 @@ function KnightIcon({
           <line x1="27" y1="5" x2="5" y2="27" stroke="url(#knightWeapon)" strokeWidth="1.8" strokeLinecap="round" />
           <line x1="25" y1="10" x2="22" y2="7" stroke="url(#knightGold)" strokeWidth="2.2" strokeLinecap="round" />
           <circle cx="6" cy="26" r="1.3" fill="url(#knightGold)" />
+        </g>
+      ) : type === 'archers' ? (
+        <g opacity="0.9">
+          <path d="M9 5 Q23 16 9 27" stroke="#ab8050" strokeWidth="2.2" strokeLinecap="round" />
+          <path d="M9 5 V27 M7 16 H27" stroke="#e6dbc1" strokeWidth="1.1" />
+          <path d="M27 16 L23 13 M27 16 L23 19" stroke="#c4cbd0" strokeWidth="1.4" />
+        </g>
+      ) : type === 'pikemen' ? (
+        <g opacity="0.9">
+          <path d="M6 27 L22 5 M12 27 L28 5" stroke="#9a7145" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M22 3 L19 10 L25 8Z M28 3 L25 10 L31 8Z" fill="url(#knightWeapon)" />
         </g>
       ) : (
         <g opacity="0.85">
@@ -228,7 +239,7 @@ function SquadVisuals({
   if (livingCount === 0) return null;
 
   const isSwordsmen = squad.type === 'swordsmen';
-  const ringColor = isSwordsmen ? '#f59e0b' : '#38bdf8';
+  const ringColor = squad.type === 'archers' ? '#7ea779' : squad.type === 'pikemen' ? '#c4a67a' : isSwordsmen ? '#f59e0b' : '#38bdf8';
   const maxMembers = squad.maxMembers || 5;
   const fillPercent = Math.min(100, Math.round((livingCount / maxMembers) * 100));
 
@@ -302,7 +313,7 @@ function SquadVisuals({
                 }`}
               />
 
-              <KnightIcon isSwordsmen={isSwordsmen} isSelected={isSelected} />
+              <KnightIcon type={squad.type} isSelected={isSelected} />
             </div>
 
             {!isParchment && (
@@ -453,8 +464,15 @@ function SquadMarchVisuals({
   grid?: GridMap;
 }) {
   const march = squad.activeMarch;
-  if (!march) return null;
+  return march ? <ActiveSquadMarchVisuals squad={squad} isParchment={isParchment} grid={grid} march={march} /> : null;
+}
 
+function ActiveSquadMarchVisuals({ squad, isParchment, grid, march }: {
+  squad: MilitiaSquad;
+  isParchment: boolean;
+  grid?: GridMap;
+  march: NonNullable<MilitiaSquad['activeMarch']>;
+}) {
   const [tx, tz] = march.targetPos;
   const targetWorldX = tx + 0.5;
   const targetWorldZ = tz + 0.5;
@@ -495,7 +513,7 @@ function SquadMarchVisuals({
     if (pathPoints.length < 2) return null;
     const geom = new THREE.BufferGeometry().setFromPoints(pathPoints);
     const mat = new THREE.LineDashedMaterial({
-      color: isParchment ? '#b45309' : (squad.type === 'swordsmen' ? '#f59e0b' : '#38bdf8'),
+      color: isParchment ? '#b45309' : (squad.type === 'swordsmen' ? '#f59e0b' : squad.type === 'archers' ? '#7ea779' : squad.type === 'pikemen' ? '#c4a67a' : '#38bdf8'),
       dashSize: 0.55,
       gapSize: 0.35,
       transparent: true,

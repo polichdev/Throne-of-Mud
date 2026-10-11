@@ -38,7 +38,7 @@ export const LordsBar: React.FC = React.memo(() => {
 
   return (
     <div className="absolute top-18 left-3 flex flex-col gap-2 pointer-events-auto z-20 animate-in fade-in slide-in-from-left-3 duration-200 select-none font-cinzel">
-      <div className="bg-[#121418]/95 backdrop-blur-md p-2.5 rounded-2xl border-2 border-[#5a4830] shadow-2xl flex flex-col gap-2 w-60">
+      <div className="realm-paper-panel bg-[#121418]/95 backdrop-blur-md p-2.5 rounded-2xl border-2 border-[#5a4830] shadow-2xl flex flex-col gap-2 w-60">
         <div className="flex items-center justify-between px-1 border-b border-[#3d3222] pb-1.5">
           <div className="flex items-center gap-1.5">
             <CrownIcon className="w-4 h-4 text-amber-400" />

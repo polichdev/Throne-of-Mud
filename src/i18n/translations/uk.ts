@@ -4,7 +4,7 @@ export const uk: TranslationDictionary = {
   common: {
     save: 'Зберегти',
     saveProgress: 'Зберегти прогрес',
-    saveAndExit: 'Зберегти та вийти в меню',
+    saveAndExit: 'Зберегти та вийти в головне меню',
     saving: 'Збереження...',
     savedSuccess: 'Прогрес гри збережено',
     saveError: 'Помилка при збереженні гри.',
@@ -105,6 +105,7 @@ export const uk: TranslationDictionary = {
     },
   },
   settings: {
+    pauseTitle: 'Пауза',
     title: 'Налаштування королівства',
     audio: 'Аудіо та музика',
     language: 'Мова інтерфейсу',

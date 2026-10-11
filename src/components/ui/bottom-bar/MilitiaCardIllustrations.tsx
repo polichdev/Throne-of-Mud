@@ -259,6 +259,48 @@ export const SwordsmanIllustration: React.FC<{ className?: string }> = ({ classN
   );
 };
 
+const NewMilitiaFigure: React.FC<{ className?: string; weapon: 'bow' | 'pike' }> = ({ className = 'w-full h-full', weapon }) => (
+  <svg viewBox="0 0 100 180" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="180" fill="#c9b794" />
+    <rect x="3" y="3" width="94" height="174" stroke="#654e32" strokeWidth="2" />
+    <rect x="7" y="7" width="86" height="166" stroke="#8e7550" strokeWidth="0.8" />
+    <path d="M0 153 Q50 145 100 153 V180 H0Z" fill="#927c5a" opacity="0.45" />
+    <path d="M35 114 L45 114 L44 153 L34 153Z M54 114 L64 114 L65 153 L55 153Z" fill="#342f2b" />
+    <path d="M31 150 H46 V157 H29Z M54 150 H69 L71 157 H54Z" fill="#211b17" />
+    <path d="M31 66 Q50 57 70 66 L67 121 H33Z" fill={weapon === 'bow' ? '#526047' : '#485667'} stroke="#283025" strokeWidth="2" />
+    <path d="M30 91 H70" stroke="#846843" strokeWidth="6" />
+    <path d="M34 69 L25 100 L31 104 L43 73 M66 69 L78 102 L70 106 L58 73" fill="#5c625d" stroke="#30352f" strokeWidth="2" />
+    <circle cx="30" cy="103" r="5" fill="#c59d71" />
+    <circle cx="75" cy="103" r="5" fill="#c59d71" />
+    <path d="M39 41 Q50 32 61 41 V58 Q50 67 39 58Z" fill="#c9a477" stroke="#6d4b32" strokeWidth="1.5" />
+    <path d="M33 43 Q33 23 50 21 Q67 23 67 43 L61 45 V36 H39 V45Z" fill={weapon === 'bow' ? '#4c583f' : '#737b7c'} stroke="#29332d" strokeWidth="2" />
+    <path d="M37 34 Q50 30 63 34" stroke="#a49b75" strokeWidth="2" />
+    <path d="M44 51 H46 M54 51 H56" stroke="#33261c" strokeWidth="2" strokeLinecap="round" />
+    {weapon === 'bow' ? (
+      <>
+        <path d="M77 24 Q51 89 79 151" stroke="#6a4224" strokeWidth="4" strokeLinecap="round" />
+        <path d="M77 24 L79 151" stroke="#e7dcc0" strokeWidth="1.5" />
+        <path d="M22 72 L25 115 L34 115 L35 75Z" fill="#5a3826" stroke="#302016" strokeWidth="2" />
+        <path d="M24 77 L17 57 M28 77 L26 54 M32 78 L35 59" stroke="#d7c9a6" strokeWidth="2" />
+      </>
+    ) : (
+      <>
+        <path d="M81 164 L81 13" stroke="#704724" strokeWidth="5" strokeLinecap="round" />
+        <path d="M81 3 L75 20 H87Z" fill="#b2b9b5" stroke="#4e5656" strokeWidth="1.5" />
+        <path d="M72 98 L88 98" stroke="#575c5a" strokeWidth="3" />
+      </>
+    )}
+  </svg>
+);
+
+export const ArcherIllustration: React.FC<{ className?: string }> = ({ className }) => (
+  <NewMilitiaFigure className={className} weapon="bow" />
+);
+
+export const PikemanIllustration: React.FC<{ className?: string }> = ({ className }) => (
+  <NewMilitiaFigure className={className} weapon="pike" />
+);
+
 export const AddSquadCardIllustration: React.FC<{ className?: string }> = ({ className = 'w-full h-full' }) => {
   return (
     <svg viewBox="0 0 100 180" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">

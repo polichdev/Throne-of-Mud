@@ -72,7 +72,7 @@ export function WeatherDebugModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm select-none animate-in fade-in duration-150 pointer-events-auto">
-      <div className="relative w-full max-w-lg bg-[#121418]/98 border-2 border-[#5a4830] rounded-2xl shadow-[0_16px_50px_rgba(0,0,0,0.95)] text-slate-200 font-cinzel overflow-hidden pointer-events-auto">
+      <div className="realm-paper-panel relative w-full max-w-lg bg-[#121418]/98 border-2 border-[#5a4830] rounded-2xl shadow-[0_16px_50px_rgba(0,0,0,0.95)] text-slate-200 font-cinzel overflow-hidden pointer-events-auto">
 
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#3d3222] bg-gradient-to-r from-amber-950/40 via-transparent to-amber-950/20">
           <div className="flex items-center gap-2">

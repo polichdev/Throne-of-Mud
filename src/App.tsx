@@ -84,7 +84,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <main className={`w-screen h-screen relative overflow-hidden select-none font-cinzel ${isStrategicView ? 'bg-[#18120c]' : 'bg-[#080c10]'}`}>
+      <main className={`game-ui w-screen h-screen relative overflow-hidden select-none font-cinzel ${isStrategicView ? 'bg-[#18120c]' : 'bg-[#080c10]'}`}>
         <div className="absolute inset-0 z-0 pointer-events-auto overflow-hidden" style={{ isolation: 'isolate' }}>
           <GameCanvas grid={grid} />
         </div>

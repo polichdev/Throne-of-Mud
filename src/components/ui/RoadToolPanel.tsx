@@ -53,7 +53,7 @@ export const RoadToolPanel: React.FC<RoadToolPanelProps> = React.memo(({ onCance
 
   return (
     <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-auto z-40 animate-in fade-in slide-in-from-bottom-2 duration-200">
-      <div className="bg-[#121418]/97 backdrop-blur-xl border-2 border-[#5a4830] rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.9)] px-4 py-3 flex items-center gap-3">
+      <div className="realm-paper-panel bg-[#121418]/97 backdrop-blur-xl border-2 border-[#5a4830] rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.9)] px-4 py-3 flex items-center gap-3">
         <div className="flex items-center gap-1.5 pr-3 border-r border-[#3d3222]">
           <RoadIcon className="w-4 h-4 text-amber-400" />
           <span className="font-cinzel font-bold text-xs text-amber-200 uppercase tracking-wider whitespace-nowrap">

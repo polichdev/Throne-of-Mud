@@ -166,7 +166,7 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
               cardsContainerRef.current.scrollLeft += e.deltaY;
             }
           }}
-          className="flex items-center gap-2.5 overflow-x-auto px-4 pt-4 pb-2 max-w-[936px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden scroll-smooth"
+          className="realm-building-tray flex items-center gap-2.5 overflow-x-auto px-4 pt-4 pb-2 max-w-[936px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden scroll-smooth"
         >
           {currentBlueprints.map((b) => (
             <BuildingCard
@@ -191,7 +191,7 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
         )}
       </div>
 
-      <div className="flex items-center bg-gradient-to-r from-[#121418]/98 via-[#1a1d24]/98 to-[#121418]/98 border border-[#52422d] px-3 py-1.5 rounded-xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] backdrop-blur-md gap-1 max-w-[94vw] overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="realm-paper-panel flex items-center bg-gradient-to-r from-[#121418]/98 via-[#1a1d24]/98 to-[#121418]/98 border border-[#52422d] px-3 py-1.5 rounded-xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] backdrop-blur-md gap-1 max-w-[94vw] overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex items-center gap-1">
           {categories.map((cat) => {
             const Icon = cat.icon;

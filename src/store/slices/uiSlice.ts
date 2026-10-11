@@ -63,6 +63,8 @@ export const createUISlice: StateCreator<GameState, [], [], UISlice> = (set, get
   setCameraZoomTarget: (zoom) => set({ cameraZoomTarget: zoom }),
   cameraAngleTarget: null,
   setCameraAngleTarget: (angle) => set({ cameraAngleTarget: angle }),
+  viewedRegionId: null,
+  setViewedRegionId: (regionId) => set({ viewedRegionId: regionId }),
   isStrategicView: false,
   setIsStrategicView: (val) => set({ isStrategicView: val }),
 

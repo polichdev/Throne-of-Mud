@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GridMap } from '../../engine/grid/GridMap';
 import { useGameStore } from '../../store/useGameStore';
 import { INITIAL_RESOURCE_DEPOSITS } from '../../engine/resources/ResourceDeposits';
+import { startCooperativeTask } from './performance/cooperativeTask';
 import { audioManager } from '../../engine/audio/AudioManager';
 import { isMilitiaDestinationAllowed } from '../../engine/combat/formationUtils';
 
@@ -22,7 +23,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
   const [activeHoverRegion, setActiveHoverRegion] = useState<number | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const drawParchmentToCanvas = useCallback((canvas: HTMLCanvasElement) => {
+  const drawParchmentToCanvas = useCallback(function* (canvas: HTMLCanvasElement): Generator<void> {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -55,6 +56,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       const rx = prng() * cw;
       const ry = prng() * ch;
       ctx.fillRect(rx, ry, prng() * 4 + 1, prng() * 4 + 1);
+      yield;
     }
 
     ctx.strokeStyle = 'rgba(110, 75, 30, 0.045)';
@@ -123,6 +125,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.setLineDash([12, 6]);
       ctx.strokeRect(rx + 4, rz + 4, rw - 8, rh - 8);
       ctx.setLineDash([]);
+      yield;
     }
 
     for (let x = 0; x < grid.width; x++) {
@@ -139,6 +142,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
         ctx.fillStyle = 'rgba(100, 160, 190, 0.25)';
         ctx.fillRect(px + 1.5, pz + 1.5, scale - 3, scale - 3);
       }
+      yield;
     }
 
     ctx.lineWidth = 1.5;
@@ -215,6 +219,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
           ctx.lineWidth = 1.5;
         }
       }
+      yield;
     }
 
     ctx.save();
@@ -227,24 +232,28 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     const ewHighwayPoints: [number, number][] = [];
     for (let x = 0; x <= grid.width; x += 0.5) {
       ewHighwayPoints.push([x * scale, GridMap.getHighwayZ(x) * scale]);
+      yield;
     }
 
     const j1Z = GridMap.getHighwayZ(128);
     const n1HighwayPoints: [number, number][] = [];
     for (let z = 0; z <= j1Z; z += 0.5) {
       n1HighwayPoints.push([GridMap.getNorthHighway1X(z) * scale, z * scale]);
+      yield;
     }
 
     const j3Z = GridMap.getHighwayZ(256);
     const n2HighwayPoints: [number, number][] = [];
     for (let z = 0; z <= j3Z; z += 0.5) {
       n2HighwayPoints.push([GridMap.getNorthHighway2X(z) * scale, z * scale]);
+      yield;
     }
 
     const j2Z = GridMap.getHighwayZ(192);
     const sHighwayPoints: [number, number][] = [];
     for (let z = j2Z; z <= grid.height; z += 0.5) {
       sHighwayPoints.push([GridMap.getSouthHighwayX(z) * scale, z * scale]);
+      yield;
     }
 
     const drawHighwayPath = (points: [number, number][]) => {
@@ -315,6 +324,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
           }
         }
       }
+      yield;
     }
 
     const adj = new Map<string, string[]>();
@@ -353,6 +363,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       }
 
       adj.set(k, nbrs);
+      yield;
     }
 
     const visitedEdges = new Set<string>();
@@ -412,6 +423,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
           rawPaths.push(path);
         }
       }
+      yield;
     }
 
     for (const [x, z] of playerTileList) {
@@ -443,6 +455,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
           rawPaths.push(path);
         }
       }
+      yield;
     }
 
     const smoothPolyline = (pts: [number, number][]): [number, number][] => {
@@ -492,6 +505,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.beginPath();
       ctx.arc(pt[0], pt[1], (localRoadWidth + 2.0) / 2, 0, Math.PI * 2);
       ctx.fill();
+      yield;
     }
 
     ctx.strokeStyle = '#5a361b';
@@ -508,6 +522,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.beginPath();
       ctx.arc(pt[0], pt[1], localRoadWidth / 2, 0, Math.PI * 2);
       ctx.fill();
+      yield;
     }
 
     ctx.strokeStyle = '#784d28';
@@ -569,6 +584,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       if (pts.length >= 2) {
         drawContinuousWagonRuts(pts, localRoadWidth * 0.25);
       }
+      yield;
     }
 
     for (const [px, pz, pr] of plazas) {
@@ -599,6 +615,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.arc(px, pz, 4.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
+      yield;
     }
 
     ctx.fillStyle = 'rgba(43, 23, 10, 0.35)';
@@ -609,6 +626,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.beginPath();
       ctx.arc(p[0] + offset, p[1], 1.2, 0, Math.PI * 2);
       ctx.fill();
+      yield;
     }
 
     for (const pts of smoothedPlayerPaths) {
@@ -620,6 +638,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
         ctx.arc(p[0] + ox, p[1] + oz, 0.85, 0, Math.PI * 2);
         ctx.fill();
       }
+      yield;
     }
 
     ctx.restore();
@@ -675,6 +694,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
           }
         }
       }
+      yield;
     }
 
     for (let x = 0; x < grid.width; x += 2) {
@@ -734,6 +754,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
           ctx.fill();
         }
       }
+      yield;
     }
 
     const townArt: Record<number, { type: 'castle' | 'timber' | 'mill' | 'citadel'; title: string }> = {
@@ -888,6 +909,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
         tx,
         by
       );
+      yield;
     }
 
     for (const reg of regions) {
@@ -926,6 +948,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.fillStyle = '#22150a';
       ctx.font = 'bold 18px "Cinzel", Georgia, serif';
       ctx.fillText(col.label, centerX, centerY);
+      yield;
     }
 
     const deposits = (resourceDeposits && resourceDeposits.length > 0)
@@ -963,6 +986,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
 
       ctx.font = '16px sans-serif';
       ctx.fillText(dep.icon, dx, dz - 0.5);
+      yield;
     }
 
     const compX = scale * 9.0;
@@ -994,6 +1018,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+      yield;
     }
 
     ctx.font = 'bold 15px serif';
@@ -1014,11 +1039,13 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.fillStyle = '#2b190c';
       ctx.fillRect(p, 6, tickLen, 10);
       ctx.fillRect(p, ch - 16, tickLen, 10);
+      yield;
     }
     for (let p = 16; p < ch - 32; p += tickLen * 2) {
       ctx.fillStyle = '#2b190c';
       ctx.fillRect(6, p, 10, tickLen);
       ctx.fillRect(cw - 16, p, 10, tickLen);
+      yield;
     }
 
     const cornerOffsets = [
@@ -1032,6 +1059,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.beginPath();
       ctx.arc(cx, cy, 6, 0, Math.PI * 2);
       ctx.fill();
+      yield;
     }
 
   }, [grid, playerRegionId]);
@@ -1040,7 +1068,8 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     const cvs = document.createElement('canvas');
     cvs.width = 2048;
     cvs.height = 2048;
-    drawParchmentToCanvas(cvs);
+    const initialDraw = drawParchmentToCanvas(cvs);
+    while (!initialDraw.next().done) { }
 
     const tex = new THREE.CanvasTexture(cvs);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -1051,53 +1080,58 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
     return { mapTexture: tex, canvas: cvs };
   }, [drawParchmentToCanvas]);
 
-  const textureRef = useRef<THREE.CanvasTexture>(mapTexture);
-  const canvasRef = useRef<HTMLCanvasElement>(canvas);
-  useEffect(() => {
-    textureRef.current = mapTexture;
-    canvasRef.current = canvas;
-  }, [mapTexture, canvas]);
-
   useEffect(() => {
     return () => {
       mapTexture.dispose();
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
     };
   }, [mapTexture]);
 
-  const isDirtyRef = useRef(true);
+  const drawnRevisionRef = useRef({ canvas, buildingVersion, terrainVersion });
+  const cameraMotionRef = useRef({ zoom: -1, x: NaN, z: NaN, at: Infinity });
 
   useEffect(() => {
-    isDirtyRef.current = true;
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    const drawn = drawnRevisionRef.current;
+    if (drawn.canvas !== canvas) {
+      drawnRevisionRef.current = { canvas, buildingVersion, terrainVersion };
+      return;
+    }
+    if (drawn.buildingVersion === buildingVersion && drawn.terrainVersion === terrainVersion) return;
+
+    let cancelWork: (() => void) | undefined;
     debounceTimerRef.current = setTimeout(() => {
-      const zoom = (window as any).__lastCameraZoom ?? 38;
-      if (zoom < 22 || useGameStore.getState().isStrategicView) {
-        if (canvasRef.current && textureRef.current) {
-          drawParchmentToCanvas(canvasRef.current);
-          textureRef.current.needsUpdate = true;
-          isDirtyRef.current = false;
-        }
-      }
+      const nextCanvas = document.createElement('canvas');
+      nextCanvas.width = canvas.width;
+      nextCanvas.height = canvas.height;
+      cancelWork = startCooperativeTask(
+        drawParchmentToCanvas(nextCanvas),
+        () => performance.now() - cameraMotionRef.current.at >= 120,
+        () => {
+          mapTexture.image = nextCanvas;
+          mapTexture.needsUpdate = true;
+          drawnRevisionRef.current = { canvas, buildingVersion, terrainVersion };
+        },
+      );
     }, 600);
 
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      cancelWork?.();
     };
-  }, [buildingVersion, terrainVersion, drawParchmentToCanvas]);
+  }, [buildingVersion, terrainVersion, drawParchmentToCanvas, canvas, mapTexture]);
 
   useFrame(({ camera }) => {
     const orthoCam = camera as THREE.OrthographicCamera;
     const zoom = orthoCam.zoom || 38;
 
-    if (zoom < 22 && isDirtyRef.current) {
-      if (canvasRef.current && textureRef.current) {
-        drawParchmentToCanvas(canvasRef.current);
-        textureRef.current.needsUpdate = true;
-        isDirtyRef.current = false;
-      }
+    const motion = cameraMotionRef.current;
+    const target = (window as any).__lastCameraTarget as [number, number] | undefined;
+    const x = target?.[0] ?? camera.position.x;
+    const z = target?.[1] ?? camera.position.z;
+    if (Math.abs(zoom - motion.zoom) > 0.01 || !Number.isFinite(motion.x) || Math.hypot(x - motion.x, z - motion.z) > 0.05) {
+      motion.zoom = zoom;
+      motion.x = x;
+      motion.z = z;
+      motion.at = performance.now();
     }
 
     const t = THREE.MathUtils.clamp((18.5 - zoom) / (18.5 - 16.5), 0, 1);

@@ -40,8 +40,8 @@ export class GameLoop {
 
   public step(frameDeltaSeconds: number): void {
     const startedAt = performance.now();
-    const { time, advanceTick, gameMode } = useGameStore.getState();
-    if (gameMode !== 'playing' || time.isPaused || time.speedMultiplier <= 0) {
+    const { time, advanceTick, gameMode, activeMenuTab } = useGameStore.getState();
+    if (gameMode !== 'playing' || activeMenuTab === 'settings' || activeMenuTab === 'codex' || time.isPaused || time.speedMultiplier <= 0) {
       this.reportSimulationTime(startedAt);
       return;
     }
