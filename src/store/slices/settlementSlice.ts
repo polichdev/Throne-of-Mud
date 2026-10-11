@@ -11,6 +11,7 @@ import {
   MAX_BUILDING_WAGE,
 } from '../../constants/economy';
 import { DEFAULT_REGIONS } from '../../constants/world';
+import { DEFAULT_PLAYER_IDENTITY } from '../../constants/playerIdentity';
 import { getTargetSnowAccumulation } from '../../constants/time';
 import { INITIAL_RESOURCE_DEPOSITS } from '../../engine/resources/ResourceDeposits';
 import {
@@ -80,6 +81,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
 
   settlementName: 'GOLDHOF',
   setSettlementName: (name) => set({ settlementName: name }),
+  playerIdentity: { ...DEFAULT_PLAYER_IDENTITY },
   influence: STARTING_INFLUENCE,
   royalFavor: STARTING_ROYAL_FAVOR,
 
@@ -506,7 +508,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
 
     let draftCount = Math.min(5, eligiblePeasants.length);
 
-    if (type === 'swordsmen') {
+    if (type !== 'spearmen') {
       const availableWeapons = state.resources.weapons || 0;
       if (availableWeapons < 1) {
         return null;
@@ -537,7 +539,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     }
 
     const rallyPoint: [number, number] = [rallyBaseX, rallyBaseZ];
-    const offsets = getFormationOffsets(drafted.length, 0);
+    const offsets = getFormationOffsets(drafted.length, 0, type);
 
     drafted.forEach((peasant, idx) => {
       const off = offsets[idx] || [0, 0];
@@ -546,7 +548,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
 
       peasant.isLevy = true;
       peasant.militiaSquadId = squadId;
-      peasant.militiaWeapon = type === 'swordsmen' ? 'sword' : 'spear';
+      peasant.militiaWeapon = type === 'swordsmen' ? 'sword' : type === 'archers' ? 'bow' : type === 'pikemen' ? 'pike' : 'spear';
       peasant.formationIndex = idx;
 
       const px = peasant.gridPosition ? peasant.gridPosition[0] : Math.floor(peasant.position ? peasant.position[0] : targetX);
@@ -565,17 +567,17 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       };
 
       peasant.speechBubble = {
-        text: type === 'swordsmen' ? 'Беру меч та щит за наш трон!' : 'Беру спис, стаю до строю!',
+        text: type === 'swordsmen' ? 'Беру меч та щит за наш трон!' : type === 'archers' ? 'Беру лук і стаю до строю!' : type === 'pikemen' ? 'Піки напоготові!' : 'Беру спис, стаю до строю!',
         expiresAtTick: currentTick + 45,
         type: 'alert',
       };
     });
 
     const isUkr = (get() as any).language === 'uk';
-    const squadName =
-      type === 'swordsmen'
-        ? (isUkr ? `Ополченці-мечники ${squadNum}` : `Swordsmen Militia ${squadNum}`)
-        : (isUkr ? `Селянські списники ${squadNum}` : `Peasant Spearmen ${squadNum}`);
+    const squadNames: Record<MilitiaUnitType, string> = isUkr
+      ? { spearmen: 'Селянські списники', swordsmen: 'Ополченці-мечники', archers: 'Лучники', pikemen: 'Пікінери' }
+      : { spearmen: 'Peasant Spearmen', swordsmen: 'Swordsmen Militia', archers: 'Archers', pikemen: 'Pikemen' };
+    const squadName = `${squadNames[type]} ${squadNum}`;
 
     const newSquad: MilitiaSquad = {
       id: squadId,
@@ -651,11 +653,12 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
           sumZ += mz;
         }
         const rallyPoint: [number, number] = [Math.round(sumX / members.length), Math.round(sumZ / members.length)];
-        const isSwords = members.some((m) => m.militiaWeapon === 'sword');
-        const squadType: MilitiaUnitType = isSwords ? 'swordsmen' : 'spearmen';
-        const name = isSwords
-          ? (isUkr ? `Ополченці-мечники ${idx}` : `Swordsmen Militia ${idx}`)
-          : (isUkr ? `Селянські списники ${idx}` : `Peasant Spearmen ${idx}`);
+        const weapon = members[0]?.militiaWeapon;
+        const squadType: MilitiaUnitType = weapon === 'sword' ? 'swordsmen' : weapon === 'bow' ? 'archers' : weapon === 'pike' ? 'pikemen' : 'spearmen';
+        const names: Record<MilitiaUnitType, string> = isUkr
+          ? { spearmen: 'Селянські списники', swordsmen: 'Ополченці-мечники', archers: 'Лучники', pikemen: 'Пікінери' }
+          : { spearmen: 'Peasant Spearmen', swordsmen: 'Swordsmen Militia', archers: 'Archers', pikemen: 'Pikemen' };
+        const name = `${names[squadType]} ${idx}`;
 
         existing = {
           id: sqId,
@@ -691,14 +694,14 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     const squad = state.militiaSquads.find((sq) => sq.id === squadId);
 
     let livingCount = 0;
-    let hadSwords = squad ? squad.type === 'swordsmen' : false;
+    let returnedWeapons = 0;
 
     for (const peasant of characterEntities) {
       if (!peasant.isCharacter || !peasant.isLevy) continue;
       const belongs = peasant.militiaSquadId === squadId || (squad && squad.memberIds.includes(peasant.id)) || squadId === 'all';
       if (belongs) {
         livingCount++;
-        if (peasant.militiaWeapon === 'sword') hadSwords = true;
+        if (peasant.militiaWeapon === 'sword' || peasant.militiaWeapon === 'bow' || peasant.militiaWeapon === 'pike') returnedWeapons++;
         peasant.isLevy = false;
         peasant.militiaSquadId = undefined;
         peasant.militiaWeapon = undefined;
@@ -717,8 +720,8 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       }
     }
 
-    if (hadSwords && livingCount > 0) {
-      get().addResource('weapons', livingCount);
+    if (returnedWeapons > 0) {
+      get().addResource('weapons', returnedWeapons);
     }
 
     set((s) => {
@@ -757,7 +760,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     );
     if (livingMembers.length === 0) return;
 
-    const offsets = getFormationOffsets(livingMembers.length, squad.facingAngle);
+    const offsets = getFormationOffsets(livingMembers.length, squad.facingAngle, squad.type);
     livingMembers.forEach((peasant, idx) => {
       const off = offsets[idx] || [0, 0];
       let targetX = Math.max(1, Math.min(grid.width - 2, Math.round(squad!.rallyPoint[0] + off[0])));
@@ -840,7 +843,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     let facingAngle = Math.atan2(targetPos[0] - curCenterX, targetPos[1] - curCenterZ);
     if (isNaN(facingAngle)) facingAngle = 0;
 
-    const finalOffsets = getFormationOffsets(livingMembers.length, facingAngle);
+    const finalOffsets = getFormationOffsets(livingMembers.length, facingAngle, squad.type);
 
     livingMembers.forEach((peasant, idx) => {
       const finalOff = finalOffsets[idx] || [0, 0];
@@ -1131,6 +1134,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       botCount: result.botCount,
       regions: result.regions,
       settlementName: result.settlementName,
+      playerIdentity: config?.identity ?? get().playerIdentity,
       cameraFocusTarget: result.cameraFocusTarget,
       isStrategicMapOpen: false,
       resourceDeposits: result.resourceDeposits,
@@ -1144,24 +1148,35 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     BotAISystem.reset();
     BanditAISystem.reset();
     clearBuildingFrameStates();
-    grid.clearAllRoads();
-    grid.generate(Date.now() % 100000 + Math.random() * 500);
     grid.isFullTerrainDirty = true;
     grid.dirtyTerrainCoords = [];
 
+    const supplies = config?.startingSupplies ?? 'standard';
+    const supplyFactor = supplies === 'abundant' ? 1.5 : supplies === 'scarce' ? 0.65 : 1;
+    const season = config?.startingSeason ?? 'Spring';
+    const seasonIndex = { Spring: 0, Summer: 3, Autumn: 6, Winter: 9 }[season];
+    const month = ({ Spring: 'March', Summer: 'June', Autumn: 'September', Winter: 'December' } as const)[season];
+
     set({
-      resources: { ...INITIAL_RESOURCES },
+      playerIdentity: config?.identity ?? { ...DEFAULT_PLAYER_IDENTITY },
+      resources: {
+        ...INITIAL_RESOURCES,
+        wood: Math.round(INITIAL_RESOURCES.wood * supplyFactor),
+        stone: Math.round(INITIAL_RESOURCES.stone * supplyFactor),
+        wheat: Math.round(INITIAL_RESOURCES.wheat * supplyFactor),
+        gold: Math.round(INITIAL_RESOURCES.gold * supplyFactor),
+      },
       time: {
         tick: 0,
         day: 1,
         dayOfMonth: 1,
-        month: 'March',
-        monthIndex: 0,
+        month,
+        monthIndex: seasonIndex,
         monthInSeason: 0,
         year: 1,
         hour: 7,
         minute: 0,
-        season: 'Spring',
+        season,
         weather: 'clear',
         targetWeather: 'clear',
         nextWeather: 'clear',
@@ -1169,7 +1184,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
         rainIntensity: 0,
         stormIntensity: 0,
         snowIntensity: 0,
-        snowAccumulation: getTargetSnowAccumulation('Spring', 1, 7, 0),
+        snowAccumulation: getTargetSnowAccumulation(season, 1, 7, 0),
         lightningFlash: 0,
         speedMultiplier: 1,
         isPaused: false,
@@ -1187,7 +1202,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
           gameDay: 1,
           gameHour: 7,
           title: 'Заснування Трону з Грязі',
-          description: 'Король Болеслав прибув на болотисті землі разом зі шляхтою та першими поселенцями.',
+          description: `${config?.identity?.rulerName || DEFAULT_PLAYER_IDENTITY.rulerName} прибув на нові землі разом із першими поселенцями.`,
           type: 'info',
         },
       ],

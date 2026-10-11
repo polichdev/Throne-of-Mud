@@ -2,6 +2,7 @@ import type { RegionData, WorldSetupConfig, ResourceDeposit } from '../../types/
 import { GridMap } from '../grid/GridMap';
 import { world } from '../ecs/world';
 import { DEFAULT_REGIONS, PRESET_BOT_LORDS } from '../../constants/world';
+import { DEFAULT_PLAYER_IDENTITY, getHeraldryGlyph } from '../../constants/playerIdentity';
 import { initResourceDeposits } from '../resources/ResourceDeposits';
 import { getSmartRoadPath, isRoadPathValid } from '../grid/roadGeneration';
 
@@ -27,15 +28,16 @@ export function initializeWorldEntities(
 
   const playerRegionId = config?.playerRegionId ?? currentRegionId ?? 0;
   const botCount = config?.botCount !== undefined ? config.botCount : (currentBotCount ?? 2);
+  const identity = config?.identity ?? DEFAULT_PLAYER_IDENTITY;
 
   const updatedRegions: RegionData[] = JSON.parse(JSON.stringify(DEFAULT_REGIONS));
 
   const pRegion = updatedRegions[playerRegionId];
   pRegion.owner = 'player';
-  pRegion.lordName = 'Король Болеслав';
+  pRegion.lordName = identity.rulerName;
   pRegion.lordTitle = 'Правитель земель';
-  pRegion.heraldryColor = '#f59e0b';
-  pRegion.heraldryIcon = '👑';
+  pRegion.heraldryColor = identity.shieldColor;
+  pRegion.heraldryIcon = getHeraldryGlyph(identity.emblemId);
   pRegion.population = 3;
   pRegion.approval = 80;
   pRegion.wealth = 50;
@@ -144,10 +146,10 @@ export function initializeWorldEntities(
   const initialUnits = [
     {
       id: 'unit-king',
-      name: 'Король Болеслав',
+      name: identity.rulerName,
       title: 'Правитель земель',
       characterClass: 'king' as const,
-      avatarColor: '#f59e0b',
+      avatarColor: identity.shieldColor,
       gx: cx - 1,
       gz: cz + 2,
       gold: 35,
@@ -406,7 +408,7 @@ export function initializeWorldEntities(
     playerSpawnPoint: [cx, cz],
     botCount,
     regions: updatedRegions,
-    settlementName: pRegion.name.toUpperCase(),
+    settlementName: identity.kingdomName.trim() || pRegion.name.toUpperCase(),
     cameraFocusTarget: [cx, cz],
     resourceDeposits: deposits,
   };

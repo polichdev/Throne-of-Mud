@@ -335,6 +335,17 @@ export interface WorldSetupConfig {
   playerSpawnPoint: [number, number];
   selectedSpawnPointId?: string;
   botCount: number;
+  identity?: PlayerIdentity;
+  startingSeason?: 'Spring' | 'Summer' | 'Autumn' | 'Winter';
+  startingSupplies?: 'scarce' | 'standard' | 'abundant';
+}
+
+export interface PlayerIdentity {
+  rulerName: string;
+  kingdomName: string;
+  portraitId: number;
+  shieldColor: string;
+  emblemId: string;
 }
 
 export type TradeMode = 'none' | 'import' | 'export';
@@ -348,7 +359,7 @@ export interface TradeRule {
 
 export type TradeCategory = 'construction' | 'agriculture' | 'food' | 'materials' | 'military';
 
-export type MilitiaUnitType = 'spearmen' | 'swordsmen';
+export type MilitiaUnitType = 'spearmen' | 'swordsmen' | 'archers' | 'pikemen';
 
 export interface MilitiaActiveMarch {
   targetPos: [number, number];

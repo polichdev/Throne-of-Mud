@@ -1,10 +1,11 @@
 import { GridMap } from '../../engine/grid/GridMap';
 import { world, type GameEntity } from '../../engine/ecs/world';
 import { useGameStore } from '../../store/useGameStore';
-import type { ResourceInventory, GameTime, ChronicleEvent, TileData, RegionData, ResourceDeposit, MilitiaSquad } from '../../types/game';
+import type { ResourceInventory, GameTime, ChronicleEvent, TileData, RegionData, ResourceDeposit, MilitiaSquad, PlayerIdentity } from '../../types/game';
 import { initResourceDeposits } from '../../engine/resources/ResourceDeposits';
 import { INITIAL_RESOURCES } from '../../constants/economy';
 import { DEFAULT_REGIONS } from '../../constants/world';
+import { DEFAULT_PLAYER_IDENTITY } from '../../constants/playerIdentity';
 import { TradeSystem } from '../../engine/ecs/systems/TradeSystem';
 
 export interface SaveMetadata {
@@ -23,6 +24,7 @@ export interface SaveData {
     resources: ResourceInventory;
     time: GameTime;
     settlementName: string;
+    playerIdentity?: PlayerIdentity;
     influence: number;
     royalFavor: number;
     chronicle: ChronicleEvent[];
@@ -107,6 +109,7 @@ export async function saveGameToIndexedDB(grid: GridMap): Promise<boolean> {
         resources: { ...state.resources },
         time: { ...state.time },
         settlementName: state.settlementName,
+        playerIdentity: state.playerIdentity,
         influence: state.influence,
         royalFavor: state.royalFavor,
         chronicle: [...state.chronicle],
@@ -353,6 +356,7 @@ export async function loadGameFromIndexedDB(grid: GridMap): Promise<boolean> {
         isPaused: saveData.gameState.time.isPaused ?? false,
       },
       settlementName: saveData.gameState.settlementName || 'GOLDHOF',
+      playerIdentity: saveData.gameState.playerIdentity ?? { ...DEFAULT_PLAYER_IDENTITY },
       influence: saveData.gameState.influence || 2500,
       royalFavor: saveData.gameState.royalFavor || 15,
       chronicle: saveData.gameState.chronicle || [],

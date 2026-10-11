@@ -3,6 +3,7 @@ import { GridMap } from '../../engine/grid/GridMap';
 import { useGameStore } from '../../store/useGameStore';
 import { characterEntities } from '../../engine/ecs/world';
 import { DEFAULT_REGIONS } from '../../constants/world';
+import { getHeraldryGlyph } from '../../constants/playerIdentity';
 import type { SpawnPointData } from '../../types/game';
 
 interface StrategicMapCanvasProps {
@@ -11,7 +12,8 @@ interface StrategicMapCanvasProps {
   selectedRegionId?: number;
   onSelectRegion?: (regionId: number) => void;
   selectedSpawnPointId?: string;
-  onSelectSpawnPoint?: (spawnPointId: string) => void;
+  selectedHeraldry?: { shieldColor: string; emblemId: string };
+  onSelectSpawnPoint?: (spawnPointId: string, regionId: number) => void;
   onClose?: () => void;
   width?: number;
   height?: number;
@@ -23,6 +25,7 @@ export function StrategicMapCanvas({
   selectedRegionId: propSelectedRegionId,
   onSelectRegion,
   selectedSpawnPointId: propSelectedSpawnPointId,
+  selectedHeraldry,
   onSelectSpawnPoint,
   onClose,
   width: initialWidth,
@@ -60,16 +63,24 @@ export function StrategicMapCanvas({
       offscreen.width / 2, offscreen.height / 2, 40,
       offscreen.width / 2, offscreen.height / 2, offscreen.width * 0.75
     );
-    bgGrad.addColorStop(0, '#ebdcc1');
-    bgGrad.addColorStop(0.7, '#dfcca9');
-    bgGrad.addColorStop(1, '#c8b28b');
+    bgGrad.addColorStop(0, '#e8e5d8');
+    bgGrad.addColorStop(0.7, '#d9d9cb');
+    bgGrad.addColorStop(1, '#c6c6b7');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, offscreen.width, offscreen.height);
 
+    const regionWashes = ['#c7ad80', '#8ea497', '#91a9a8', '#b2a49a', '#9cab83', '#c5a376'];
+    for (const region of DEFAULT_REGIONS) {
+      ctx.fillStyle = `${regionWashes[region.id]}28`;
+      ctx.fillRect(region.bounds.minX * scale, region.bounds.minZ * scale,
+        (region.bounds.maxX - region.bounds.minX + 1) * scale,
+        (region.bounds.maxZ - region.bounds.minZ + 1) * scale);
+    }
+
     ctx.fillStyle = 'rgba(120, 80, 40, 0.03)';
     for (let i = 0; i < 2000; i++) {
-      const rx = Math.random() * offscreen.width;
-      const ry = Math.random() * offscreen.height;
+      const rx = ((i * 1297 + 271) % 2003) / 2003 * offscreen.width;
+      const ry = ((i * 7919 + 113) % 2011) / 2011 * offscreen.height;
       ctx.fillRect(rx, ry, 2, 2);
     }
 
@@ -85,13 +96,13 @@ export function StrategicMapCanvas({
           ctx.fillStyle = '#557e90';
           ctx.fillRect(px, pz, scale, scale);
         } else if (tile.terrain === 'road') {
-          ctx.fillStyle = '#543319';
+          ctx.fillStyle = '#b69c75';
           ctx.fillRect(px, pz, scale, scale);
         } else if (tile.terrain === 'stone' || tile.foliageType === 'rock') {
           ctx.fillStyle = '#a69888';
           ctx.fillRect(px, pz, scale, scale);
         } else if (tile.foliageType === 'tree') {
-          ctx.fillStyle = '#c7bc99';
+          ctx.fillStyle = '#ced0bd';
           ctx.fillRect(px, pz, scale, scale);
         }
       }
@@ -138,16 +149,16 @@ export function StrategicMapCanvas({
 
           if (randTree > 0.48) {
             isPine = false;
-            treeColor = '#456a35';
-            strokeColor = '#253e1c';
+            treeColor = '#3c6237';
+            strokeColor = '#25442a';
           } else if (randTree > 0.12) {
             isPine = true;
-            treeColor = '#1f4429';
-            strokeColor = '#0e2516';
+            treeColor = '#31533c';
+            strokeColor = '#1c3929';
           } else {
             isPine = false;
-            treeColor = '#c2701e';
-            strokeColor = '#713c0b';
+            treeColor = '#8e7047';
+            strokeColor = '#60452f';
           }
 
           ctx.fillStyle = treeColor;
@@ -224,68 +235,71 @@ export function StrategicMapCanvas({
         const rw = toScreenX(reg.bounds.maxX - reg.bounds.minX + 1);
         const rh = toScreenY(reg.bounds.maxZ - reg.bounds.minZ + 1);
 
-        if (isSelected) {
-          ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
-          ctx.fillRect(rx, rz, rw, rh);
-          ctx.strokeStyle = '#f59e0b';
-          ctx.lineWidth = 3;
-          ctx.strokeRect(rx + 2, rz + 2, rw - 4, rh - 4);
+        if (mode === 'setup') {
+          ctx.save();
+          ctx.setLineDash([7, 5]);
+          ctx.strokeStyle = isSelected ? 'rgba(93, 72, 40, 0.9)' : 'rgba(99, 95, 80, 0.66)';
+          ctx.lineWidth = isSelected ? 2.3 : 1.4;
+          ctx.strokeRect(rx + 1, rz + 1, rw - 2, rh - 2);
+          ctx.restore();
         } else if (isHovered) {
           ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
           ctx.fillRect(rx, rz, rw, rh);
         }
       }
 
-      ctx.save();
-      ctx.setLineDash([7, 5]);
-      ctx.strokeStyle = 'rgba(124, 45, 18, 0.75)';
-      ctx.lineWidth = 1.8;
-
-      ctx.beginPath();
+      const roadPaths: Array<Array<[number, number]>> = [];
+      const eastWest: Array<[number, number]> = [];
       for (let gx = 0; gx <= grid.width; gx += 4) {
         const gz = GridMap.getHighwayZ(gx);
-        const sx = toScreenX(gx);
-        const sy = toScreenY(gz);
-        if (gx === 0) ctx.moveTo(sx, sy);
-        else ctx.lineTo(sx, sy);
+        eastWest.push([toScreenX(gx), toScreenY(gz)]);
       }
-      ctx.stroke();
+      roadPaths.push(eastWest);
 
       const j1Z = GridMap.getHighwayZ(128);
-      ctx.beginPath();
+      const northWest: Array<[number, number]> = [];
       for (let gz = 0; gz <= j1Z; gz += 3) {
         const gx = GridMap.getNorthHighway1X(gz);
-        const sx = toScreenX(gx);
-        const sy = toScreenY(gz);
-        if (gz === 0) ctx.moveTo(sx, sy);
-        else ctx.lineTo(sx, sy);
+        northWest.push([toScreenX(gx), toScreenY(gz)]);
       }
-      ctx.lineTo(toScreenX(128), toScreenY(j1Z));
-      ctx.stroke();
+      northWest.push([toScreenX(128), toScreenY(j1Z)]);
+      roadPaths.push(northWest);
 
       const j3Z = GridMap.getHighwayZ(256);
-      ctx.beginPath();
+      const northEast: Array<[number, number]> = [];
       for (let gz = 0; gz <= j3Z; gz += 3) {
         const gx = GridMap.getNorthHighway2X(gz);
-        const sx = toScreenX(gx);
-        const sy = toScreenY(gz);
-        if (gz === 0) ctx.moveTo(sx, sy);
-        else ctx.lineTo(sx, sy);
+        northEast.push([toScreenX(gx), toScreenY(gz)]);
       }
-      ctx.lineTo(toScreenX(256), toScreenY(j3Z));
-      ctx.stroke();
+      northEast.push([toScreenX(256), toScreenY(j3Z)]);
+      roadPaths.push(northEast);
 
       const j2Z = GridMap.getHighwayZ(192);
-      ctx.beginPath();
-      ctx.moveTo(toScreenX(192), toScreenY(j2Z));
+      const south: Array<[number, number]> = [[toScreenX(192), toScreenY(j2Z)]];
       for (let gz = Math.ceil(j2Z); gz <= grid.height; gz += 3) {
         const gx = GridMap.getSouthHighwayX(gz);
-        const sx = toScreenX(gx);
-        const sy = toScreenY(gz);
-        ctx.lineTo(sx, sy);
+        south.push([toScreenX(gx), toScreenY(gz)]);
       }
-      ctx.stroke();
-      ctx.restore();
+      roadPaths.push(south);
+
+      for (const points of roadPaths) {
+        ctx.save();
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        for (const [lineWidth, strokeStyle, dash] of [
+          [8, '#59442e', []],
+          [5, '#a77e51', []],
+          [1.2, '#dac092', [4, 7]],
+        ] as const) {
+          ctx.beginPath();
+          points.forEach(([x, y], index) => index === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+          ctx.lineWidth = lineWidth;
+          ctx.strokeStyle = strokeStyle;
+          ctx.setLineDash([...dash]);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
 
       const plazas = [
         [128, j1Z],
@@ -362,63 +376,66 @@ export function StrategicMapCanvas({
       ctx.restore();
 
       if (mode === 'setup') {
-        const currentReg = regions.find((r) => r.id === activeRegionId);
-        const spawnPoints = currentReg?.spawnPoints || GridMap.getPresetSpawnPoints(activeRegionId);
-
-        spawnPoints.forEach((sp, idx) => {
+        regions.flatMap((region) => (region.spawnPoints || GridMap.getPresetSpawnPoints(region.id)).map((sp) => ({ sp, regionId: region.id }))).forEach(({ sp, regionId }) => {
           const sx = toScreenX(sp.position[0]);
           const sz = toScreenY(sp.position[1]);
-          const isSelected = (propSelectedSpawnPointId === sp.id) || (!propSelectedSpawnPointId && idx === 0);
+          const isSelected = propSelectedSpawnPointId === sp.id;
           const isHovered = hoveredSpawnPoint?.id === sp.id;
+          if (isSelected) return;
 
           ctx.save();
-
-          if (isSelected) {
-            const pulse = (Math.sin(Date.now() * 0.005) + 1) * 0.5;
+          ctx.beginPath();
+          ctx.arc(sx, sz, isHovered ? 11 : 9, 0, Math.PI * 2);
+          ctx.fillStyle = isHovered ? '#e6d4a2' : 'rgba(218, 214, 194, 0.5)';
+          ctx.fill();
+          ctx.strokeStyle = '#857d69';
+          ctx.lineWidth = 1.7;
+          ctx.stroke();
+          if (regionId === activeRegionId) {
             ctx.beginPath();
-            ctx.arc(sx, sz, 18 + pulse * 6, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(245, 158, 11, ${0.25 + pulse * 0.2})`;
+            ctx.arc(sx, sz, 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#79633f';
             ctx.fill();
           }
-
-          ctx.beginPath();
-          ctx.ellipse(sx, sz + 6, 9, 4, 0, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-          ctx.fill();
-
-          ctx.beginPath();
-          ctx.arc(sx, sz, isSelected ? 12 : isHovered ? 11 : 9.5, 0, Math.PI * 2);
-          ctx.fillStyle = isSelected ? '#f59e0b' : isHovered ? '#fbbf24' : '#d97706';
-          ctx.fill();
-          ctx.strokeStyle = isSelected ? '#ffffff' : '#78350f';
-          ctx.lineWidth = isSelected ? 2.5 : 1.8;
-          ctx.stroke();
-
-          ctx.font = isSelected ? '12px sans-serif' : '10px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = '#ffffff';
-          ctx.fillText(isSelected ? '👑' : '⛺', sx, sz);
-
-          const tagText = `${idx + 1}. ${sp.name}`;
-          ctx.font = 'bold 10px "Cinzel", Georgia, serif';
-          const textMetrics = ctx.measureText(tagText);
-          const tagW = textMetrics.width + 12;
-          const tagH = 18;
-
-          ctx.fillStyle = isSelected ? 'rgba(26, 20, 13, 0.95)' : 'rgba(38, 28, 18, 0.85)';
-          ctx.strokeStyle = isSelected ? '#f59e0b' : '#a16207';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.roundRect(sx - tagW / 2, sz + 12, tagW, tagH, 4);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = isSelected ? '#fef08a' : '#fde68a';
-          ctx.fillText(tagText, sx, sz + 21);
-
           ctx.restore();
         });
+
+        const selectedPoint = regions.flatMap((region) => region.spawnPoints || GridMap.getPresetSpawnPoints(region.id))
+          .find((point) => point.id === propSelectedSpawnPointId);
+        if (selectedPoint) {
+          const sx = toScreenX(selectedPoint.position[0]);
+          const sy = toScreenY(selectedPoint.position[1]);
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.shadowColor = '#241b11';
+          ctx.shadowBlur = 9;
+          ctx.beginPath();
+          ctx.arc(0, 0, 22, 0, Math.PI * 2);
+          ctx.fillStyle = '#211f1b';
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = '#c8ac73';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(-12, -14);
+          ctx.lineTo(12, -14);
+          ctx.lineTo(12, 5);
+          ctx.quadraticCurveTo(11, 13, 0, 18);
+          ctx.quadraticCurveTo(-11, 13, -12, 5);
+          ctx.closePath();
+          ctx.fillStyle = selectedHeraldry?.shieldColor || '#723b31';
+          ctx.fill();
+          ctx.strokeStyle = '#e8d4a5';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.font = 'bold 19px Georgia, serif';
+          ctx.fillStyle = '#f6e9c5';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(getHeraldryGlyph(selectedHeraldry?.emblemId || 'crown'), 0, 0);
+          ctx.restore();
+        }
       }
 
       if (mode === 'ingame') {
@@ -533,6 +550,7 @@ export function StrategicMapCanvas({
     hoveredRegionId,
     hoveredSpawnPoint,
     propSelectedSpawnPointId,
+    selectedHeraldry,
     playerRegionId,
     cameraFocusTarget,
   ]);
@@ -547,21 +565,13 @@ export function StrategicMapCanvas({
     const quadrantId = GridMap.getRegionIdForCoord(clickX, clickZ);
 
     if (mode === 'setup') {
-      const currentReg = regions.find((r) => r.id === activeRegionId);
-      const spawnPoints = currentReg?.spawnPoints || GridMap.getPresetSpawnPoints(activeRegionId);
-
-      let clickedSp: SpawnPointData | null = null;
-      for (const sp of spawnPoints) {
-        const dist = Math.hypot(sp.position[0] - clickX, sp.position[1] - clickZ);
-        if (dist <= 12) {
-          clickedSp = sp;
-          break;
+      for (const region of regions) {
+        for (const sp of region.spawnPoints || GridMap.getPresetSpawnPoints(region.id)) {
+          if (Math.hypot(sp.position[0] - clickX, sp.position[1] - clickZ) <= 8) {
+            onSelectSpawnPoint?.(sp.id, region.id);
+            return;
+          }
         }
-      }
-
-      if (clickedSp && onSelectSpawnPoint) {
-        onSelectSpawnPoint(clickedSp.id);
-        return;
       }
 
       if (onSelectRegion && quadrantId !== activeRegionId) {
@@ -582,22 +592,24 @@ export function StrategicMapCanvas({
     const mouseGx = ((e.clientX - rect.left) / rect.width) * grid.width;
     const mouseGz = ((e.clientY - rect.top) / rect.height) * grid.height;
 
-    setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    setMousePos({
+      x: Math.max(8, Math.min(canvas.offsetLeft + e.clientX - rect.left + 16, (containerRef.current?.clientWidth || 640) - 220)),
+      y: Math.max(8, Math.min(canvas.offsetTop + e.clientY - rect.top + 16, (containerRef.current?.clientHeight || 640) - 100)),
+    });
 
     const qId = GridMap.getRegionIdForCoord(mouseGx, mouseGz);
     setHoveredRegionId(qId);
 
     if (mode === 'setup') {
-      const currentReg = regions.find((r) => r.id === activeRegionId);
-      const spawnPoints = currentReg?.spawnPoints || GridMap.getPresetSpawnPoints(activeRegionId);
-
       let foundSp: SpawnPointData | null = null;
-      for (const sp of spawnPoints) {
-        const dist = Math.hypot(sp.position[0] - mouseGx, sp.position[1] - mouseGz);
-        if (dist <= 10) {
-          foundSp = sp;
-          break;
+      for (const region of regions) {
+        for (const sp of region.spawnPoints || GridMap.getPresetSpawnPoints(region.id)) {
+          if (Math.hypot(sp.position[0] - mouseGx, sp.position[1] - mouseGz) <= 8) {
+            foundSp = sp;
+            break;
+          }
         }
+        if (foundSp) break;
       }
       setHoveredSpawnPoint(foundSp);
     }
@@ -618,15 +630,15 @@ export function StrategicMapCanvas({
         onClick={handleClick}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        className="w-full h-full max-w-[660px] max-h-[660px] object-contain rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.85)] cursor-pointer"
+        className={`object-contain shadow-[0_12px_40px_rgba(0,0,0,0.85)] cursor-pointer ${mode === 'setup' ? 'realm-setup-map-canvas' : 'w-full h-full max-w-[660px] max-h-[660px] rounded-xl'}`}
       />
 
       {hoveredSpawnPoint && mousePos && (
         <div
           className="absolute z-30 pointer-events-none p-2.5 rounded-xl bg-[#1c150e]/95 border border-amber-500/80 shadow-[0_8px_25px_rgba(0,0,0,0.9)] max-w-xs text-amber-100 text-xs font-cinzel animate-in fade-in zoom-in-95 duration-150"
           style={{
-            left: `${Math.min(mousePos.x + 16, (initialWidth || 640) - 220)}px`,
-            top: `${Math.min(mousePos.y + 16, (initialHeight || 640) - 100)}px`,
+            left: `${mousePos.x}px`,
+            top: `${mousePos.y}px`,
           }}
         >
           <div className="font-bold text-amber-300 flex items-center gap-1.5 text-sm">
@@ -642,14 +654,14 @@ export function StrategicMapCanvas({
         </div>
       )}
 
-      <div className="absolute top-3 right-3 pointer-events-none opacity-80 flex flex-col items-end gap-1">
+      {mode === 'ingame' && <div className="absolute top-3 right-3 pointer-events-none opacity-80 flex flex-col items-end gap-1">
         <div className="bg-[#1e150d]/90 border border-amber-700/60 px-2.5 py-1 rounded-lg text-[10px] text-amber-300 font-cinzel font-bold shadow">
           🧭 ПІВНІЧ
         </div>
         <div className="bg-[#1e150d]/80 border border-amber-900/50 px-2 py-0.5 rounded text-[9px] text-amber-400/70 font-mono">
           {grid.width} × {grid.height} клітинок
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

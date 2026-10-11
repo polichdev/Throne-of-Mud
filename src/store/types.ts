@@ -12,6 +12,7 @@ import type {
   RegionData,
   ResourceDeposit,
   WorldSetupConfig,
+  PlayerIdentity,
   TradeRule,
   MilitiaSquad,
   MilitiaUnitType,
@@ -87,6 +88,8 @@ export interface UISlice {
   setCameraZoomTarget: (zoom: number | null) => void;
   cameraAngleTarget: number | null;
   setCameraAngleTarget: (angle: number | null) => void;
+  viewedRegionId: number | null;
+  setViewedRegionId: (regionId: number) => void;
   isStrategicView: boolean;
   setIsStrategicView: (val: boolean) => void;
 
@@ -113,6 +116,7 @@ export interface SettlementSlice {
 
   settlementName: string;
   setSettlementName: (name: string) => void;
+  playerIdentity: PlayerIdentity;
   influence: number;
   royalFavor: number;
 

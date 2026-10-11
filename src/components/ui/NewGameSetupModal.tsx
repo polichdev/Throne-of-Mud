@@ -1,18 +1,11 @@
 import { useState } from 'react';
+import { ArrowLeft, ArrowRight, Check, MapPinned } from 'lucide-react';
 import { GridMap } from '../../engine/grid/GridMap';
 import { DEFAULT_REGIONS, PRESET_BOT_LORDS } from '../../store/useGameStore';
-import type { WorldSetupConfig, SpawnPointData } from '../../types/game';
-import { ArrowRight } from 'lucide-react';
-import {
-  CrownIcon,
-  CrossCloseIcon,
-  MapParchmentIcon,
-  MedievalCheckIcon,
-  WeaponsIcon,
-  ShieldIcon,
-  CastleKeepIcon,
-  DiplomacyPactIcon
-} from './MedievalIcons';
+import { DEFAULT_PLAYER_IDENTITY, HERALDRY_EMBLEMS, SHIELD_COLORS } from '../../constants/playerIdentity';
+import type { PlayerIdentity, SpawnPointData, WorldSetupConfig } from '../../types/game';
+import { CrownIcon, CrossCloseIcon } from './MedievalIcons';
+import { HeraldicShield, RulerPortrait, RULER_PORTRAIT_COUNT } from './PlayerHeraldry';
 import { StrategicMapCanvas } from './StrategicMapCanvas';
 import { useTranslation } from '../../i18n';
 
@@ -23,306 +16,162 @@ interface Props {
   grid: GridMap;
 }
 
+type Season = NonNullable<WorldSetupConfig['startingSeason']>;
+type Supplies = NonNullable<WorldSetupConfig['startingSupplies']>;
+type Scenario = 'calm' | 'frontier' | 'hardship';
+
 export function NewGameSetupModal({ isOpen, onClose, onConfirm, grid }: Props) {
-  const { dict, language } = useTranslation();
-  const [selectedRegionId, setSelectedRegionId] = useState<number>(0);
-  const [selectedSpawnPointId, setSelectedSpawnPointId] = useState<string>('sp-0-1');
-  const [botCount, setBotCount] = useState<number>(3);
+  const { language } = useTranslation();
+  const isUkr = language === 'uk';
+  const [step, setStep] = useState<1 | 2>(1);
+  const [identity, setIdentity] = useState<PlayerIdentity>({ ...DEFAULT_PLAYER_IDENTITY, rulerName: '', portraitId: -1 });
+  const [selectedRegionId, setSelectedRegionId] = useState(0);
+  const [selectedSpawnPointId, setSelectedSpawnPointId] = useState('sp-0-1');
+  const [botCount, setBotCount] = useState(3);
+  const [season, setSeason] = useState<Season>('Spring');
+  const [supplies, setSupplies] = useState<Supplies>('standard');
+  const [scenario, setScenario] = useState<Scenario>('frontier');
 
   if (!isOpen) return null;
 
   const selectedRegion = DEFAULT_REGIONS[selectedRegionId];
   const spawnPoints: SpawnPointData[] = selectedRegion.spawnPoints || GridMap.getPresetSpawnPoints(selectedRegionId);
+  const activeSpawn = spawnPoints.find((point) => point.id === selectedSpawnPointId) || spawnPoints[0];
+  const canContinue = identity.portraitId >= 0 && identity.rulerName.trim().length > 0 && identity.kingdomName.trim().length > 0;
 
-  const activeSpawn = spawnPoints.find((s) => s.id === selectedSpawnPointId) || spawnPoints[0];
-
-  const handleSelectRegion = (regId: number) => {
-    setSelectedRegionId(regId);
-    const newSpList = DEFAULT_REGIONS[regId]?.spawnPoints || GridMap.getPresetSpawnPoints(regId);
-    if (newSpList && newSpList.length > 0) {
-      setSelectedSpawnPointId(newSpList[0].id);
-    }
+  const selectRegion = (regionId: number) => {
+    setSelectedRegionId(regionId);
+    const points = DEFAULT_REGIONS[regionId]?.spawnPoints || GridMap.getPresetSpawnPoints(regionId);
+    if (points.length) setSelectedSpawnPointId(points[0].id);
   };
 
-  const handleStart = () => {
+  const selectSpawnPoint = (spawnPointId: string, regionId: number) => {
+    setSelectedRegionId(regionId);
+    setSelectedSpawnPointId(spawnPointId);
+  };
+
+  const chooseScenario = (choice: Scenario) => {
+    setScenario(choice);
+    if (choice === 'calm') { setBotCount(1); setSupplies('abundant'); setSeason('Spring'); }
+    if (choice === 'frontier') { setBotCount(3); setSupplies('standard'); setSeason('Spring'); }
+    if (choice === 'hardship') { setBotCount(4); setSupplies('scarce'); setSeason('Autumn'); }
+  };
+
+  const startGame = () => {
+    if (!activeSpawn || !canContinue) return;
     onConfirm({
       playerRegionId: selectedRegionId,
       playerSpawnPoint: activeSpawn.position,
       selectedSpawnPointId: activeSpawn.id,
       botCount,
+      startingSeason: season,
+      startingSupplies: supplies,
+      identity: { ...identity, rulerName: identity.rulerName.trim(), kingdomName: identity.kingdomName.trim() },
     });
   };
 
-  const otherRegions = DEFAULT_REGIONS.filter((r) => r.id !== selectedRegionId);
-  const regionDisplayName = language === 'uk' ? (selectedRegion.ukrName || selectedRegion.name) : selectedRegion.name;
+  const scenarios: Array<{ id: Scenario; name: string; caption: string }> = [
+    { id: 'calm', name: isUkr ? 'Мирна долина' : 'Peaceful Valley', caption: isUkr ? 'Щедрі запаси · 1 суперник' : 'Abundant supplies · 1 rival' },
+    { id: 'frontier', name: isUkr ? 'Нове володіння' : 'New Realm', caption: isUkr ? 'Збалансований початок' : 'Balanced beginning' },
+    { id: 'hardship', name: isUkr ? 'Суворий кордон' : 'Harsh Frontier', caption: isUkr ? 'Мало запасів · 4 суперники' : 'Scarce supplies · 4 rivals' },
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-6 animate-in fade-in zoom-in-95 duration-200 select-none font-cinzel pointer-events-auto">
-      <div className="relative w-full max-w-6xl h-[92vh] max-h-[850px] bg-[#1a140e] border-2 border-[#825c31] rounded-2xl shadow-[0_25px_70px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col pointer-events-auto">
-
-        <div className="flex items-center justify-between px-6 py-3.5 bg-gradient-to-b from-[#2d2013] to-[#1e150d] border-b border-[#5e4120]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-950/80 border border-amber-600/70 flex items-center justify-center shadow text-amber-300">
-              <CrownIcon size={22} className="text-amber-300" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold tracking-wider text-amber-200 uppercase drop-shadow">
-                {dict.newGame.title}
-              </h2>
-              <p className="text-[11px] text-amber-400/70">
-                {dict.newGame.subtitle}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-700/60 text-red-300 flex items-center justify-center transition-colors shadow cursor-pointer"
-            title={dict.common.close}
-          >
-            <CrossCloseIcon size={16} />
-          </button>
+    <div className="realm-newgame-screen fixed inset-0 z-[70] flex flex-col pointer-events-auto select-none font-cinzel text-[#e4d6b7]" role="dialog" aria-modal="true" aria-label={isUkr ? 'Нова гра' : 'New Game'}>
+      <header className="realm-newgame-header shrink-0 flex items-center justify-between gap-4 px-6 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <CrownIcon size={26} className="text-[#c5a96d] shrink-0" />
+          <h1 className="text-lg sm:text-xl font-bold tracking-[0.12em] uppercase truncate">{isUkr ? 'Заснування нового володіння' : 'Found a New Realm'}</h1>
         </div>
+        <button onClick={onClose} className="realm-newgame-close w-9 h-9 flex items-center justify-center shrink-0" aria-label={isUkr ? 'Закрити' : 'Close'}><CrossCloseIcon size={17} /></button>
+      </header>
 
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-
-          <div className="lg:w-7/12 h-64 lg:h-full bg-[#120d08] p-4 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-[#4d351b] relative">
-            <div className="absolute top-4 left-5 z-10 flex items-center gap-2 bg-[#1b140d]/90 px-3 py-1.5 rounded-xl border border-amber-700/60 shadow">
-              <MapParchmentIcon size={14} className="text-amber-400" />
-              <span className="text-xs text-amber-200 font-bold uppercase tracking-wider">
-                {dict.newGame.mapTitle}
-              </span>
-            </div>
-
-            <StrategicMapCanvas
-              grid={grid}
-              mode="setup"
-              selectedRegionId={selectedRegionId}
-              onSelectRegion={handleSelectRegion}
-              selectedSpawnPointId={activeSpawn.id}
-              onSelectSpawnPoint={(spId) => setSelectedSpawnPointId(spId)}
-              width={580}
-              height={580}
-            />
-
-            <div className="absolute bottom-4 left-5 z-10 text-[10px] text-amber-400/70 bg-[#1a130c]/85 px-3 py-1 rounded-lg border border-stone-800 flex items-center gap-1.5">
-              <MapParchmentIcon size={12} className="text-amber-400" />
-              <span>{language === 'uk' ? 'Клацніть на сектор для вибору регіону, або на прапорець для вибору точки табору' : 'Click a sector to choose region, or flag to choose camp location'}</span>
-            </div>
-          </div>
-
-          <div className="lg:w-5/12 h-full overflow-y-auto p-5 space-y-4 bg-[#17110a]">
-
-            <div className="bg-[#1e150d] p-3.5 rounded-xl border border-amber-900/50">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center text-lg border shadow"
-                    style={{
-                      backgroundColor: `${selectedRegion.heraldryColor}22`,
-                      borderColor: selectedRegion.heraldryColor,
-                    }}
-                  >
-                    {selectedRegion.heraldryIcon}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-amber-100 text-sm flex items-center gap-2">
-                      <span>{regionDisplayName}</span>
-                      <span className="text-xs text-amber-400/50 font-mono">({selectedRegion.name})</span>
-                    </h3>
-                    <span className="text-[10px] text-amber-400/70 block">
-                      {language === 'uk' ? 'Межі' : 'Bounds'}: [{selectedRegion.bounds.minX}..{selectedRegion.bounds.maxX}, {selectedRegion.bounds.minZ}..{selectedRegion.bounds.maxZ}]
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex gap-1">
-                  {DEFAULT_REGIONS.map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => handleSelectRegion(r.id)}
-                      className={`w-7 h-7 rounded text-xs font-bold transition-all border cursor-pointer ${
-                        r.id === selectedRegionId
-                          ? 'bg-amber-500 text-slate-950 border-amber-300 scale-110 shadow'
-                          : 'bg-stone-900 text-stone-400 border-stone-700 hover:text-amber-200'
-                      }`}
-                      title={language === 'uk' ? (r.ukrName || r.name) : r.name}
-                    >
-                      {r.id + 1}
-                    </button>
-                  ))}
-                </div>
+      {step === 1 ? (
+        <main className="realm-newgame-identity flex-1 min-h-0 grid lg:grid-cols-[minmax(0,1fr)_minmax(400px,1fr)] overflow-y-auto">
+          <section className="realm-newgame-column p-6 lg:p-9 overflow-y-auto">
+            <div className="max-w-[700px] mx-auto">
+              <span className="realm-newgame-eyebrow">{isUkr ? 'ОБЛИЧЧЯ КОРОНИ' : 'FACE OF THE CROWN'}</span>
+              <h2 className="text-2xl lg:text-3xl font-bold mt-2 mb-2">{isUkr ? 'Ваш правитель' : 'Your Ruler'}</h2>
+              <p className="text-sm text-[#a99a80] mb-6">{isUkr ? 'Ім’я та портрет з’являться у грі поруч із вашим гербом.' : 'The name and portrait appear beside your coat of arms in game.'}</p>
+              <label className="realm-newgame-label" htmlFor="realm-ruler-name">{isUkr ? 'Ім’я правителя' : 'Ruler name'}</label>
+              <input id="realm-ruler-name" className="realm-newgame-input mb-6" maxLength={32} value={identity.rulerName} onChange={(event) => setIdentity({ ...identity, rulerName: event.target.value })} placeholder={isUkr ? 'Ім’я правителя' : 'Ruler name'} />
+              <span className="realm-newgame-label block mb-3">{isUkr ? 'Портрет' : 'Portrait'}</span>
+              <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                {Array.from({ length: RULER_PORTRAIT_COUNT }, (_, portraitId) => (
+                  <button key={portraitId} type="button" onClick={() => setIdentity({ ...identity, portraitId })} className={`realm-newgame-portrait ${identity.portraitId === portraitId ? 'selected' : ''}`} aria-label={`${isUkr ? 'Портрет' : 'Portrait'} ${portraitId + 1}`} aria-pressed={identity.portraitId === portraitId}>
+                    <RulerPortrait portraitId={portraitId} size={100} />
+                    {identity.portraitId === portraitId && <span className="realm-newgame-selected"><Check size={13} /></span>}
+                  </button>
+                ))}
               </div>
-
-              <p className="text-xs text-amber-300/80 leading-relaxed italic border-t border-amber-900/30 pt-2">
-                "{selectedRegion.description}"
-              </p>
             </div>
+          </section>
 
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold flex items-center justify-center border border-amber-500/40">
-                    2
-                  </span>
-                  <h3 className="text-xs font-bold text-amber-100 uppercase tracking-wider">
-                    {dict.newGame.selectCamp}
-                  </h3>
-                </div>
-                <span className="text-[10px] text-amber-400/60 font-mono">
-                  [{activeSpawn.position[0]}, {activeSpawn.position[1]}]
-                </span>
+          <section className="realm-newgame-column realm-newgame-arms p-6 lg:p-9 overflow-y-auto">
+            <div className="max-w-[700px] mx-auto">
+              <span className="realm-newgame-eyebrow">{isUkr ? 'СИМВОЛ ВОЛОДІННЯ' : 'SYMBOL OF THE REALM'}</span>
+              <h2 className="text-2xl lg:text-3xl font-bold mt-2 mb-6">{isUkr ? 'Назва та герб' : 'Name and Arms'}</h2>
+              <label className="realm-newgame-label" htmlFor="realm-kingdom-name">{isUkr ? 'Назва королівства' : 'Kingdom name'}</label>
+              <input id="realm-kingdom-name" className="realm-newgame-input mb-6" maxLength={32} value={identity.kingdomName} onChange={(event) => setIdentity({ ...identity, kingdomName: event.target.value })} placeholder={isUkr ? 'Назва королівства' : 'Kingdom name'} />
+              <div className="realm-newgame-shield-preview flex items-center gap-5 p-5 mb-6">
+                <HeraldicShield color={identity.shieldColor} emblemId={identity.emblemId} size={92} />
+                <div className="min-w-0"><span className="text-[10px] uppercase tracking-[.2em] text-[#ac9974]">{isUkr ? 'Ваш стяг' : 'Your banner'}</span><div className="text-xl font-bold mt-1 break-words">{identity.kingdomName || '—'}</div><div className="text-sm text-[#b8a98d] mt-1">{identity.rulerName || '—'}</div></div>
               </div>
-
+              <span className="realm-newgame-label block mb-3">{isUkr ? 'Колір щита' : 'Shield color'}</span>
+              <div className="flex flex-wrap gap-3 mb-7">
+                {SHIELD_COLORS.map((color) => <button key={color} type="button" className={`realm-newgame-color ${identity.shieldColor === color ? 'selected' : ''}`} style={{ backgroundColor: color }} onClick={() => setIdentity({ ...identity, shieldColor: color })} aria-label={`${isUkr ? 'Колір' : 'Color'} ${color}`} aria-pressed={identity.shieldColor === color} />)}
+              </div>
+              <span className="realm-newgame-label block mb-3">{isUkr ? 'Емблема' : 'Emblem'}</span>
+              <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                {HERALDRY_EMBLEMS.map((emblem) => <button key={emblem.id} type="button" className={`realm-newgame-emblem ${identity.emblemId === emblem.id ? 'selected' : ''}`} onClick={() => setIdentity({ ...identity, emblemId: emblem.id })} title={isUkr ? emblem.nameUk : emblem.nameEn} aria-pressed={identity.emblemId === emblem.id}><HeraldicShield color={identity.shieldColor} emblemId={emblem.id} size={43} /></button>)}
+              </div>
+            </div>
+          </section>
+        </main>
+      ) : (
+        <main className="realm-newgame-world flex-1 min-h-0 flex flex-col lg:flex-row">
+          <aside className="realm-newgame-options lg:w-[530px] xl:w-[560px] shrink-0 overflow-y-auto p-5 lg:p-7 lg:mr-5">
+            <span className="realm-newgame-eyebrow">{isUkr ? 'УМОВИ КАМПАНІЇ' : 'CAMPAIGN CONDITIONS'}</span>
+            <h2 className="text-xl font-bold mt-1 mb-5">{isUkr ? 'Заснування поселення' : 'Found a Settlement'}</h2>
+            <div className="realm-newgame-section">
+              <h3>{isUkr ? 'Сценарій' : 'Scenario'}</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {scenarios.map((choice) => <button key={choice.id} type="button" className={`realm-newgame-scenario ${scenario === choice.id ? 'selected' : ''}`} onClick={() => chooseScenario(choice.id)} aria-pressed={scenario === choice.id}><span>{choice.name}</span><small>{choice.caption}</small></button>)}
+              </div>
+            </div>
+            <div className="realm-newgame-section">
+              <h3>{isUkr ? 'Регіон' : 'Region'}</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {DEFAULT_REGIONS.map((region) => <button key={region.id} type="button" className={`realm-newgame-region ${region.id === selectedRegionId ? 'selected' : ''}`} onClick={() => selectRegion(region.id)} aria-pressed={region.id === selectedRegionId}><span className="text-lg" style={{ color: region.heraldryColor }}>{region.heraldryIcon}</span><span className="truncate">{isUkr ? region.ukrName : region.name}</span></button>)}
+              </div>
+            </div>
+            <div className="realm-newgame-section">
+              <h3>{isUkr ? 'Місце табору' : 'Camp location'} <span className="font-mono text-[10px] text-[#a08f6f] ml-auto">{activeSpawn ? `[${activeSpawn.position.join(', ')}]` : ''}</span></h3>
               <div className="space-y-2">
-                {spawnPoints.map((sp, idx) => {
-                  const isSpActive = sp.id === activeSpawn.id;
-                  return (
-                    <div
-                      key={sp.id}
-                      onClick={() => setSelectedSpawnPointId(sp.id)}
-                      className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-start justify-between ${
-                        isSpActive
-                          ? 'bg-gradient-to-r from-[#2c1f11] to-[#22180e] border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-                          : 'bg-[#15100a] border-stone-800 hover:border-amber-700/60'
-                      }`}
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold border mt-0.5 ${
-                            isSpActive ? 'bg-amber-500 text-slate-950 border-amber-300' : 'bg-stone-800 text-stone-400 border-stone-700'
-                          }`}
-                        >
-                          {idx + 1}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-amber-200">{sp.name}</span>
-                            <span className="text-[10px] text-amber-400/50 font-mono">
-                              [{sp.position[0]}, {sp.position[1]}]
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-amber-300/70 mt-0.5 leading-snug">
-                            {sp.description}
-                          </p>
-                        </div>
-                      </div>
-
-                      {isSpActive && (
-                        <div className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-xs shrink-0 mt-1 shadow">
-                          <MedievalCheckIcon size={12} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {spawnPoints.map((point, index) => <button key={point.id} type="button" className={`realm-newgame-spawn ${point.id === activeSpawn?.id ? 'selected' : ''}`} onClick={() => setSelectedSpawnPointId(point.id)} aria-pressed={point.id === activeSpawn?.id}><span className="realm-newgame-spawn-number">{index + 1}</span><span className="min-w-0"><strong>{point.name}</strong><small>{point.description}</small></span>{point.id === activeSpawn?.id && <MapPinned size={16} className="ml-auto shrink-0 text-[#d1b373]" />}</button>)}
               </div>
             </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold flex items-center justify-center border border-amber-500/40">
-                  3
-                </span>
-                <h3 className="text-xs font-bold text-amber-100 uppercase tracking-wider">
-                  {dict.newGame.rivalLords} (0 - 4)
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-5 gap-1.5">
-                {[0, 1, 2, 3, 4].map((count) => {
-                  const isCountSelected = count === botCount;
-                  return (
-                    <button
-                      key={count}
-                      onClick={() => setBotCount(count)}
-                      className={`py-2 px-1 rounded-xl border text-center transition-all cursor-pointer ${
-                        isCountSelected
-                          ? 'bg-amber-500 text-slate-950 font-bold border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
-                          : 'bg-[#15100a] text-stone-400 border-stone-800 hover:border-amber-700 hover:text-amber-200'
-                      }`}
-                    >
-                      <div className="h-6 flex items-center justify-center">
-                        {count === 0 && <DiplomacyPactIcon size={18} className="mx-auto" />}
-                        {count === 1 && <WeaponsIcon size={18} className="mx-auto" />}
-                        {count === 2 && (
-                          <div className="flex items-center justify-center gap-1">
-                            <ShieldIcon size={15} />
-                            <WeaponsIcon size={15} />
-                          </div>
-                        )}
-                        {count === 3 && (
-                          <div className="flex items-center justify-center gap-1">
-                            <CastleKeepIcon size={15} />
-                            <WeaponsIcon size={15} />
-                          </div>
-                        )}
-                        {count === 4 && (
-                          <div className="flex items-center justify-center gap-1">
-                            <CrownIcon size={15} />
-                            <CastleKeepIcon size={15} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xs font-bold">{count === 0 ? '0' : `${count}`}</div>
-                      <div className="text-[9px] opacity-75">
-                        {count === 0 ? (language === 'uk' ? 'Мирно' : 'Peaceful') : (language === 'uk' ? `${count} лорд.` : `${count} lords`)}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {botCount > 0 && (
-                <div className="mt-2.5 p-2 rounded-xl bg-[#120e09] border border-amber-900/30 space-y-1.5">
-                  <span className="text-[10px] text-amber-400/70 font-semibold block uppercase tracking-wider">
-                    {language === 'uk' ? 'Розподіл лордів по інших регіонах:' : 'Rival Lords distribution across fiefs:'}
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    {PRESET_BOT_LORDS.slice(0, botCount).map((bot, idx) => {
-                      const assignedRegion = otherRegions[idx];
-                      const botRegionName = assignedRegion ? (language === 'uk' ? (assignedRegion.ukrName || assignedRegion.name) : assignedRegion.name) : 'Lands';
-                      return (
-                        <div
-                          key={bot.id}
-                          className="flex items-center gap-2 px-2.5 py-1 rounded bg-stone-950/60 border border-stone-800 text-[11px]"
-                        >
-                          <span>{bot.heraldryIcon}</span>
-                          <div className="truncate">
-                            <span className="font-bold text-amber-200 block truncate">{bot.name}</span>
-                            <span className="text-[9px] text-amber-400/50 block truncate">
-                              {language === 'uk' ? `Зона: ${botRegionName}` : `Fief: ${botRegionName}`}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+            <div className="realm-newgame-section">
+              <h3>{isUkr ? 'Суперники на карті' : 'Rival lords'}</h3>
+              <div className="grid grid-cols-5 gap-2">{[0, 1, 2, 3, 4].map((count) => <button key={count} type="button" className={`realm-newgame-count ${botCount === count ? 'selected' : ''}`} onClick={() => setBotCount(count)} aria-pressed={botCount === count}>{count}</button>)}</div>
+              {botCount > 0 && <p className="text-[11px] text-[#a4967b] mt-2">{PRESET_BOT_LORDS.slice(0, botCount).map((lord) => lord.name).join(' · ')}</p>}
             </div>
+            <div className="realm-newgame-section grid grid-cols-2 gap-3">
+              <label className="text-[11px] text-[#cbb98e]">{isUkr ? 'Початкова пора року' : 'Starting season'}<select className="realm-newgame-select" value={season} onChange={(event) => setSeason(event.target.value as Season)}><option value="Spring">{isUkr ? 'Весна' : 'Spring'}</option><option value="Summer">{isUkr ? 'Літо' : 'Summer'}</option><option value="Autumn">{isUkr ? 'Осінь' : 'Autumn'}</option><option value="Winter">{isUkr ? 'Зима' : 'Winter'}</option></select></label>
+              <label className="text-[11px] text-[#cbb98e]">{isUkr ? 'Початкові запаси' : 'Starting supplies'}<select className="realm-newgame-select" value={supplies} onChange={(event) => setSupplies(event.target.value as Supplies)}><option value="scarce">{isUkr ? 'Малі' : 'Scarce'}</option><option value="standard">{isUkr ? 'Звичайні' : 'Standard'}</option><option value="abundant">{isUkr ? 'Щедрі' : 'Abundant'}</option></select></label>
+            </div>
+          </aside>
+          <section className="realm-newgame-map flex-1 min-w-0 min-h-[320px] relative p-4 lg:pl-2 lg:pr-7 lg:py-7">
+            <StrategicMapCanvas grid={grid} mode="setup" selectedRegionId={selectedRegionId} onSelectRegion={selectRegion} selectedSpawnPointId={activeSpawn?.id} selectedHeraldry={identity} onSelectSpawnPoint={selectSpawnPoint} width={1200} height={760} />
+          </section>
+        </main>
+      )}
 
-          </div>
-        </div>
-
-        <div className="px-6 py-3 bg-[#140e08] border-t border-[#4a341b] flex items-center justify-between">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-stone-700 text-stone-400 hover:text-amber-200 hover:border-stone-500 transition-colors text-xs font-semibold cursor-pointer"
-          >
-            {dict.common.cancel}
-          </button>
-
-          <button
-            onClick={handleStart}
-            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-bold text-xs tracking-wider uppercase flex items-center gap-2 shadow-[0_4px_25px_rgba(245,158,11,0.4)] transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-          >
-            <span>{dict.newGame.startJourney}</span>
-            <ArrowRight size={15} />
-          </button>
-        </div>
-
-      </div>
+      <footer className="realm-newgame-footer shrink-0 flex items-center justify-between gap-3 px-6 py-3">
+        <button type="button" className="realm-newgame-secondary flex items-center gap-2" onClick={step === 1 ? onClose : () => setStep(1)}>{step === 2 && <ArrowLeft size={15} />}{step === 1 ? (isUkr ? 'Назад до меню' : 'Back to menu') : (isUkr ? 'Назад до герба' : 'Back to arms')}</button>
+        <div className="hidden md:flex items-center gap-2 text-[11px] text-[#a89878] truncate"><HeraldicShield color={identity.shieldColor} emblemId={identity.emblemId} size={25} /><span className="truncate">{identity.kingdomName} · {identity.rulerName}</span></div>
+        <button type="button" className="realm-newgame-primary flex items-center gap-2" disabled={!canContinue} onClick={step === 1 ? () => setStep(2) : startGame}>{step === 1 ? (isUkr ? 'До вибору земель' : 'Choose lands') : (isUkr ? 'Заснувати володіння' : 'Found the realm')}<ArrowRight size={15} /></button>
+      </footer>
     </div>
   );
 }
