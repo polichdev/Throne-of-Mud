@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { world, characterEntities } from '../../engine/ecs/world';
 import {
@@ -12,23 +11,28 @@ import {
 } from './MedievalIcons';
 import { useTranslation } from '../../i18n';
 import { BuildingInspectorSection } from './inspector/BuildingInspectorSection';
+import { BuildingInspectorWindow } from './inspector/BuildingInspectorWindow';
 import { CharacterInspectorSection } from './inspector/CharacterInspectorSection';
 import { DepositInspectorSection } from './inspector/DepositInspectorSection';
 
 export function InspectorPanel() {
+  const selectedEntityId = useGameStore(s => s.selectedEntityId);
+  return selectedEntityId ? <InspectorPanelContent key={selectedEntityId} selectedEntityId={selectedEntityId} /> : null;
+}
+
+function InspectorPanelContent({ selectedEntityId }: { selectedEntityId: string }) {
   const { dict, language } = useTranslation();
-  const selectedEntityId = useGameStore((s) => s.selectedEntityId);
   const setSelectedEntityId = useGameStore((s) => s.setSelectedEntityId);
   const playerRegionId = useGameStore((s) => s.playerRegionId);
   const regions = useGameStore((s) => s.regions);
+  useGameStore((s) => s.buildingVersion);
+  useGameStore((s) => s.resources);
 
-  const selectedEntity = useMemo(() => {
-    if (!selectedEntityId) return null;
-    return world.entities.find((e) => e.id === selectedEntityId) || null;
-  }, [selectedEntityId]);
+  const selectedEntity = world.entities.find(e => e.id === selectedEntityId) || null;
+  useGameStore(() => selectedEntity
+    ? `${selectedEntity.assignedWorkers?.join(',')}:${selectedEntity.assignedLordId}:${selectedEntity.wage}` : '');
 
-  const lords = useMemo(() => {
-    return Array.from(characterEntities).filter(
+  const lords = Array.from(characterEntities).filter(
       (c) =>
         (c.factionId === 'player' || (c.regionId === playerRegionId && c.factionId !== 'bot')) &&
         (c.characterClass === 'king' ||
@@ -36,17 +40,14 @@ export function InspectorPanel() {
           c.characterClass === 'warrior' ||
           c.characterClass === 'lord')
     );
-  }, [playerRegionId]);
 
-  const freePeasantsCount = useMemo(() => {
-    return Array.from(characterEntities).filter(
+  const freePeasantsCount = Array.from(characterEntities).filter(
       (c) =>
         (c.factionId === 'player' || (c.regionId === playerRegionId && c.factionId !== 'bot')) &&
         c.characterClass === 'peasant' &&
         !c.workBuildingId &&
         !c.isLevy
     ).length;
-  }, [playerRegionId]);
 
   if (!selectedEntity || (selectedEntity.isLevy && selectedEntity.militiaSquadId)) {
     return null;
@@ -78,6 +79,15 @@ export function InspectorPanel() {
   const isCommandingLevies = isNoble && Array.from(characterEntities).some(
     (c) => c.isLevy && c.commandingLordId === selectedEntity.id
   );
+
+  if (isBuilding) {
+    return <BuildingInspectorWindow key={selectedEntity.id} entity={selectedEntity} regionName={ownerRegion?.name}
+      isForeign={isForeign} freePeasantsCount={freePeasantsCount}>
+      {tab => <BuildingInspectorSection tab={tab} entity={selectedEntity} isForeign={isForeign}
+        ownerRegionName={ownerRegion?.name} ownerLordName={ownerRegion?.lordName}
+        freePeasantsCount={freePeasantsCount} lords={lords} />}
+    </BuildingInspectorWindow>;
+  }
 
   return (
     <aside className="realm-paper-panel absolute top-18 right-3 w-88 max-h-[calc(100vh-5.5rem)] overflow-y-auto bg-[#121418]/98 backdrop-blur-xl p-4 rounded-2xl border-2 border-[#5a4830] shadow-[0_15px_40px_rgba(0,0,0,0.95)] flex flex-col gap-3 pointer-events-auto z-30 animate-in fade-in slide-in-from-right-4 duration-200 custom-scrollbar select-none">
@@ -171,17 +181,6 @@ export function InspectorPanel() {
           isNoble={isNoble}
           isForeign={isForeign}
           isCommandingLevies={isCommandingLevies}
-        />
-      )}
-
-      {isBuilding && (
-        <BuildingInspectorSection
-          entity={selectedEntity}
-          isForeign={isForeign}
-          ownerRegionName={ownerRegion?.name}
-          ownerLordName={ownerRegion?.lordName}
-          freePeasantsCount={freePeasantsCount}
-          lords={lords}
         />
       )}
 

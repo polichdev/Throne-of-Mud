@@ -23,7 +23,7 @@ export function RulerPortrait({ portraitId, size = 64, className = '' }: RulerPo
       style={{
         width: size,
         height: size,
-        backgroundImage: "url('/assets/ui/ruler-portraits-v2.png')",
+        backgroundImage: "url('/assets/ui/portraits/ruler-portraits-v2.png')",
         backgroundSize: '400% 300%',
         backgroundPosition: `${column * 100 / 3}% ${row * 50}%`,
         backgroundRepeat: 'no-repeat',

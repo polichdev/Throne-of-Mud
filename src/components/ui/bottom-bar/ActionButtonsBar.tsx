@@ -4,13 +4,13 @@ import { useTranslation } from '../../../i18n';
 import { audioManager } from '../../../engine/audio/AudioManager';
 import { useTownCenterFocus } from '../../../hooks/useTownCenterFocus';
 import {
-  RoadIcon,
-  HammerIcon,
-  WeaponsIcon,
-  GoldIcon,
-  DiplomacyDeskIcon,
-  SettingsIcon,
-} from '../MedievalIcons';
+  DockRoadIcon,
+  DockBuildIcon,
+  DockMilitaryIcon,
+  DockTradeIcon,
+  DockDiplomacyIcon,
+  DockSettingsIcon,
+} from './DockActionIcons';
 
 interface ActionButtonsBarProps {
   onToggleTab: (tabName: 'buildings' | 'military' | 'trade' | 'codex' | 'settings' | 'roads') => void;
@@ -56,52 +56,62 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
             audioManager.playUIClick();
             onToggleTab('roads');
           }}
-          className={`w-11 h-11 manor-square-btn flex items-center justify-center transition cursor-pointer ${
+          className={`w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeTool === 'road' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          title={language === 'uk' ? 'Прокладання доріг (R)' : 'Pave Roads (R)'}
+          data-ui-tip={language === 'uk' ? 'Прокладання доріг (R)' : 'Pave Roads (R)'}
+          aria-label={language === 'uk' ? 'Прокладання доріг' : 'Pave Roads'}
+          aria-pressed={activeTool === 'road'}
         >
-          <RoadIcon className="w-5 h-5 text-amber-200 drop-shadow" />
+          <DockRoadIcon />
         </button>
 
         <button
           onClick={() => onToggleTab('buildings')}
-          className={`w-11 h-11 manor-square-btn flex items-center justify-center transition cursor-pointer ${
+          className={`w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'buildings' || activeTool === 'build' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          title={language === 'uk' ? 'Будівництво споруд (B / H)' : 'Construction Menu (B / H)'}
+          data-ui-tip={language === 'uk' ? 'Будівництво споруд (B / H)' : 'Construction Menu (B / H)'}
+          aria-label={language === 'uk' ? 'Будівництво споруд' : 'Construction Menu'}
+          aria-pressed={activeMenuTab === 'buildings' || activeTool === 'build'}
         >
-          <HammerIcon className="w-5 h-5 text-amber-200 drop-shadow" />
+          <DockBuildIcon />
         </button>
 
         <button
           onClick={() => onToggleTab('military')}
-          className={`w-11 h-11 manor-square-btn flex items-center justify-center transition cursor-pointer ${
+          className={`w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'military' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          title={language === 'uk' ? 'Військо та скликання ополчення (V / M)' : 'Military & Peasant Levies (V / M)'}
+          data-ui-tip={language === 'uk' ? 'Військо та скликання ополчення (V / M)' : 'Military & Peasant Levies (V / M)'}
+          aria-label={language === 'uk' ? 'Військо та скликання ополчення' : 'Military and Peasant Levies'}
+          aria-pressed={activeMenuTab === 'military'}
         >
-          <WeaponsIcon className="w-5 h-5 text-amber-200 drop-shadow" />
+          <DockMilitaryIcon />
         </button>
 
         <button
           onClick={() => onToggleTab('trade')}
-          className={`w-11 h-11 manor-square-btn flex items-center justify-center transition cursor-pointer ${
+          className={`w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'trade' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          title={language === 'uk' ? 'Економіка, зарплати та ринок (E)' : 'Economy, Wages & Market (E)'}
+          data-ui-tip={language === 'uk' ? 'Економіка, зарплати та ринок (E)' : 'Economy, Wages & Market (E)'}
+          aria-label={language === 'uk' ? 'Економіка, зарплати та ринок' : 'Economy, Wages and Market'}
+          aria-pressed={activeMenuTab === 'trade'}
         >
-          <GoldIcon className="w-5 h-5 text-amber-200 drop-shadow" />
+          <DockTradeIcon />
         </button>
 
         <button
           onClick={() => onToggleTab('codex')}
-          className={`relative w-11 h-11 manor-square-btn flex items-center justify-center transition cursor-pointer ${
+          className={`relative w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'codex' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          title={language === 'uk' ? 'Дипломатія та листи королівств (L)' : 'Kingdom Diplomacy & Letters (L)'}
+          data-ui-tip={language === 'uk' ? 'Дипломатія та листи королівств (L)' : 'Kingdom Diplomacy & Letters (L)'}
+          aria-label={language === 'uk' ? 'Дипломатія та листи королівств' : 'Kingdom Diplomacy and Letters'}
+          aria-pressed={activeMenuTab === 'codex'}
         >
-          <DiplomacyDeskIcon className="w-5 h-5 text-amber-200 drop-shadow" />
+          <DockDiplomacyIcon />
           {unreadLettersCount > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-600 text-[10px] font-mono font-bold text-white flex items-center justify-center border border-amber-300 shadow-[0_0_8px_rgba(225,29,72,0.9)] animate-pulse">
               {unreadLettersCount}
@@ -111,12 +121,14 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
 
         <button
           onClick={() => onToggleTab('settings')}
-          className={`w-11 h-11 manor-square-btn flex items-center justify-center transition cursor-pointer ${
+          className={`w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'settings' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          title={dict.settings.title}
+          data-ui-tip={dict.settings.title}
+          aria-label={dict.settings.title}
+          aria-pressed={activeMenuTab === 'settings'}
         >
-          <SettingsIcon className="w-5 h-5 text-amber-200 drop-shadow" />
+          <DockSettingsIcon />
         </button>
       </div>
     </footer>

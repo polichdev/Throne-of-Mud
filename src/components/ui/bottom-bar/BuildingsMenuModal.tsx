@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useLayoutEffect } from 'react';
 import { useGameStore } from '../../../store/useGameStore';
 import { BUILDING_BLUEPRINTS } from '../../../engine/buildings/blueprints';
 import type { BuildingType } from '../../../types/game';
@@ -32,6 +32,8 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
   const [roadSnapEnabled, setRoadSnapEnabled] = useState(true);
 
   const cardsContainerRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+  const [activeTooltipId, setActiveTooltipId] = useState<BuildingType | null>(null);
 
   const categories = [
     {
@@ -129,6 +131,7 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
 
   const handleScrollLeft = () => {
     audioManager.playUIClick();
+    setActiveTooltipId(null);
     if (cardsContainerRef.current) {
       cardsContainerRef.current.scrollBy({ left: -228, behavior: 'smooth' });
     }
@@ -136,22 +139,46 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
 
   const handleScrollRight = () => {
     audioManager.playUIClick();
+    setActiveTooltipId(null);
     if (cardsContainerRef.current) {
       cardsContainerRef.current.scrollBy({ left: 228, behavior: 'smooth' });
     }
   };
 
   const currentBlueprints = categoryBlueprints[activeCategory];
-  const hasOverflow = currentBlueprints.length > 8;
+  useLayoutEffect(() => {
+    const tray = cardsContainerRef.current;
+    if (!tray) return;
+    tray.scrollLeft = 0;
+    const measure = () => setHasOverflow(tray.scrollWidth > tray.clientWidth + 2);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(tray);
+    window.addEventListener('resize', measure);
+    return () => { observer.disconnect(); window.removeEventListener('resize', measure); };
+  }, [activeCategory, language]);
+  const sectionBreaks: Partial<Record<typeof activeCategory, Partial<Record<BuildingType, string>>>> = {
+    gathering: {
+      stone_quarry: language === 'uk' ? 'Копальні' : 'Mines',
+      fishermans_hut: language === 'uk' ? 'Добування' : 'Gathering',
+      stockpile: language === 'uk' ? 'Зберігання' : 'Storage',
+    },
+    industry: {
+      charcoal_kiln: language === 'uk' ? 'Матеріали' : 'Materials',
+      weavers_workshop: language === 'uk' ? 'Ремесла' : 'Crafts',
+    },
+    trade: { hitching_post: language === 'uk' ? 'Перевезення' : 'Transport' },
+  };
 
   return (
-    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-auto z-40 max-w-[98vw] animate-in fade-in slide-in-from-bottom-2 duration-200 select-none">
-      <div className="relative w-full flex items-center justify-center mb-0.5 px-3">
+    <div className="construction-menu absolute bottom-20 left-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-auto z-40 max-w-[98vw] animate-in fade-in slide-in-from-bottom-2 duration-200 select-none">
+      <div className="construction-menu-scroll relative w-full flex items-center justify-center px-3">
         {hasOverflow && (
           <button
             onClick={handleScrollLeft}
-            className="absolute -left-2 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full manor-circle-btn text-amber-200 hover:text-amber-100 flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.85)] hover:scale-110 active:scale-95 transition cursor-pointer"
-            title="Прокрутити вліво"
+            className="ui-tip-anchor ui-tip-left absolute -left-2 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full manor-circle-btn text-amber-200 hover:text-amber-100 flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.85)] hover:scale-110 active:scale-95 transition cursor-pointer"
+            data-ui-tip={language === 'uk' ? 'Попередні споруди' : 'Previous buildings'}
+            aria-label={language === 'uk' ? 'Прокрутити вліво' : 'Scroll left'}
           >
             <svg className="w-4 h-4 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
@@ -161,28 +188,39 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
 
         <div
           ref={cardsContainerRef}
+          onScroll={() => setActiveTooltipId(null)}
           onWheel={(e) => {
+            e.stopPropagation();
+            setActiveTooltipId(null);
             if (cardsContainerRef.current) {
               cardsContainerRef.current.scrollLeft += e.deltaY;
             }
           }}
-          className="realm-building-tray flex items-center gap-2.5 overflow-x-auto px-4 pt-4 pb-2 max-w-[936px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden scroll-smooth"
+          className="construction-building-tray flex items-center gap-1 overflow-x-auto px-5 py-2 max-w-[1080px] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
           {currentBlueprints.map((b) => (
-            <BuildingCard
-              key={b.type}
-              blueprint={b}
-              isSelected={activeBuildType === b.type}
-              onSelect={handleSelectBuilding}
-            />
+            <React.Fragment key={b.type}>
+              {sectionBreaks[activeCategory]?.[b.type] && <div className="construction-section-divider" title={sectionBreaks[activeCategory]?.[b.type]} aria-label={sectionBreaks[activeCategory]?.[b.type]}>
+                <span>✦</span><span>✦</span><span>✦</span>
+              </div>}
+              <BuildingCard
+                blueprint={b}
+                isSelected={activeBuildType === b.type}
+                onSelect={handleSelectBuilding}
+                isTooltipVisible={activeTooltipId === b.type}
+                onTooltipOpen={setActiveTooltipId}
+                onTooltipClose={(type) => setActiveTooltipId((current) => current === type ? null : current)}
+              />
+            </React.Fragment>
           ))}
         </div>
 
         {hasOverflow && (
           <button
             onClick={handleScrollRight}
-            className="absolute -right-2 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full manor-circle-btn text-amber-200 hover:text-amber-100 flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.85)] hover:scale-110 active:scale-95 transition cursor-pointer"
-            title="Прокрутити вправо"
+            className="ui-tip-anchor ui-tip-right absolute -right-2 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full manor-circle-btn text-amber-200 hover:text-amber-100 flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.85)] hover:scale-110 active:scale-95 transition cursor-pointer"
+            data-ui-tip={language === 'uk' ? 'Наступні споруди' : 'Next buildings'}
+            aria-label={language === 'uk' ? 'Прокрутити вправо' : 'Scroll right'}
           >
             <svg className="w-4 h-4 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
@@ -191,7 +229,7 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
         )}
       </div>
 
-      <div className="realm-paper-panel flex items-center bg-gradient-to-r from-[#121418]/98 via-[#1a1d24]/98 to-[#121418]/98 border border-[#52422d] px-3 py-1.5 rounded-xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] backdrop-blur-md gap-1 max-w-[94vw] overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="construction-menu-toolbar flex items-center bg-[#242721]/95 border border-[#69583d] px-3 py-1 gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex items-center gap-1">
           {categories.map((cat) => {
             const Icon = cat.icon;
@@ -201,21 +239,17 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
                 key={cat.id}
                 onClick={() => {
                   audioManager.playUIClick();
+                  setActiveTooltipId(null);
                   setActiveCategory(cat.id);
                   setActiveBuildType(null);
                   setActiveTool('select');
                 }}
-                title={cat.label}
-                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all cursor-pointer relative ${
-                  isActive
-                    ? 'bg-gradient-to-b from-[#6b4e23] to-[#36230b] border border-[#d4af37] text-amber-100 shadow-[0_0_12px_rgba(212,175,55,0.4)]'
-                    : 'text-stone-400 hover:text-amber-200 hover:bg-[#222630]/80 border border-transparent'
-                }`}
+                data-ui-tip={cat.label}
+                aria-label={cat.label}
+                aria-pressed={isActive}
+                className={`construction-category ui-tip-anchor ${isActive ? 'active' : ''}`}
               >
-                <Icon className="w-5 h-5" />
-                {isActive && (
-                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-[#d4af37] rotate-45" />
-                )}
+                <Icon className="w-6 h-6" />
               </button>
             );
           })}
@@ -223,19 +257,21 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
 
         <div className="w-px h-6 bg-[#3d3222] mx-2" />
 
-        <div
+        <button type="button"
           onClick={() => {
             audioManager.playUIClick();
             setRoadSnapEnabled(!roadSnapEnabled);
           }}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-cinzel cursor-pointer transition select-none ${
+          className={`ui-tip-anchor flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-cinzel cursor-pointer transition select-none ${
             roadSnapEnabled
               ? 'bg-[#1e2318] border-emerald-700/60 text-emerald-300'
               : 'bg-[#15171c] border-stone-800 text-stone-400 hover:text-stone-200'
           }`}
-          title={language === 'uk' ? 'Прив\'язка споруд до доріг та сітки' : 'Snap buildings to roads & grid'}
+          data-ui-tip={language === 'uk' ? 'Прив\'язка споруд до доріг та сітки' : 'Snap buildings to roads & grid'}
+          aria-label={language === 'uk' ? 'Прив’язка до дороги' : 'Snap to road'}
+          aria-pressed={roadSnapEnabled}
         >
-          <RoadIcon className="w-4 h-4" />
+          <RoadIcon className="construction-road-icon" />
           <span className="text-[11px] font-bold whitespace-nowrap">
             {language === 'uk' ? 'Прив\'язка до дороги' : 'Snap to road'}
           </span>
@@ -250,12 +286,13 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
               </svg>
             )}
           </div>
-        </div>
+        </button>
 
         <button
           onClick={onClose}
-          className="w-8 h-8 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800/80 transition flex items-center justify-center cursor-pointer ml-1"
-          title={dict.common.close}
+          className="ui-tip-anchor w-8 h-8 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800/80 transition flex items-center justify-center cursor-pointer ml-1"
+          data-ui-tip={dict.common.close}
+          aria-label={dict.common.close}
         >
           <CrossCloseIcon className="w-4 h-4" />
         </button>

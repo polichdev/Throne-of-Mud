@@ -15,24 +15,23 @@ import {
   ShieldIcon,
   StorageIcon,
   HouseTierIcon,
-  CarrotIcon,
-  ChickenIcon,
   GoatIcon,
-  BowIcon,
-  BeerKegIcon,
   CrestBadgeIcon,
   MedievalCheckIcon,
   MedievalAlertIcon,
 } from '../MedievalIcons';
-import { Plus, Minus, Trash2 } from 'lucide-react';
+import { IlluminatedIcon } from '../IlluminatedIcons';
+import { toggleBuildingDemolition } from './buildingInspectorActions';
 import { useGameStore } from '../../../store/useGameStore';
 import { useTranslation } from '../../../i18n';
 import { MIN_BUILDING_WAGE, MAX_BUILDING_WAGE } from '../../../constants/economy';
-import { HOUSE_TIERS_CONFIG, BACKYARD_EXTENSIONS_CONFIG, FOOD_RESOURCE_KEYS } from '../../../constants/housing';
-import type { HouseTier, BackyardExtensionType, ResourceInventory } from '../../../types/game';
+import { HOUSE_TIERS_CONFIG, FOOD_RESOURCE_KEYS } from '../../../constants/housing';
+import type { HouseTier, ResourceInventory } from '../../../types/game';
 import { audioManager } from '../../../engine/audio/AudioManager';
+import type { BuildingInspectorTab } from './BuildingInspectorWindow';
 
 interface BuildingInspectorSectionProps {
+  tab: BuildingInspectorTab;
   entity: GameEntity;
   isForeign: boolean;
   ownerRegionName?: string;
@@ -42,6 +41,7 @@ interface BuildingInspectorSectionProps {
 }
 
 export function BuildingInspectorSection({
+  tab,
   entity,
   isForeign,
   ownerRegionName,
@@ -59,11 +59,7 @@ export function BuildingInspectorSection({
   const removeWorkerFromBuilding = useGameStore((s) => s.removeWorkerFromBuilding);
   const assignLordToBuilding = useGameStore((s) => s.assignLordToBuilding);
   const setBuildingWage = useGameStore((s) => s.setBuildingWage);
-  const upgradeHouseTier = useGameStore((s) => s.upgradeHouseTier);
-  const setBackyardExtension = useGameStore((s) => s.setBackyardExtension);
   const pendingJobs = useGameStore((s) => s.pendingJobs);
-  const addPendingJob = useGameStore((s) => s.addPendingJob);
-  const removePendingJob = useGameStore((s) => s.removePendingJob);
   const incrementBuildingVersion = useGameStore((s) => s.incrementBuildingVersion);
   const tradeRules = useGameStore((s) => s.tradeRules);
   const caravanStatus = useGameStore((s) => s.caravanStatus);
@@ -81,86 +77,23 @@ export function BuildingInspectorSection({
   const isProduction = blueprint?.category === 'production' || blueprint?.category === 'agriculture' || blueprint?.category === 'military' || blueprint?.category === 'gathering' || blueprint?.category === 'community' || (blueprint?.workSlots ?? 0) > 0 || bType === 'market' || bType === 'stockpile';
 
   const isDemolishPending = pendingJobs.some((j) => j.targetBuildingId === entity.id && j.type === 'demolish_structure') || Boolean(entity.isDemolishing);
-  const refundWood = (blueprint?.cost?.wood || 0) + (entity.localInventory?.wood || 0);
-  const refundStone = blueprint?.cost?.stone || 0;
-  const refundGold = blueprint?.cost?.gold || 0;
 
-  const handleToggleDemolish = () => {
-    if (isDemolishPending) {
-      for (const pj of pendingJobs) {
-        if (pj.targetBuildingId === entity.id && pj.type === 'demolish_structure') {
-          removePendingJob(pj.id);
-        }
-      }
-      for (const c of characterEntities) {
-        if (c.currentJob?.targetBuildingId === entity.id && c.currentJob?.type === 'demolish_structure') {
-          c.currentJob = { id: `idle-${c.id}`, type: 'idle', progress: 0, totalWork: 0 };
-        }
-      }
-      entity.isDemolishing = false;
-      entity.demolitionProgress = 0;
-      incrementBuildingVersion();
-    } else {
-      for (const pj of pendingJobs) {
-        if (pj.targetBuildingId === entity.id && pj.type === 'build_structure') {
-          removePendingJob(pj.id);
-        }
-      }
-      addPendingJob({
-        id: `job-demolish-${entity.id}`,
-        type: 'demolish_structure',
-        targetPosition: entity.gridPosition || [0, 0],
-        targetBuildingId: entity.id,
-        progress: 0,
-        totalWork: 30 + (blueprint ? blueprint.width * blueprint.height * 10 : 30),
-      });
-      entity.isDemolishing = true;
-      entity.demolitionProgress = 0;
-      incrementBuildingVersion();
-    }
-  };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/40 flex flex-col gap-1 text-xs">
-        <div className="flex items-center justify-between">
-          <span className="text-slate-400">{dict.inspector.status}:</span>
-          <span className="font-bold text-emerald-400">
-            {entity.isDemolishing
-              ? dict.inspector.demolishingStatus
-              : entity.pendingHouseTier || entity.pendingBackyardExtension
-              ? (language === 'uk' ? 'Покращення' : 'Upgrading')
-              : entity.isCompleted
-              ? dict.buildings.statusCompleted
-              : dict.buildings.statusUnderConstruction}
-          </span>
-        </div>
-        {(entity.pendingHouseTier || entity.pendingBackyardExtension) && (
-          <div className="text-[11px] text-amber-200 border-t border-slate-700/50 pt-2">
-            <div>{language === 'uk' ? 'Робота' : 'Work'}: {Math.round(entity.constructionProgress || 0)}%</div>
-            {Object.entries(entity.requiredMaterials || {}).map(([resource, required]) => (
-              <div key={resource} className="flex justify-between">
-                <span>{resource}</span>
-                <span>{entity.deliveredMaterials?.[resource as keyof ResourceInventory] || 0} / {required}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center justify-between">
-          <span className="text-slate-400">{dict.buildings.hp}:</span>
-          <span className="font-mono text-slate-200">
-            {entity.buildingHealth} / {entity.maxBuildingHealth}
-          </span>
-        </div>
-      </div>
+    <div className="building-inspector-content flex flex-col gap-3">
+      {(tab === 'residential' || tab === 'operations') && <div className="building-inspector-condition">
+        <div><span>{dict.inspector.status}</span><strong>{entity.isDemolishing ? dict.inspector.demolishingStatus : entity.pendingHouseTier || entity.pendingBackyardExtension ? (language === 'uk' ? 'Покращення' : 'Upgrading') : entity.isCompleted ? dict.buildings.statusCompleted : dict.buildings.statusUnderConstruction}</strong></div>
+        <div><span>{dict.buildings.hp}</span><strong>{entity.buildingHealth} / {entity.maxBuildingHealth}</strong></div>
+        {(entity.pendingHouseTier || entity.pendingBackyardExtension) && <div><span>{language === 'uk' ? 'Робота' : 'Work'}</span><strong>{Math.round(entity.constructionProgress || 0)}%</strong></div>}
+      </div>}
 
-      {blueprint && (
-        <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/50 p-2.5 rounded-xl border border-slate-800">
+      {blueprint && tab === 'general' && (
+        <p className="building-inspector-description">
           {dict.buildings.items[bType]?.description || blueprint.description}
         </p>
       )}
 
-      {bType === 'peasant_house' && (entity.houseTier || 1) >= 2 && (
+      {tab === 'residential' && bType === 'peasant_house' && (entity.houseTier || 1) >= 2 && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-800/60 bg-slate-950/70 p-2">
           <span className="text-xs text-amber-200 mr-auto">{language === 'uk' ? 'Огляд поверху' : 'View floor'}</span>
           {([1, 2] as const).map((floor) => (
@@ -176,7 +109,7 @@ export function BuildingInspectorSection({
         </div>
       )}
 
-      {isForeign && (
+      {isForeign && (tab === 'residential' || tab === 'operations') && (
         <div className="bg-amber-950/40 border border-amber-600/60 p-3 rounded-xl flex flex-col gap-1.5 text-xs shadow-inner">
           <div className="flex items-center gap-2">
             <ShieldIcon className="w-4 h-4 text-amber-400" />
@@ -197,26 +130,14 @@ export function BuildingInspectorSection({
         </div>
       )}
 
-      {entity.isCompleted && !isForeign && (bType === 'peasant_house' || bType === 'manor') && (() => {
+      {tab === 'residential' && entity.isCompleted && !isForeign && (bType === 'peasant_house' || bType === 'manor') && (() => {
         const tier = (entity.houseTier || 1) as HouseTier;
-        const currentExt = (entity.backyardExtension || 'none') as BackyardExtensionType;
         const tierConfig = HOUSE_TIERS_CONFIG[tier];
         const nextTier = tier < 3 ? ((tier + 1) as HouseTier) : null;
         const nextTierConfig = nextTier ? HOUSE_TIERS_CONFIG[nextTier] : null;
-        const extConfig = BACKYARD_EXTENSIONS_CONFIG[currentExt];
 
         const availableFoodsCount = FOOD_RESOURCE_KEYS.filter((k) => (resources[k] || 0) > 0).length;
         const hasEnoughFood = nextTierConfig ? availableFoodsCount >= nextTierConfig.upgradeMinFoodTypes : true;
-
-        let hasUpgradeCost = true;
-        if (nextTierConfig) {
-          for (const [res, amt] of Object.entries(nextTierConfig.upgradeCost)) {
-            if ((resources[res as keyof ResourceInventory] || 0) < (amt || 0)) {
-              hasUpgradeCost = false;
-              break;
-            }
-          }
-        }
 
         let hasRequiredGoods = true;
         if (nextTierConfig) {
@@ -228,45 +149,15 @@ export function BuildingInspectorSection({
           }
         }
 
-        const canUpgrade = Boolean(nextTierConfig && hasEnoughFood && hasUpgradeCost && hasRequiredGoods);
 
         return (
           <div className="bg-slate-950/70 p-3 rounded-xl border border-amber-800/60 flex flex-col gap-3 shadow-lg">
-            <div className="flex items-center justify-between border-b border-amber-900/60 pb-2">
-              <div className="flex items-center gap-2">
-                <HouseTierIcon className="w-4 h-4 text-amber-400" />
-                <span className="text-[12px] font-bold text-amber-200 uppercase tracking-wider">
-                  {language === 'uk' ? 'Садиба володіння' : 'Burgage Plot'}
-                </span>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider bg-amber-950/80 text-amber-300 border border-amber-700/60">
-                {language === 'uk' ? tierConfig.nameUk : tierConfig.nameEn}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800 flex items-center gap-2">
-                <PeasantsIcon className="w-4 h-4 text-sky-400 shrink-0" />
-                <div>
-                  <div className="text-[10px] text-slate-400 uppercase">{language === 'uk' ? 'Місткість' : 'Capacity'}</div>
-                  <div className="font-bold text-slate-200">{tierConfig.capacity} {language === 'uk' ? 'селян' : 'peasants'}</div>
-                </div>
-              </div>
-
-              <div className="bg-slate-900/80 p-2 rounded-lg border border-slate-800 flex items-center gap-2">
-                <GoldIcon className="w-4 h-4 text-amber-400 shrink-0" />
-                <div>
-                  <div className="text-[10px] text-slate-400 uppercase">{language === 'uk' ? 'Податок' : 'Daily Tax'}</div>
-                  <div className="font-bold text-amber-300">+{tierConfig.dailyTaxGold} {language === 'uk' ? 'зол./день' : 'gold/day'}</div>
-                </div>
-              </div>
-            </div>
 
             {nextTierConfig ? (
               <div className="bg-slate-900/90 p-2.5 rounded-lg border border-amber-900/40 flex flex-col gap-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-amber-300">
-                    {language === 'uk' ? `Покращення до Рівня ${nextTier}` : `Upgrade to Tier ${nextTier}`}
+                    {language === 'uk' ? `Вимоги для рівня ${nextTier}` : `Requirements for tier ${nextTier}`}
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">
                     +{nextTierConfig.capacity - tierConfig.capacity} {language === 'uk' ? 'місць' : 'beds'}
@@ -282,6 +173,11 @@ export function BuildingInspectorSection({
                     <span className={hasEnoughFood ? 'text-emerald-300 font-mono' : 'text-rose-400 font-mono'}>
                       {availableFoodsCount} / {nextTierConfig.upgradeMinFoodTypes} {language === 'uk' ? 'видів' : 'types'}
                     </span>
+                  </div>
+                  <div className="building-inspector-foods">
+                    {FOOD_RESOURCE_KEYS.map(key => <span key={key} className={(resources[key] || 0) > 0 ? 'available' : ''}>
+                      <i />{({ bread: language === 'uk' ? 'Хліб' : 'Bread', vegetables: language === 'uk' ? 'Овочі' : 'Vegetables', eggs: language === 'uk' ? 'Яйця' : 'Eggs', meat: language === 'uk' ? 'М’ясо' : 'Meat', fish: language === 'uk' ? 'Риба' : 'Fish', berries: language === 'uk' ? 'Ягоди' : 'Berries' } as Record<string, string>)[key]}
+                    </span>)}
                   </div>
 
                   {nextTierConfig.upgradeRequiredGoods.length > 0 && (
@@ -311,18 +207,7 @@ export function BuildingInspectorSection({
                   </div>
                 </div>
 
-                <button
-                  onClick={() => upgradeHouseTier(entity.id)}
-                  disabled={!canUpgrade}
-                  className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition border ${
-                    canUpgrade
-                      ? 'bg-amber-900/80 hover:bg-amber-800 text-amber-200 border-amber-600 shadow-md cursor-pointer active:scale-98'
-                      : 'bg-slate-800/40 text-slate-500 border-slate-750 cursor-not-allowed'
-                  }`}
-                >
-                  <HouseTierIcon className="w-4 h-4" />
-                  {language === 'uk' ? `Покращити садибу (Рівень ${nextTier})` : `Upgrade Homestead (Tier ${nextTier})`}
-                </button>
+
               </div>
             ) : (
               <div className="bg-amber-950/30 p-2.5 rounded-lg border border-amber-800/40 text-[11px] text-amber-300 flex items-center gap-2">
@@ -331,95 +216,16 @@ export function BuildingInspectorSection({
               </div>
             )}
 
-            <div className="border-t border-amber-900/60 pt-2 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <CarrotIcon className="w-3.5 h-3.5 text-emerald-400" />
-                  {language === 'uk' ? 'Присадибне господарство' : 'Backyard Extensions'}
-                </span>
-                <span className="text-[10px] text-slate-400">
-                  {language === 'uk' ? extConfig.nameUk : extConfig.nameEn}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-2 gap-1.5">
-                {(Object.keys(BACKYARD_EXTENSIONS_CONFIG) as BackyardExtensionType[]).map((extKey) => {
-                  const item = BACKYARD_EXTENSIONS_CONFIG[extKey];
-                  const isSelected = currentExt === extKey;
-                  const isLocked = tier < item.requiredTier;
-
-                  let canAfford = true;
-                  for (const [r, amt] of Object.entries(item.cost)) {
-                    if ((resources[r as keyof ResourceInventory] || 0) < (amt || 0)) {
-                      canAfford = false;
-                      break;
-                    }
-                  }
-
-                  const renderExtIcon = () => {
-                    switch (item.iconType) {
-                      case 'vegetable': return <CarrotIcon className="w-4 h-4 text-emerald-400" />;
-                      case 'chicken': return <ChickenIcon className="w-4 h-4 text-amber-400" />;
-                      case 'goat': return <GoatIcon className="w-4 h-4 text-yellow-300" />;
-                      case 'bow': return <BowIcon className="w-4 h-4 text-orange-400" />;
-                      case 'shield': return <ShieldIcon className="w-4 h-4 text-blue-400" />;
-                      case 'beer': return <BeerKegIcon className="w-4 h-4 text-amber-400" />;
-                      default: return <HouseTierIcon className="w-4 h-4 text-slate-400" />;
-                    }
-                  };
-
-                  return (
-                    <button
-                      key={extKey}
-                      onClick={() => {
-                        if (isSelected || isLocked || !canAfford) return;
-                        setBackyardExtension(entity.id, extKey);
-                      }}
-                      disabled={isSelected || isLocked || !canAfford}
-                      className={`p-2 rounded-lg border text-left flex flex-col justify-between gap-1 transition text-xs ${
-                        isSelected
-                          ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500/50'
-                          : isLocked
-                          ? 'bg-slate-900/40 border-slate-800 text-slate-600 cursor-not-allowed opacity-60'
-                          : canAfford
-                          ? 'bg-slate-900/90 border-slate-750 hover:border-amber-600 text-slate-200 cursor-pointer hover:bg-slate-850 active:scale-98'
-                          : 'bg-slate-900/50 border-slate-800 text-slate-500 cursor-not-allowed'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 font-semibold text-[11px] leading-tight">
-                        {renderExtIcon()}
-                        <span>{language === 'uk' ? item.nameUk : item.nameEn}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400 leading-tight line-clamp-2">
-                        {language === 'uk' ? item.descriptionUk : item.descriptionEn}
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-800">
-                        {isLocked ? (
-                          <span className="text-rose-400 font-bold">{language === 'uk' ? `Потрібен Рівень ${item.requiredTier}` : `Requires Tier ${item.requiredTier}`}</span>
-                        ) : isSelected ? (
-                          <span className="text-emerald-400 font-bold">{language === 'uk' ? 'Активно' : 'Active'}</span>
-                        ) : (
-                          <div className="flex items-center gap-1 text-amber-300 font-mono">
-                            {Object.entries(item.cost).length > 0
-                              ? Object.entries(item.cost).map(([r, a]) => `${a} ${r === 'gold' ? 'зол.' : r === 'wood' ? 'дер.' : 'зал.'}`).join(', ')
-                              : (language === 'uk' ? 'Безкоштовно' : 'Free')}
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
         );
       })()}
 
-      {entity.isCompleted && (blueprint?.maxStorage || entity.buildingType === 'lumberjack_hut' || entity.buildingType === 'stockpile') && (() => {
+      {tab === 'operations' && entity.isCompleted && (blueprint?.maxStorage || entity.buildingType === 'lumberjack_hut' || entity.buildingType === 'stockpile') && (() => {
         const maxStorage = blueprint?.maxStorage || (entity.buildingType === 'lumberjack_hut' ? 20 : 100);
         const inv = entity.localInventory || {};
-        const entries = Object.entries(inv).filter(([_, amt]) => (amt || 0) > 0);
-        const totalStored = entries.reduce((acc, [_, amt]) => acc + (amt || 0), 0);
+        const entries = Object.entries(inv).filter(([, amt]) => (amt || 0) > 0);
+        const totalStored = entries.reduce((acc, [, amt]) => acc + (amt || 0), 0);
         const isFull = totalStored >= maxStorage;
         const pct = Math.min(100, Math.round((totalStored / maxStorage) * 100));
 
@@ -494,7 +300,7 @@ export function BuildingInspectorSection({
         );
       })()}
 
-      {entity.isCompleted && !isForeign && isHousing && (() => {
+      {tab === 'people' && entity.isCompleted && !isForeign && isHousing && (() => {
         const beds = bType === 'peasant_house'
           ? HOUSE_TIERS_CONFIG[(entity.houseTier || 1) as HouseTier].capacity
           : blueprint?.bedsCount ?? (bType === 'tent' ? 1 : 0);
@@ -514,16 +320,6 @@ export function BuildingInspectorSection({
               </span>
             </div>
 
-            <div className="text-[11px] text-slate-400 bg-slate-900/80 p-2 rounded-lg border border-slate-800 flex flex-col gap-1">
-              <div className="flex justify-between items-center">
-                <span>{language === 'uk' ? 'Місткість житла:' : 'Shelter capacity:'}</span>
-                <span className="font-semibold text-slate-200">{beds} {language === 'uk' ? 'поселенці' : 'settlers'}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>{language === 'uk' ? 'Затишок і тепло:' : 'Comfort & warmth:'}</span>
-                <span className="font-semibold text-emerald-400">{bType === 'peasant_house' ? '+100% (Піч та ліжка)' : '+50% (Намет)'}</span>
-              </div>
-            </div>
 
             {sleepers.length > 0 && (
               <div className="flex flex-col gap-1 mt-1">
@@ -547,7 +343,7 @@ export function BuildingInspectorSection({
         );
       })()}
 
-      {entity.isCompleted && !isForeign && bType === 'market' && (() => {
+      {tab === 'operations' && entity.isCompleted && !isForeign && bType === 'market' && (() => {
         const tradeItems: Array<{
           res: 'wood' | 'stone' | 'wheat' | 'flour' | 'bread' | 'ale';
           nameUk: string;
@@ -687,7 +483,7 @@ export function BuildingInspectorSection({
         );
       })()}
 
-      {entity.isCompleted && !isForeign && bType === 'trading_post' && (() => {
+      {tab === 'operations' && entity.isCompleted && !isForeign && bType === 'trading_post' && (() => {
         const activeRules = Object.values(tradeRules).filter((r) => r.mode !== 'none');
         return (
           <div className="bg-slate-950/70 p-3 rounded-xl border border-amber-600/60 flex flex-col gap-2.5 shadow-lg">
@@ -734,7 +530,7 @@ export function BuildingInspectorSection({
         );
       })()}
 
-      {entity.isCompleted && !isForeign && bType === 'hitching_post' && (
+      {tab === 'operations' && entity.isCompleted && !isForeign && bType === 'hitching_post' && (
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -808,7 +604,7 @@ export function BuildingInspectorSection({
         </div>
       )}
 
-      {entity.isCompleted && !isForeign && isProduction && (
+      {tab === 'people' && entity.isCompleted && !isForeign && isProduction && (
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -861,7 +657,7 @@ export function BuildingInspectorSection({
                     : 'bg-slate-800/40 text-slate-500 border-slate-750 cursor-not-allowed'
                 }`}
               >
-                <Plus className="w-3.5 h-3.5" />
+                <IlluminatedIcon kind="plus" className="w-3.5 h-3.5" />
                 {dict.inspector.assignWorker} ({freePeasantsCount} {language === 'uk' ? 'вільних' : 'idle'})
               </button>
             )}
@@ -869,7 +665,7 @@ export function BuildingInspectorSection({
         </div>
       )}
 
-      {entity.isCompleted && !isForeign && isProduction && (
+      {tab === 'people' && entity.isCompleted && !isForeign && isProduction && (
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2">
           <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
             <CrownIcon className="w-3.5 h-3.5 text-amber-400" />
@@ -900,7 +696,7 @@ export function BuildingInspectorSection({
         </div>
       )}
 
-      {entity.isCompleted && !isForeign && isProduction && (
+      {tab === 'operations' && entity.isCompleted && !isForeign && isProduction && (
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -920,7 +716,7 @@ export function BuildingInspectorSection({
                 }}
                 className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 border border-slate-700 transition cursor-pointer"
               >
-                <Minus className="w-3.5 h-3.5" />
+                <IlluminatedIcon kind="minus" className="w-3.5 h-3.5" />
               </button>
               <span className="px-3 py-1 bg-slate-900 rounded-lg font-mono font-bold text-amber-300 text-xs border border-slate-800">
                 {currentWage} {dict.common.gold.toLowerCase()}
@@ -931,7 +727,7 @@ export function BuildingInspectorSection({
                 }}
                 className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 border border-slate-700 transition cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <IlluminatedIcon kind="plus" className="w-3.5 h-3.5" />
               </button>
             </div>
             <span className="text-[10px] text-slate-400">
@@ -941,13 +737,13 @@ export function BuildingInspectorSection({
         </div>
       )}
 
-      {!isForeign && (
+      {tab === 'advanced' && !isForeign && (
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex flex-col gap-2">
           {isDemolishPending ? (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-rose-400 flex items-center gap-1.5">
-                  <Trash2 className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                  <IlluminatedIcon kind="demolish" className="w-3.5 h-3.5 animate-pulse" />
                   {dict.inspector.demolishingStatus}
                 </span>
                 {Boolean(entity.demolitionProgress) && (
@@ -957,7 +753,7 @@ export function BuildingInspectorSection({
                 )}
               </div>
               <button
-                onClick={handleToggleDemolish}
+                onClick={() => toggleBuildingDemolition(entity)}
                 className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg border border-slate-750 transition cursor-pointer active:scale-98"
               >
                 {dict.inspector.cancelDemolish}
@@ -966,37 +762,12 @@ export function BuildingInspectorSection({
           ) : (
             <div className="flex flex-col gap-2">
               <button
-                onClick={handleToggleDemolish}
+                onClick={() => toggleBuildingDemolition(entity)}
                 className="w-full py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-bold rounded-lg border border-rose-800/60 flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md active:scale-98"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <IlluminatedIcon kind="demolish" className="w-3.5 h-3.5" />
                 {dict.inspector.demolishBuilding}
               </button>
-              {(refundWood > 0 || refundStone > 0 || refundGold > 0) && (
-                <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-                  <span>{dict.inspector.refundNotice}</span>
-                  <div className="flex items-center gap-2 font-mono font-bold text-amber-300">
-                    {refundWood > 0 && (
-                      <span className="flex items-center gap-1">
-                        <WoodIcon className="w-3 h-3 text-amber-500" />
-                        +{refundWood}
-                      </span>
-                    )}
-                    {refundStone > 0 && (
-                      <span className="flex items-center gap-1">
-                        <StoneIcon className="w-3 h-3 text-slate-400" />
-                        +{refundStone}
-                      </span>
-                    )}
-                    {refundGold > 0 && (
-                      <span className="flex items-center gap-1">
-                        <GoldIcon className="w-3 h-3 text-yellow-400" />
-                        +{refundGold}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>

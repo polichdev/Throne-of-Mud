@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useGameStore } from '../../store/useGameStore';
+import { world } from '../../engine/ecs/world';
 
 const TARGET_FRAME_MS = 1000 / 165;
 const GOOD_FRAME_MS = TARGET_FRAME_MS * 1.05;
@@ -7,6 +8,7 @@ const WARN_FRAME_MS = TARGET_FRAME_MS * 2.1;
 
 export const FpsMonitor: React.FC = React.memo(() => {
   const selectedEntityId = useGameStore((s) => s.selectedEntityId);
+  const hasSideInspector = selectedEntityId && !world.entities.find(entity => entity.id === selectedEntityId)?.isBuilding;
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -37,6 +39,12 @@ export const FpsMonitor: React.FC = React.memo(() => {
     textures: 0,
     programs: 0,
     heapMb: 0,
+    frameSubscribers: 0,
+    renderTasks: 0,
+    sceneObjects: 0,
+    activePointLights: 0,
+    pointLightSlots: 0,
+    registeredPointLights: 0,
   });
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -76,6 +84,12 @@ export const FpsMonitor: React.FC = React.memo(() => {
       textures: 0,
       programs: 0,
       heapMb: 0,
+      frameSubscribers: 0,
+      renderTasks: 0,
+      sceneObjects: 0,
+      activePointLights: 0,
+      pointLightSlots: 0,
+      registeredPointLights: 0,
     });
   }, []);
 
@@ -139,6 +153,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
           const minFps = Math.round(1000 / (maxFt || 16.6));
           const renderMetrics = (window as any).__renderMetrics as { calls?: number; triangles?: number; geometries?: number; textures?: number; programs?: number; cpuFrameMs?: number; cpuRenderMs?: number; cpuMatrixMs?: number; cpuBatchMs?: number; cpuRenderOtherMs?: number; cpuSubmissionMs?: number | null; cpuPreparationMs?: number | null; sampledDrawCalls?: number; cpuFramePeakMs?: number; cpuRenderPeakMs?: number; simulationPeakMs?: number; shadowRefreshes?: number; gpuMs?: number | null; gpuSupported?: boolean } | undefined;
           const simulationMs = Number(((window as any).__simulationMs || 0).toFixed(1));
+          const lifecycle = (window as any).__renderMetrics as { frameSubscribers?: number; renderTasks?: number; sceneObjects?: number; activePointLights?: number; pointLightSlots?: number; registeredPointLights?: number } | undefined;
           const memory = (performance as any).memory;
           const heapMb = memory?.usedJSHeapSize ? Math.round(memory.usedJSHeapSize / (1024 * 1024)) : 0;
 
@@ -169,6 +184,12 @@ export const FpsMonitor: React.FC = React.memo(() => {
             textures: renderMetrics?.textures || 0,
             programs: renderMetrics?.programs || 0,
             heapMb,
+            frameSubscribers: lifecycle?.frameSubscribers ?? 0,
+            renderTasks: lifecycle?.renderTasks ?? 0,
+            sceneObjects: lifecycle?.sceneObjects ?? 0,
+            activePointLights: lifecycle?.activePointLights ?? 0,
+            pointLightSlots: lifecycle?.pointLightSlots ?? 0,
+            registeredPointLights: lifecycle?.registeredPointLights ?? 0,
           });
 
           const canvas = canvasRef.current;
@@ -246,7 +267,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
 
   const positionClass = pos
     ? ''
-    : selectedEntityId
+    : hasSideInspector
     ? 'right-92 top-48'
     : 'right-4 top-48';
 
@@ -457,6 +478,12 @@ export const FpsMonitor: React.FC = React.memo(() => {
             <div title="JS Heap">
               <span className="text-stone-500">Heap:</span> <span className="text-stone-300 font-bold">{stats.heapMb ? `${stats.heapMb}M` : '—'}</span>
             </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1 text-center text-[9px] font-mono text-stone-300">
+            <div title="Обробники кадру R3F / завдання підготовки рендера. Зростання за незмінного світу може вказувати на накопичення підписок.">Кадр: {stats.frameSubscribers}/{stats.renderTasks}</div>
+            <div title="Кількість об’єктів у сцені, включно з прихованими регіонами.">Об’єкти: {stats.sceneObjects}</div>
+            <div title={`Активні лампи / слоти в шейдері. Зареєстровано у світі: ${stats.registeredPointLights}.`}>Світло: {stats.activePointLights}/{stats.pointLightSlots}</div>
           </div>
 
           <div className="flex flex-col gap-1">

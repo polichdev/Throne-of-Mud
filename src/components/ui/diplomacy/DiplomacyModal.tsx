@@ -3,10 +3,10 @@ import { useGameStore } from '../../../store/useGameStore';
 import { useTranslation } from '../../../i18n';
 import { audioManager } from '../../../engine/audio/AudioManager';
 import {
-  DiplomacyDeskIcon,
   CrownIcon,
 } from '../MedievalIcons';
 import {
+  DiplomacySealIcon,
   PeacePactIcon,
   MilitaryPassageIcon,
   WarSwordsIcon,
@@ -14,11 +14,7 @@ import {
   WaxSealStampIcon,
   CloseCrossIcon,
 } from './DiplomacyIcons';
-import {
-  BaronBergAvatar,
-  LadyHildegardAvatar,
-  DukeWilhelmAvatar,
-} from './LordIllustratedAvatars';
+import { RulerPortrait } from '../PlayerHeraldry';
 import type { DiplomaticStatus } from '../../../types/diplomacy';
 
 interface DiplomacyModalProps {
@@ -38,7 +34,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
   const influence = useGameStore((s) => s.influence);
 
   const [confirmWar, setConfirmWar] = useState(false);
-  const [selectedLordId, setSelectedLordId] = useState<string | null>(null);
+  const [selectedLordId, setSelectedLordId] = useState<string | null>('bot-2');
 
   const realBotLords = useMemo(() => {
     return ['bot-1', 'bot-2', 'bot-3']
@@ -62,9 +58,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
   };
 
   const renderLordAvatar = (lordId: string, size = 48) => {
-    if (lordId === 'bot-1') return <BaronBergAvatar size={size} />;
-    if (lordId === 'bot-2') return <LadyHildegardAvatar size={size} />;
-    return <DukeWilhelmAvatar size={size} />;
+    return <RulerPortrait portraitId={lordDiplomacy[lordId]?.portraitId ?? (lordId === 'bot-2' ? 1 : 0)} size={size} />;
   };
 
   const getStatusBadge = (status: DiplomaticStatus, hasPassage: boolean) => {
@@ -113,10 +107,10 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
     <div className="realm-diplomacy-screen fixed inset-0 z-[100] pointer-events-auto select-none font-sans" role="dialog" aria-modal="true" aria-label={isUkr ? 'Дипломатія' : 'Diplomacy'}>
       <div className="realm-paper-panel realm-large-modal realm-diplomacy-modal relative w-full h-full flex flex-col overflow-hidden text-stone-200">
         
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#3d3222] bg-[#11131a]">
+        <div className="realm-diplomacy-heading flex items-center justify-between px-5 py-3 border-b border-[#3d3222] bg-[#11131a]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-amber-950/80 border border-amber-600/70 flex items-center justify-center shadow">
-              <DiplomacyDeskIcon className="w-4 h-4 text-amber-300" />
+              <DiplomacySealIcon className="w-7 h-7" />
             </div>
             <div>
               <h2 className="text-sm font-cinzel font-bold text-amber-100 tracking-wider">
@@ -167,8 +161,8 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                         : 'bg-[#151722] border-[#2e261d] hover:border-amber-700/80 hover:bg-[#1a1c28]'
                     }`}
                   >
-                    <div className="shrink-0 rounded-lg overflow-hidden border border-amber-500/40 shadow">
-                      {renderLordAvatar(lord.lordId, 56)}
+                    <div className="realm-diplomacy-avatar shrink-0 rounded-lg overflow-hidden border border-amber-500/40 shadow">
+                      {renderLordAvatar(lord.lordId, 72)}
                     </div>
 
                     <div className="flex flex-col min-w-0 flex-1">
@@ -203,8 +197,8 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
               <>
                 <div className="realm-diplomacy-profile flex items-center justify-between p-3.5 border shadow">
                   <div className="flex items-center gap-3.5">
-                    <div className="shrink-0 rounded-xl overflow-hidden border-2 border-amber-400 shadow-md">
-                      {renderLordAvatar(activeLord.lordId, 56)}
+                    <div className="realm-diplomacy-avatar realm-diplomacy-avatar-large shrink-0 rounded-xl overflow-hidden border-2 border-amber-400 shadow-md">
+                      {renderLordAvatar(activeLord.lordId, 104)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -222,6 +216,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                           {activeLord.opinion > 0 ? `+${activeLord.opinion}` : activeLord.opinion} ({getOpinionInfo(activeLord.opinion).text})
                         </span>
                       </p>
+                      <p className="realm-diplomacy-description">{activeLord.description}</p>
                     </div>
                   </div>
                 </div>

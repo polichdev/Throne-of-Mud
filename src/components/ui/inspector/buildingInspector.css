@@ -1,0 +1,92 @@
+.building-inspector-window {
+  position: fixed; top: 0; left: 0; width: min(378px, calc(100vw - 24px));
+  max-height: calc(100dvh - 166px); z-index: 35; pointer-events: auto;
+  display: flex; flex-direction: column; overflow: hidden;
+  color: #e0d7bd; font-family: Georgia, 'Times New Roman', serif;
+  background: url('/assets/ui/textures/parchment-grain.svg'), linear-gradient(110deg, #46483af5, #292e28f5);
+  border: 1px solid #837d63; border-radius: 4px;
+  box-shadow: 0 14px 38px #0009, inset 0 0 0 1px #e7d5a220;
+}
+.building-inspector-titlebar {
+  display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 6px 9px;
+  background: repeating-linear-gradient(45deg, #ffffff02 0 1px, transparent 1px 8px), linear-gradient(#545b57, #414b47);
+  border-bottom: 1px solid #b9ad855c; cursor: grab; touch-action: none;
+}
+.building-inspector-titlebar:active { cursor: grabbing; }
+.building-inspector-titlebar > svg { flex-shrink: 0; color: #c9c4a9; }
+.building-inspector-titlebar h2 { margin: 0; min-width: 0; flex: 1; font-size: 15px; font-weight: 600; line-height: 1.15; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.building-inspector-region { margin-left: auto; max-width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-style: italic; color: #b7bcad; }
+.building-inspector-titlebar button { display: grid; place-items: center; flex-shrink: 0; width: 22px; height: 23px; color: #c6c9bc; cursor: pointer; border-radius: 50%; }
+.building-inspector-titlebar button:hover { color: #fff5d8; background: #ffffff12; }
+.building-inspector-titlebar button:disabled { opacity: .34; cursor: not-allowed; }
+.building-inspector-titlebar .building-inspector-demolish:hover { color: #de977f; }
+.building-inspector-window button:focus-visible, .building-inspector-window select:focus-visible { outline: 2px solid #d4bf86; outline-offset: -2px; }
+.building-inspector-art-wrap { position: relative; flex-shrink: 0; }
+.building-inspector-illustration { position: relative; height: 184px; flex-shrink: 0; background: #d9c9a5 url('/assets/ui/textures/parchment-grain.svg') center / cover; overflow: hidden; border-bottom: 1px solid #878367; }
+.building-inspector-vignette { width: 100%; height: 100%; opacity: .8; filter: sepia(.12) saturate(.78); }
+.building-inspector-painted > img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 55%; }
+.building-inspector-painted[data-building-type='peasant_house'] > img { object-position: center 58%; }
+.building-inspector-painted[data-building-type='manor'] > img { object-position: center 54%; }
+.building-inspector-building { position: absolute; right: 2px; top: -12px; width: 174px; height: 158px; filter: saturate(.7) sepia(.22) contrast(1.08) drop-shadow(0 3px 2px #4737226b); mask-image: linear-gradient(to right, transparent, black 18%); }
+.building-inspector-building > svg { width: 100%; height: 100%; }
+.building-inspector-ink { position: absolute; inset: 0; pointer-events: none; background: url('/assets/ui/textures/parchment-grain.svg'), linear-gradient(90deg, #f1dec53b, transparent 55%, #62513b46); opacity: .52; mix-blend-mode: multiply; box-shadow: inset 0 0 19px #6753394d; }
+.building-inspector-seal { position: absolute; left: calc(50% - 21px); top: 50%; transform: translateY(-50%); width: 42px; height: 42px; display: grid; place-items: center; color: #ded3ac; background: radial-gradient(circle, #514d3f, #292e26); border: 2px solid #b9a06c; border-radius: 50%; box-shadow: 0 2px 5px #33251080, inset 0 0 0 2px #c4b48424; }
+.building-inspector-art-wrap.has-extension .building-inspector-seal { left: calc(50% - 118px); }
+.building-inspector-art-wrap.has-upgrade-control .building-inspector-illustration .building-inspector-seal { display: none; }
+.building-inspector-upgrade-seal { z-index: 6; cursor: pointer; }
+.building-inspector-upgrade-seal.is-ready { color: #fffdf2; border-color: #f5d594; background: radial-gradient(circle, #766b4d, #303329 75%); box-shadow: 0 0 0 2px #e0bd75a8, 0 0 15px #f0cf8b8f, inset 0 1px #fff6dc8c; }
+.building-inspector-upgrade-seal.is-ready svg { stroke: #fffdf2; stroke-width: 2.1; }
+.building-inspector-upgrade-seal.is-ready:hover { background: radial-gradient(circle, #8d784d, #3e402f 75%); transform: translateY(-50%) scale(1.07); }
+.building-inspector-upgrade-seal:disabled { color: #aea891; border-color: #82775f; opacity: .72; cursor: not-allowed; }
+.building-inspector-seal span { position: absolute; bottom: -3px; right: -1px; font-size: 10px; background: #514d3f; border: 1px solid #a18d61; border-radius: 50%; width: 15px; text-align: center; }
+.building-inspector-extension-control { position: absolute; top: 50%; left: calc(50% - 67px); transform: translateY(-50%); z-index: 5; width: 186px; }
+.building-inspector-extension-trigger { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 34px; padding: 4px 7px; color: #f1e8cd; background: #252922ef; border: 1px solid #d0b477; box-shadow: 0 3px 9px #201b17b0; font-size: 11px; cursor: pointer; }
+.building-inspector-extension-trigger span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.building-inspector-extension-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; position: absolute; top: calc(100% + 3px); right: 0; width: 248px; padding: 7px; background: #20251ef7; border: 1px solid #b7a076; box-shadow: 0 7px 16px #000b; }
+.building-inspector-extension-menu button { display: grid; place-items: center; min-height: 70px; padding: 4px; color: #e0d5b8; background: radial-gradient(circle at 35% 25%, #595c48, #353c32 75%); border: 1px solid #8f835e; cursor: pointer; box-shadow: inset 0 1px #e3d1a534; }
+.building-inspector-extension-menu button svg { width: 44px; height: 44px; filter: drop-shadow(0 2px 2px #0009); }
+.building-inspector-extension-menu button:hover { background: #5b5c44; border-color: #d4bb7e; }
+.building-inspector-extension-menu button:disabled { opacity: .68; filter: saturate(.65); cursor: default; }
+.building-inspector-extension-menu button.selected { opacity: 1; filter: none; color: #e6d394; border-color: #e5c384; box-shadow: inset 0 0 0 1px #e7cb8c66, 0 0 8px #d0ad6866; }
+.building-inspector-tabs { display: flex; flex-shrink: 0; background: #23271fde; border-bottom: 1px solid #9c906150; }
+.building-inspector-tabs button { flex: 1; min-width: 0; padding: 10px 3px 9px; font-size: 13px; color: #a8aa94; cursor: pointer; border-bottom: 2px solid transparent; }
+.building-inspector-tabs button:hover { color: #e8dec0; background: #e1d7b108; }
+.building-inspector-tabs button[aria-selected='true'] { color: #f0e5c5; border-bottom-color: #b9a474; background: linear-gradient(transparent, #b6a57f13); }
+.building-inspector-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; padding: 12px 16px 16px; }
+.building-inspector-footer { display: flex; justify-content: space-between; gap: 12px; flex-shrink: 0; padding: 8px 12px; border-top: 1px solid #96845b55; background: #1d241d66; color: #aaa995; font-size: 10px; font-style: italic; }
+.building-inspector-footer span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.building-inspector-footer span:last-child { flex-shrink: 0; }
+.building-inspector-workforce { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 4px 0 16px; margin-bottom: 12px; border-bottom: 1px solid #b5a47a55; }
+.building-inspector-workforce .workforce-adjust { border: 1px solid #a5a28b; border-radius: 50%; width: 31px; height: 31px; display: grid; place-items: center; color: #e1dec5; cursor: pointer; }
+.building-inspector-workforce button:disabled { opacity: .3; cursor: default; }
+.building-inspector-workforce .workforce-slots { max-width: 214px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; cursor: pointer; }
+.workforce-slots > span { background: #858673; border-radius: 50%; width: 30px; height: 30px; display: grid; place-items: center; color: #383f33; }
+.workforce-slots > span.occupied { background: #e6e4c4; color: #2c3529; }
+.workforce-slots small { width: 100%; font-size: 10px; color: #acae96; line-height: 1; }
+
+.building-inspector-content { font-family: Georgia, 'Times New Roman', serif; }
+.building-inspector-condition { padding: 9px 11px; }
+.building-inspector-condition > div { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; line-height: 1.7; }
+.building-inspector-condition span { color: #acae96; }
+.building-inspector-condition strong { color: #e7ddbf; font-weight: 600; font-variant-numeric: tabular-nums; }
+.building-inspector-foods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 10px; padding: 6px 2px; border-top: 1px solid #b7a87942; }
+.building-inspector-foods span { display: flex; align-items: center; gap: 6px; color: #aaa995; font-size: 10px; }
+.building-inspector-foods i { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; border: 1px solid #8b8062; background: #3b4036; }
+.building-inspector-foods span.available { color: #e3dec4; }
+.building-inspector-foods span.available i { border-color: #d1bc7e; background: #b8bd7e; box-shadow: 0 0 4px #d7c68c70; }
+.building-inspector-content > div { background: #1b251d29; border: 1px solid #a1946c55; border-radius: 2px; box-shadow: none; }
+.building-inspector-content [class*='bg-slate-'], .building-inspector-content [class*='bg-black/'] { background-color: #1b231d50; }
+.building-inspector-content [class*='border-slate-'] { border-color: #9d906447; }
+.building-inspector-content [class*='rounded'] { border-radius: 2px; }
+.building-inspector-content [class*='text-slate-2'], .building-inspector-content [class*='text-slate-3'], .building-inspector-content [class*='text-amber-2'], .building-inspector-content [class*='text-amber-3'] { color: #e2dac0; }
+.building-inspector-content [class*='text-slate-4'], .building-inspector-content [class*='text-slate-5'] { color: #b0b09a; }
+.building-inspector-content [class*='text-amber-4'], .building-inspector-content [class*='text-amber-5'], .building-inspector-content [class*='text-yellow-'] { color: #c7b47c; }
+.building-inspector-content [class*='text-emerald-'], .building-inspector-content [class*='text-sky-'] { color: #bdc794; }
+.building-inspector-content [class*='text-rose-'] { color: #d18f78; }
+.building-inspector-content [class*='uppercase'] { text-transform: none; letter-spacing: .02em; font-size: 13px; }
+.building-inspector-content .font-mono { font-family: Georgia, 'Times New Roman', serif; font-variant-numeric: tabular-nums; }
+.building-inspector-content button { box-shadow: none; }
+.building-inspector-content button:not(:disabled):hover { filter: brightness(1.15); }
+.building-inspector-content select { max-width: 100%; background: #2b3328; color: #e6dec5; border-color: #9a8c65; }
+.building-inspector-description { color: #b8b6a0; font-size: 12px; line-height: 1.5; font-style: italic; padding: 0 4px 8px; text-align: center; }
+@media (max-height: 620px) { .building-inspector-illustration { height: 138px; } }

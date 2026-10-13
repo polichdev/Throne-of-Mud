@@ -4,178 +4,137 @@ import { useTranslation } from '../../i18n';
 import { useSettlementMetrics } from '../../hooks/useSettlementMetrics';
 import { useTownCenterFocus } from '../../hooks/useTownCenterFocus';
 import { HeraldicShield, RulerPortrait } from './PlayerHeraldry';
+import type { ResourceInventory } from '../../types/game';
+import { RESOURCE_UI } from './resourcePresentation';
+import { IlluminatedIcon, type IlluminatedIconKind } from './IlluminatedIcons';
+import { ResourceGroupIcon, type ResourceGroupKind } from './ResourceGroupIcon';
 import {
-  WoodIcon,
-  PlanksIcon,
-  StoneIcon,
-  ClayIcon,
-  BreadIcon,
-  WheatIcon,
-  AleIcon,
-  OxIcon,
-  StorageIcon,
-  GoldIcon,
-  WeaponsIcon,
-  FlameIcon,
-  PeasantsIcon,
-  InfluenceIcon,
+  GoldIcon, InfluenceIcon,
 } from './MedievalIcons';
 
-export const TopHUD: React.FC = React.memo(() => {
-  const { dict } = useTranslation();
-  const { focusTownCenter } = useTownCenterFocus();
+type DetailRow = { label: string; value: string | number; icon?: IlluminatedIconKind };
+type DetailSection = { title: string; rows: DetailRow[] };
 
+const RESOURCE_GROUPS: { icon: ResourceGroupKind; uk: string; en: string; sections: { uk: string; en: string; keys: (keyof ResourceInventory)[] }[] }[] = [
+  { icon: 'construction', uk: 'Будівельні матеріали', en: 'Construction', sections: [
+    { uk: 'Деревина', en: 'Woodworks', keys: ['wood', 'planks'] },
+    { uk: 'Камінь', en: 'Stoneworks', keys: ['stone', 'cut_stone'] },
+    { uk: 'Глина та цегла', en: 'Clay and bricks', keys: ['clay', 'clay_bricks'] },
+  ] },
+  { icon: 'food', uk: 'Їжа та напої', en: 'Food and drink', sections: [
+    { uk: 'Готові продукти', en: 'Prepared goods', keys: ['bread', 'ale'] },
+    { uk: 'Тваринні продукти', en: 'Animal produce', keys: ['meat', 'fish', 'eggs'] },
+    { uk: 'Зібране та приправи', en: 'Foraged and seasoning', keys: ['berries', 'vegetables', 'salt'] },
+  ] },
+  { icon: 'farm', uk: 'Врожай і млин', en: 'Crops and milling', sections: [
+    { uk: 'Зерно', en: 'Grain', keys: ['wheat'] },
+    { uk: 'Помел', en: 'Milling', keys: ['flour'] },
+  ] },
+  { icon: 'materials', uk: 'Сировина', en: 'Raw materials', sections: [
+    { uk: 'Руда й паливо', en: 'Ore and fuel', keys: ['iron_ore', 'coal', 'iron'] },
+    { uk: 'Шкури', en: 'Hides', keys: ['hides'] },
+  ] },
+  { icon: 'goods', uk: 'Ремісничі вироби', en: 'Crafted goods', sections: [
+    { uk: 'Одяг', en: 'Clothing', keys: ['clothes'] },
+    { uk: 'Спорядження', en: 'Equipment', keys: ['weapons'] },
+  ] },
+];
+
+function HudMetric({ icon, value, title, rows, sections, note, alignRight, onClick }: {
+  icon: React.ReactNode;
+  value: string | number;
+  title: string;
+  rows: DetailRow[];
+  sections?: DetailSection[];
+  note?: string;
+  alignRight?: boolean;
+  onClick?: () => void;
+}) {
+  return <div className={`hud-metric ${alignRight ? 'hud-metric-right' : ''} ${onClick ? 'hud-metric-clickable' : ''}`}
+    onClick={onClick} tabIndex={0} role={onClick ? 'button' : undefined}
+    onKeyDown={onClick ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick(); } } : undefined}
+    aria-label={`${title}: ${value}`}>
+    <span className="hud-metric-icon">{icon}</span>
+    <strong>{value}</strong>
+    <div className="hud-detail" role="tooltip">
+      <h3>{title}</h3>
+      {sections ? sections.map((section) => <div className="hud-detail-section" key={section.title}>
+        <h4>{section.title}</h4>
+        {section.rows.map((row) => <div className="hud-detail-row" key={row.label}><span>{row.icon && <IlluminatedIcon kind={row.icon} size={20} />}{row.label}</span><b>{row.value}</b></div>)}
+      </div>) : rows.map((row) => <div className="hud-detail-row" key={row.label}><span>{row.icon && <IlluminatedIcon kind={row.icon} size={17} />}{row.label}</span><b>{row.value}</b></div>)}
+      {note && <p>{note}</p>}
+    </div>
+  </div>;
+}
+
+export const TopHUD: React.FC = React.memo(() => {
+  const { dict, language } = useTranslation();
+  const isUkr = language === 'uk';
+  const { focusTownCenter } = useTownCenterFocus();
   const resources = useGameStore((s) => s.resources);
+  const influence = useGameStore((s) => s.influence);
   const settlementName = useGameStore((s) => s.settlementName);
   const setSettlementName = useGameStore((s) => s.setSettlementName);
-  const influence = useGameStore((s) => s.influence);
   const playerIdentity = useGameStore((s) => s.playerIdentity);
-  const isLordsBarOpen = useGameStore((s) => s.isLordsBarOpen);
   const toggleLordsBar = useGameStore((s) => s.toggleLordsBar);
-
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(settlementName);
-
   const {
-    approvalRating,
-    housingStats,
-    storageUsage,
-    totalFood,
-    muleStats,
+    allCharacters, employedPeasants, freePeasants, approvalRating,
+    housingStats, storageUsage, muleStats,
   } = useSettlementMetrics();
 
   const handleSaveName = useCallback(() => {
     setSettlementName(tempName.trim() || 'GOLDHOF');
     setIsEditingName(false);
   }, [tempName, setSettlementName]);
+  const resourceRows = (keys: (keyof ResourceInventory)[]) =>
+    keys.map((key) => ({ label: isUkr ? RESOURCE_UI[key].uk : RESOURCE_UI[key].en, value: resources[key] || 0, icon: RESOURCE_UI[key].icon }));
+  const resourceMetric = (group: typeof RESOURCE_GROUPS[number]) => {
+    const keys = group.sections.flatMap((section) => section.keys);
+    const total = keys.reduce((sum, key) => sum + (resources[key] || 0), 0);
+    return <HudMetric key={group.icon} icon={<ResourceGroupIcon kind={group.icon} />} value={total.toLocaleString()}
+      title={isUkr ? group.uk : group.en} rows={[]}
+      sections={group.sections.map((section) => ({ title: isUkr ? section.uk : section.en, rows: resourceRows(section.keys) }))} alignRight />;
+  };
 
   return (
     <header className="absolute top-2 left-0 right-0 flex justify-center pointer-events-none z-30 select-none px-5 font-cinzel">
       <div className="manor-spear-outer realm-resource-ribbon pointer-events-auto min-w-0">
-        <div className="manor-spear-inner backdrop-blur-xl pl-8 pr-8 py-2 flex items-center justify-between gap-4 text-slate-200 overflow-x-auto scrollbar-none">
-          <div className="flex items-center gap-3 text-xs font-mono shrink-0">
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={dict.hud.wood}>
-              <WoodIcon className="w-3.5 h-3.5 text-amber-500/90 drop-shadow" />
-              <span className="font-bold text-slate-100">{resources.wood}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={dict.hud.planks}>
-              <PlanksIcon className="w-3.5 h-3.5 text-amber-600/90 drop-shadow" />
-              <span className="font-bold text-slate-300">{Math.floor(resources.wood * 0.4)}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={dict.hud.stone}>
-              <StoneIcon className="w-3.5 h-3.5 text-slate-300 drop-shadow" />
-              <span className="font-bold text-slate-100">{resources.stone}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={dict.hud.clay}>
-              <ClayIcon className="w-3.5 h-3.5 text-orange-400/90 drop-shadow" />
-              <span className="font-bold text-slate-400">0</span>
-            </div>
-
-            <div className="w-[1px] h-4 bg-[#4a3b26]" />
-
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={`${dict.hud.bread} & food`}>
-              <BreadIcon className="w-3.5 h-3.5 text-amber-300 drop-shadow" />
-              <span className="font-bold text-amber-200">{totalFood}</span>
-            </div>
-
-            <div
-              onClick={toggleLordsBar}
-              className={`flex items-center gap-1.5 transition cursor-pointer ${
-                isLordsBarOpen ? 'text-amber-300' : 'hover:text-amber-200'
-              }`}
-              title={`${dict.hud.population}: ${housingStats.occupied}/${housingStats.capacity}.\n${
-                housingStats.capacity > housingStats.occupied
-                  ? (approvalRating >= 50 ? dict.hud.settlersOnTheWay : dict.hud.needApprovalForImmigration)
-                  : dict.hud.lackHousing
-              }\n${dict.hud.clickToToggleLordsBar}`}
-            >
-              <PeasantsIcon className={`w-3.5 h-3.5 ${isLordsBarOpen ? 'text-amber-400' : 'text-sky-400'} drop-shadow`} />
-              <span className="font-bold text-[11px] text-slate-100">{housingStats.occupied}/{housingStats.capacity}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={`${dict.hud.oxenTooltip}: ${muleStats.available}/${muleStats.total}`}>
-              <OxIcon className="w-3.5 h-3.5 text-amber-400/90 drop-shadow" />
-              <span className="font-bold text-slate-200">{muleStats.available}/{muleStats.total}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={`${dict.hud.storageCapacityTooltip}: ${storageUsage.current}/${storageUsage.max}`}>
-              <StorageIcon className="w-3.5 h-3.5 text-amber-500/80 drop-shadow" />
-              <span className="font-bold text-slate-300">{storageUsage.current}/{storageUsage.max}</span>
-            </div>
+        <div className="manor-spear-inner backdrop-blur-xl flex items-center text-slate-200">
+          <div className="hud-metric-group">
+            <HudMetric icon={<IlluminatedIcon kind="peasants" />} value={`${freePeasants.length}/${allCharacters.length}`}
+              title={isUkr ? 'Працівники' : 'Workers'}
+              rows={[{ label: isUkr ? 'Вільні' : 'Unassigned', value: freePeasants.length }, { label: isUkr ? 'Працюють' : 'Assigned', value: employedPeasants.length }, { label: isUkr ? 'Усього мешканців' : 'Total population', value: allCharacters.length }]}
+              note={isUkr ? 'Вільні селяни будують споруди й перевозять матеріали.' : 'Unassigned peasants construct buildings and move materials.'} onClick={toggleLordsBar} />
+            <HudMetric icon={<IlluminatedIcon kind="town" />} value={`${housingStats.occupied}/${housingStats.capacity}`}
+              title={isUkr ? 'Житло' : 'Housing'}
+              rows={[{ label: isUkr ? 'Мешканці' : 'Residents', value: housingStats.occupied }, { label: isUkr ? 'Місця' : 'Places', value: housingStats.capacity }, { label: isUkr ? 'Вільні місця' : 'Free places', value: Math.max(0, housingStats.capacity - housingStats.occupied) }]}
+              onClick={toggleLordsBar} />
+            <HudMetric icon={<IlluminatedIcon kind="approval" />} value={`${approvalRating}%`}
+              title={isUkr ? 'Схвалення' : 'Approval'}
+              rows={[{ label: isUkr ? 'Середній настрій' : 'Average mood', value: `${approvalRating}%` }]}
+              note={isUkr ? 'Схвалення впливає на прибуття нових поселенців.' : 'Approval affects immigration.'} />
+            <HudMetric icon={<IlluminatedIcon kind="ox" />} value={`${muleStats.available}/${muleStats.total}`}
+              title={isUkr ? 'Мули' : 'Mules'}
+              rows={[{ label: isUkr ? 'Доступні' : 'Available', value: muleStats.available }, { label: isUkr ? 'У роботі' : 'Working', value: muleStats.inUse }, { label: isUkr ? 'Усього' : 'Total', value: muleStats.total }]} />
+            <HudMetric icon={<IlluminatedIcon kind="storage" />} value={`${storageUsage.current}/${storageUsage.max}`}
+              title={isUkr ? 'Місткість складів' : 'Storage capacity'}
+              rows={[{ label: isUkr ? 'Зайнято' : 'Used', value: storageUsage.current }, { label: isUkr ? 'Місткість' : 'Capacity', value: storageUsage.max }]} />
           </div>
 
           <div className="manor-settlement-slot flex items-stretch justify-center shrink-0 mx-1 self-stretch">
-            <div
-              onClick={focusTownCenter}
-              className="manor-center-plaque px-4 flex items-center justify-center cursor-pointer transition group"
-              title={dict.hud.focusTownCenter}
-            >
-              {isEditingName ? (
-                <input
-                  type="text"
-                  value={tempName}
-                  onChange={(e) => setTempName(e.target.value)}
-                  onBlur={handleSaveName}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveName();
-                  }}
-                  autoFocus
-                  className="bg-transparent border-b border-amber-400 text-amber-200 font-cinzel font-bold text-xs tracking-widest uppercase text-center outline-none w-32"
-                />
-              ) : (
-                <span
-                  onDoubleClick={() => setIsEditingName(true)}
-                  className="font-cinzel font-bold text-xs tracking-[0.14em] text-amber-100 uppercase"
-                >
-                  {settlementName}
-                </span>
-              )}
+            <div onClick={focusTownCenter} className="manor-center-plaque px-4 flex items-center justify-center cursor-pointer transition group" title={dict.hud.focusTownCenter}>
+              {isEditingName ? <input type="text" value={tempName} onChange={(e) => setTempName(e.target.value)}
+                onBlur={handleSaveName} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); }}
+                autoFocus className="bg-transparent border-b border-amber-400 text-amber-200 font-cinzel font-bold text-xs tracking-widest uppercase text-center outline-none w-32" />
+                : <span onDoubleClick={() => setIsEditingName(true)} className="font-cinzel font-bold text-xs tracking-[0.14em] text-amber-100 uppercase">{settlementName}</span>}
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs font-mono shrink-0">
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={`${dict.hud.wood}: ${resources.wood}`}>
-              <FlameIcon className="w-3.5 h-3.5 text-orange-400 drop-shadow" />
-              <span className="font-bold text-slate-100">{resources.wood}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title="Wheat">
-              <WheatIcon className="w-3.5 h-3.5 text-yellow-400 drop-shadow" />
-              <span className="font-bold text-slate-100">{resources.wheat}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title="Ale">
-              <AleIcon className="w-3.5 h-3.5 text-amber-500 drop-shadow" />
-              <span className="font-bold text-slate-100">{resources.ale}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help" title={dict.hud.weapons}>
-              <WeaponsIcon className="w-3.5 h-3.5 text-red-400 drop-shadow" />
-              <span className="font-bold text-slate-100">{resources.weapons}</span>
-            </div>
-
-            <div className="w-[1px] h-4 bg-[#4a3b26]" />
-
-            <div
-              className="flex items-center gap-1.5 hover:text-amber-200 transition cursor-help"
-              title={`${dict.hud.treasury} (${dict.common.gold})`}
-            >
-              <GoldIcon className="w-3.5 h-3.5 text-amber-400 drop-shadow" />
-              <span className="font-bold font-mono text-amber-200 text-[11px] tracking-wide">
-                {resources.gold.toLocaleString()}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1 hover:text-amber-200 transition cursor-help" title={`${dict.hud.influence}: ${influence}`}>
-              <InfluenceIcon className="w-3.5 h-3.5 text-amber-300 drop-shadow" />
-              <span className="font-bold text-slate-200 text-[11px]">{(influence / 1000).toFixed(1)}k</span>
-            </div>
-
+          <div className="hud-metric-group">
+            {RESOURCE_GROUPS.map(resourceMetric)}
           </div>
-
         </div>
       </div>
       <div className="realm-player-widget pointer-events-auto absolute right-6 top-0" title={`${playerIdentity.rulerName} · ${playerIdentity.kingdomName}`}>
@@ -185,11 +144,9 @@ export const TopHUD: React.FC = React.memo(() => {
             <HeraldicShield color={playerIdentity.shieldColor} emblemId={playerIdentity.emblemId} size={42} />
           </div>
         </div>
-        <div className="realm-player-card-details grid grid-cols-2 gap-x-3 gap-y-1 pl-5 min-w-0 font-mono text-[11px] text-[#cbbb99]">
-          <span className="flex items-center gap-1" title={`${dict.hud.population}: ${housingStats.occupied}`}><PeasantsIcon className="w-3.5 h-3.5" />{housingStats.occupied}</span>
-          <span className="flex items-center gap-1" title={`${dict.hud.influence}: ${influence}`}><InfluenceIcon className="w-3.5 h-3.5" />{influence}</span>
-          <span className="flex items-center gap-1" title={`${dict.hud.treasury}: ${resources.gold}`}><GoldIcon className="w-3.5 h-3.5" />{resources.gold}</span>
-          <span className="flex items-center gap-1" title={`${dict.hud.oxenTooltip}: ${muleStats.total}`}><OxIcon className="w-3.5 h-3.5" />{muleStats.total}</span>
+        <div className="realm-player-card-details grid grid-cols-2 gap-x-3 gap-y-1 pl-5 min-w-0 text-[11px] text-[#cbbb99]">
+          <span className="flex items-center gap-1" title={`${isUkr ? 'Вплив' : 'Influence'}: ${influence}`}><InfluenceIcon className="w-3.5 h-3.5" />{influence.toLocaleString(isUkr ? 'uk-UA' : 'en-US')}</span>
+          <span className="flex items-center gap-1" title={`${isUkr ? 'Монети' : 'Coins'}: ${resources.gold}`}><GoldIcon className="w-3.5 h-3.5" />{resources.gold.toLocaleString(isUkr ? 'uk-UA' : 'en-US')}</span>
         </div>
       </div>
     </header>

@@ -5,74 +5,50 @@ interface IconProps {
   size?: number | string;
 }
 
+export const DiplomacySealIcon: React.FC<IconProps> = ({ className = 'w-6 h-6', size }) => (
+  <svg viewBox="0 0 32 32" fill="none" className={className} style={{ width: size, height: size }} aria-hidden="true">
+    <path d="M5 5h22v21H5Z" fill="#e5d3ab" stroke="#f7e8c4" strokeWidth="1.6" />
+    <path d="m5 7 11 9L27 7" stroke="#94734e" strokeWidth="1.8" />
+    <circle cx="16" cy="19" r="6" fill="#9c423b" stroke="#e5b27d" strokeWidth="1.6" />
+    <path d="m16 15 1.3 2.4 2.7.4-2 2 .5 2.8-2.5-1.3-2.5 1.3.5-2.8-2-2 2.7-.4Z" fill="#f2d69a" />
+    <path d="m12 24-2 6 6-2 6 2-2-6" fill="#78322f" stroke="#d99f71" strokeWidth="1.2" />
+  </svg>
+);
+
 export const PeacePactIcon: React.FC<IconProps> = ({ className = 'w-4 h-4', size }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    style={{ width: size, height: size }}
-  >
-    <path d="M12 4 C14 7 16 9 20 9 C18 13 14 15 10 16 C8 16.5 6 15.5 5 14 C3.5 12 4.5 9 6.5 8 C7.5 7.5 9 7.8 10 8.5 C10.5 7 11 5.5 12 4 Z" fill="currentColor" fillOpacity="0.25" />
-    <path d="M10 16 C10 18 8 20 5 21" strokeWidth="1.5" />
-    <circle cx="8" cy="11" r="1" fill="currentColor" />
+  <svg viewBox="0 0 32 32" fill="none" className={className} style={{ width: size, height: size }} aria-hidden="true">
+    <circle cx="16" cy="16" r="12" fill="#365747" stroke="#b6d1a3" strokeWidth="1.5" />
+    <path d="M7 23c8-1 15-6 19-15" stroke="#e9ddb1" strokeWidth="2" strokeLinecap="round" />
+    <path d="M12 19c-4 0-5-3-4-5 3 0 5 1 6 3m3-2c-1-4 1-6 4-7 1 4 0 6-2 8m1-3c4-1 6 0 7 2-2 2-5 2-8 1M9 23c-2 3-4 3-6 2 0-3 2-4 6-4" fill="#91b77e" stroke="#d6daa6" strokeWidth="1" />
+    <circle cx="16" cy="16" r="2.2" fill="#e9d6a2" />
   </svg>
 );
 
 export const MilitaryPassageIcon: React.FC<IconProps> = ({ className = 'w-4 h-4', size }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    style={{ width: size, height: size }}
-  >
-    <path d="M4 21 V7 L12 3 L20 7 V21" fill="currentColor" fillOpacity="0.15" />
-    <path d="M9 21 V13 C9 11.5 10.5 10 12 10 C13.5 10 15 11.5 15 13 V21" fill="currentColor" fillOpacity="0.3" />
-    <line x1="12" y1="3" x2="12" y2="10" strokeDasharray="1.5 1.5" />
+  <svg viewBox="0 0 32 32" fill="none" className={className} style={{ width: size, height: size }} aria-hidden="true">
+    <path d="M4 27V11L16 4l12 7v16h-6V15H10v12Z" fill="#8b8f87" stroke="#d9d5bd" strokeWidth="1.8" strokeLinejoin="round" />
+    <path d="M11 27v-9a5 5 0 0 1 10 0v9" fill="#326279" stroke="#b4d8d7" strokeWidth="1.8" />
+    <path d="M16 18v11m-4-4 4 4 4-4" stroke="#e9d9a9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M7 11h18M7 15h4m10 0h4" stroke="#555d5d" strokeWidth="1.3" />
   </svg>
 );
 
 export const WarSwordsIcon: React.FC<IconProps> = ({ className = 'w-4 h-4', size }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    style={{ width: size, height: size }}
-  >
-    <line x1="4" y1="4" x2="20" y2="20" />
-    <line x1="20" y1="4" x2="4" y2="20" />
-    <line x1="3" y1="8" x2="7" y2="4" strokeWidth="2.2" />
-    <line x1="21" y1="8" x2="17" y2="4" strokeWidth="2.2" />
-    <circle cx="4" cy="20" r="1.5" fill="currentColor" />
-    <circle cx="20" cy="20" r="1.5" fill="currentColor" />
+  <svg viewBox="0 0 32 32" fill="none" className={className} style={{ width: size, height: size }} aria-hidden="true">
+    <path d="m4 5 3-1 14 16-2 2L4 8Zm24 0-3-1L11 20l2 2L28 8Z" fill="#cfd5ca" stroke="#f3dfb0" strokeWidth="1.2" />
+    <path d="m7 20 5 5m-1-7-6 6m20-4-5 5m1-7 6 6" stroke="#d6ac69" strokeWidth="2.6" strokeLinecap="round" />
+    <path d="M16 10 23 13v7c0 4-3 7-7 9-4-2-7-5-7-9v-7Z" fill="#943e3c" stroke="#e2b378" strokeWidth="1.6" />
+    <path d="M16 14v10m-4-5h8" stroke="#f3dfae" strokeWidth="1.7" />
   </svg>
 );
 
 export const ClaimBannerIcon: React.FC<IconProps> = ({ className = 'w-4 h-4', size }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    style={{ width: size, height: size }}
-  >
-    <line x1="5" y1="21" x2="5" y2="3" strokeWidth="2.2" />
-    <path d="M5 4 L18 8 L14 11 L19 14 L5 16 Z" fill="currentColor" fillOpacity="0.3" />
-    <circle cx="5" cy="3" r="1.2" fill="currentColor" />
+  <svg viewBox="0 0 32 32" fill="none" className={className} style={{ width: size, height: size }} aria-hidden="true">
+    <path d="M8 29V4" stroke="#e6d2a1" strokeWidth="2.8" strokeLinecap="round" />
+    <circle cx="8" cy="4" r="2" fill="#f3d78f" />
+    <path d="M10 6h18l-4 8 4 7H10Z" fill="#b68a45" stroke="#f2d593" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="m19 9 1.5 2.5 3 .5-2.2 2 .5 3-2.8-1.4-2.8 1.4.5-3-2.2-2 3-.5Z" fill="#f7e8b7" />
+    <path d="M3 29h11" stroke="#b4a382" strokeWidth="2" strokeLinecap="round" />
   </svg>
 );
 

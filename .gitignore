@@ -9,6 +9,7 @@ dist-ssr/
 build/
 out/
 release/
+artifacts/
 *.tsbuildinfo
 
 # Environment variables & local configuration

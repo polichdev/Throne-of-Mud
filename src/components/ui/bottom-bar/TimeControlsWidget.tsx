@@ -52,12 +52,13 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
   const CurrentWeatherIcon = currentWeatherInfo.icon;
 
   return (
-    <div className="absolute bottom-3 right-3 flex items-center gap-2 pointer-events-auto z-20 select-none">
+    <div className="realm-time-widget absolute bottom-3 right-3 flex items-center gap-2 pointer-events-auto z-20 select-none">
       <div className="realm-paper-panel flex items-center gap-2 bg-[#121418]/95 backdrop-blur-md px-2.5 py-1 rounded-xl border border-[#52422d]/80 shadow-2xl">
-        <div
+        <button type="button"
           onClick={() => setIsWeatherDebugOpen(true)}
-          className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/80 px-1.5 py-0.5 rounded-lg transition"
-          title={`${dict.common.season}: ${currentSeasonInfo.label}${monthLabel ? ` • ${dict.common.month}: ${monthLabel}` : ''}`}
+          className="ui-tip-anchor flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/80 px-1.5 py-0.5 rounded-lg transition"
+          data-ui-tip={`${dict.common.season}: ${currentSeasonInfo.label}${monthLabel ? ` • ${dict.common.month}: ${monthLabel}` : ''}`}
+          aria-label={`${dict.common.season}: ${currentSeasonInfo.label}`}
         >
           <CurrentSeasonIcon className="w-4 h-4 text-amber-300 drop-shadow" />
           <div className="flex flex-col text-left leading-none">
@@ -68,24 +69,25 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
               {currentSeasonInfo.label}
             </span>
           </div>
-        </div>
+        </button>
 
         <div className="w-[1px] h-3.5 bg-[#4a3b26]" />
 
-        <div
+        <button type="button"
           onClick={() => setIsWeatherDebugOpen(true)}
-          className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/80 px-1.5 py-0.5 rounded-lg transition"
-          title={`${currentWeatherInfo.label}${nextWeather ? ` • ${language === 'uk' ? 'Далі' : 'Next'}: ${weatherIcons[nextWeather]?.label || nextWeather}` : ''}`}
+          className="ui-tip-anchor flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/80 px-1.5 py-0.5 rounded-lg transition"
+          data-ui-tip={`${currentWeatherInfo.label}${nextWeather ? ` • ${language === 'uk' ? 'Далі' : 'Next'}: ${weatherIcons[nextWeather]?.label || nextWeather}` : ''}`}
+          aria-label={currentWeatherInfo.label}
         >
           <CurrentWeatherIcon className={`w-3.5 h-3.5 ${currentWeatherInfo.color} drop-shadow`} />
           <span className="text-xs font-cinzel font-semibold text-slate-200">
             {currentWeatherInfo.label}
           </span>
-        </div>
+        </button>
 
         <div className="w-[1px] h-3.5 bg-[#4a3b26]" />
 
-        <div className="flex items-center gap-2 px-1 whitespace-nowrap text-[11px] font-cinzel font-semibold text-[#c8b58e]" title={`${dict.common.day} ${dayOfMonth || day}, ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`}>
+        <div className="ui-tip-anchor flex items-center gap-2 px-1 whitespace-nowrap text-[11px] font-cinzel font-semibold text-[#c8b58e]" data-ui-tip={`${dict.common.day} ${dayOfMonth || day}, ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`}>
           <span>{dict.common.day} {dayOfMonth || day}</span>
           <span className="text-[#77674c]">·</span>
           <span className="font-mono tabular-nums text-[#d6c6a8]">{String(hour).padStart(2, '0')}:{String(minute).padStart(2, '0')}</span>
@@ -93,8 +95,9 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
 
         <button
           onClick={() => setIsWeatherDebugOpen(true)}
-          className="p-1 rounded-lg text-amber-400 hover:text-amber-200 hover:bg-amber-950/70 transition border border-transparent hover:border-amber-600/50 ml-0.5 cursor-pointer"
-          title={language === 'uk' ? 'Дебаг-меню: Пори року та Погода (F2)' : 'Debug Menu: Seasons & Weather (F2)'}
+          className="ui-tip-anchor p-1 rounded-lg text-amber-400 hover:text-amber-200 hover:bg-amber-950/70 transition border border-transparent hover:border-amber-600/50 ml-0.5 cursor-pointer"
+          data-ui-tip={language === 'uk' ? 'Пори року та погода (F2)' : 'Seasons & Weather (F2)'}
+          aria-label={language === 'uk' ? 'Пори року та погода' : 'Seasons and Weather'}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
         </button>
@@ -103,48 +106,56 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
       <div className="realm-paper-panel flex items-center gap-1 bg-[#121418]/95 backdrop-blur-md p-1 rounded-xl border border-[#52422d]/80 shadow-2xl">
         <button
           onClick={togglePause}
-          className={`p-1.5 rounded-lg transition cursor-pointer ${
+          className={`ui-tip-anchor p-1.5 rounded-lg transition cursor-pointer ${
             isPaused
               ? 'bg-amber-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          title={language === 'uk' ? 'Пауза (Пробіл)' : 'Pause (Space)'}
+          data-ui-tip={language === 'uk' ? 'Пауза (Пробіл)' : 'Pause (Space)'}
+          aria-label={language === 'uk' ? 'Пауза' : 'Pause'}
+          aria-pressed={isPaused}
         >
           <Pause className="w-3.5 h-3.5" />
         </button>
 
         <button
           onClick={() => setSpeedMultiplier(1)}
-          className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+          className={`ui-tip-anchor px-2 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
             !isPaused && speedMultiplier === 1
               ? 'bg-amber-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          title={language === 'uk' ? '1x Звичайна швидкість' : '1x Normal Speed'}
+          data-ui-tip={language === 'uk' ? '1× Звичайна швидкість' : '1× Normal Speed'}
+          aria-label={language === 'uk' ? 'Звичайна швидкість' : 'Normal speed'}
+          aria-pressed={!isPaused && speedMultiplier === 1}
         >
           1x
         </button>
 
         <button
           onClick={() => setSpeedMultiplier(2)}
-          className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+          className={`ui-tip-anchor px-2 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
             !isPaused && speedMultiplier === 2
               ? 'bg-amber-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          title={language === 'uk' ? '2x Прискорена' : '2x Fast Speed'}
+          data-ui-tip={language === 'uk' ? '2× Прискорена' : '2× Fast Speed'}
+          aria-label={language === 'uk' ? 'Подвійна швидкість' : 'Double speed'}
+          aria-pressed={!isPaused && speedMultiplier === 2}
         >
           2x
         </button>
 
         <button
           onClick={() => setSpeedMultiplier(5)}
-          className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
+          className={`ui-tip-anchor px-2 py-1 rounded-lg text-xs font-mono font-bold transition cursor-pointer ${
             !isPaused && speedMultiplier === 5
               ? 'bg-amber-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          title={language === 'uk' ? '5x Максимальна' : '5x Maximum Speed'}
+          data-ui-tip={language === 'uk' ? '5× Максимальна' : '5× Maximum Speed'}
+          aria-label={language === 'uk' ? 'П’ятикратна швидкість' : 'Fivefold speed'}
+          aria-pressed={!isPaused && speedMultiplier === 5}
         >
           5x
         </button>

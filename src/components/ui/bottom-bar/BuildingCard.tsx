@@ -1,32 +1,68 @@
-import React from 'react';
-import type { BuildingBlueprint } from '../../../types/game';
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { BuildingBlueprint, ResourceInventory } from '../../../types/game';
 import { BuildingIllustration } from './BuildingCardIllustrations';
+import { PAINTED_BUILDING_ART } from '../inspector/buildingArt';
 import { useGameStore } from '../../../store/useGameStore';
 import { audioManager } from '../../../engine/audio/AudioManager';
 import { useTranslation } from '../../../i18n';
-import {
-  WoodIcon,
-  StoneIcon,
-  BreadIcon,
-  WheatIcon,
-  AleIcon,
-  StorageIcon,
-  FlameIcon,
-  PeasantsIcon,
-  ShieldIcon,
-  TownCenterIcon,
-  WeaponsIcon,
-} from '../MedievalIcons';
+import { WoodIcon, StoneIcon, GoldIcon } from '../MedievalIcons';
+import { IlluminatedIcon } from '../IlluminatedIcons';
+import type { IlluminatedIconKind } from '../IlluminatedIcons';
+import { RESOURCE_UI } from '../resourcePresentation';
 
 interface BuildingCardProps {
   blueprint: BuildingBlueprint;
   isSelected: boolean;
   onSelect: (type: BuildingBlueprint['type']) => void;
+  isTooltipVisible: boolean;
+  onTooltipOpen: (type: BuildingBlueprint['type']) => void;
+  onTooltipClose: (type: BuildingBlueprint['type']) => void;
 }
 
-export const BuildingCard: React.FC<BuildingCardProps> = React.memo(({ blueprint, isSelected, onSelect }) => {
-  const { dict } = useTranslation();
+const BADGE_KIND: Record<BuildingBlueprint['type'], IlluminatedIconKind> = {
+  campfire: 'flame',
+  tent: 'town',
+  hitching_post: 'donkey',
+  lumberjack_hut: 'wood',
+  peasant_house: 'town',
+  manor: 'town',
+  stockpile: 'storage',
+  market: 'market',
+  wheat_farm: 'wheat',
+  windmill: 'windmill',
+  brewery: 'ale',
+  bakery: 'bread',
+  barracks: 'weapons',
+  wooden_wall: 'shield',
+  wooden_gate: 'shield',
+  stone_wall: 'shield',
+  fishermans_hut: 'fish',
+  foragers_hut: 'berry',
+  hunters_hut: 'bow',
+  iron_mine: 'hammer',
+  stone_quarry: 'stone',
+  clay_pit: 'clay',
+  salt_works: 'storage',
+  charcoal_kiln: 'flame',
+  iron_smelter: 'hammer',
+  stonecutter: 'stone',
+  brickworks: 'brick',
+  sawmill: 'planks',
+  weavers_workshop: 'cloth',
+  foresters_hut: 'wood',
+  wooden_church: 'church',
+  tavern: 'ale',
+  trading_post: 'market',
+};
+
+export const BuildingCard: React.FC<BuildingCardProps> = React.memo(({ blueprint, isSelected, onSelect, isTooltipVisible, onTooltipOpen, onTooltipClose }) => {
+  const { dict, language } = useTranslation();
   const resources = useGameStore((s) => s.resources);
+  const [tooltipPosition, setTooltipPosition] = useState<{ left: number; top: number } | null>(null);
+  const isTooltipOpen = tooltipPosition !== null && isTooltipVisible;
+  const cardRef = useRef<HTMLButtonElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
 
   const bTrans = dict.buildings.items[blueprint.type] || {
     name: blueprint.name,
@@ -38,182 +74,109 @@ export const BuildingCard: React.FC<BuildingCardProps> = React.memo(({ blueprint
   if (blueprint.cost.stone && resources.stone < blueprint.cost.stone) canAfford = false;
   if (blueprint.cost.gold && resources.gold < blueprint.cost.gold) canAfford = false;
 
-  const renderBadgeIcon = () => {
-    switch (blueprint.type) {
-      case 'tent':
-      case 'peasant_house':
-      case 'manor':
-        return <TownCenterIcon className="w-3.5 h-3.5 text-amber-200" />;
-      case 'lumberjack_hut':
-      case 'foresters_hut':
-      case 'sawmill':
-        return <WoodIcon className="w-3.5 h-3.5 text-emerald-300" />;
-      case 'stone_quarry':
-      case 'stonecutter':
-        return <StoneIcon className="w-3.5 h-3.5 text-stone-200" />;
-      case 'iron_mine':
-      case 'iron_smelter':
-        return (
-          <svg className="w-3.5 h-3.5 text-orange-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m14 12-8.5 8.5a2.12 2.12 0 1 1-3-3L11 9" />
-            <path d="M15 13 9 7l4-4 6 6h3l3 3" />
-          </svg>
-        );
-      case 'clay_pit':
-      case 'salt_works':
-        return (
-          <svg className="w-3.5 h-3.5 text-sky-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 11 12 18 5 11" />
-            <path d="M5 11a7 7 0 0 1 14 0Z" />
-            <path d="M12 18v3" />
-          </svg>
-        );
-      case 'fishermans_hut':
-        return (
-          <svg className="w-3.5 h-3.5 text-cyan-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6.5 12c.94-3.46 4.94-6 8.5-6 3.56 0 6.06 2.54 7 6-.94 3.47-3.44 6-7 6-3.56 0-7.56-2.53-8.5-6Z" />
-            <path d="M18 12c-.5 1.5-2 2-3 2" />
-            <circle cx="16" cy="9" r="1" fill="currentColor" />
-          </svg>
-        );
-      case 'hunters_hut':
-        return (
-          <svg className="w-3.5 h-3.5 text-rose-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="8" />
-            <line x1="12" y1="2" x2="12" y2="6" />
-            <line x1="12" y1="18" x2="12" y2="22" />
-            <line x1="2" y1="12" x2="6" y2="12" />
-            <line x1="18" y1="12" x2="22" y2="12" />
-          </svg>
-        );
-      case 'foragers_hut':
-        return (
-          <svg className="w-3.5 h-3.5 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2a5 5 0 0 0-5 5c0 4 5 13 5 13s5-9 5-13a5 5 0 0 0-5-5Z" />
-            <circle cx="12" cy="7" r="1.5" fill="currentColor" />
-          </svg>
-        );
-      case 'stockpile':
-        return <StorageIcon className="w-3.5 h-3.5 text-amber-200" />;
-      case 'hitching_post':
-        return <span className="text-xs">🫏</span>;
-      case 'campfire':
-      case 'charcoal_kiln':
-        return <FlameIcon className="w-3.5 h-3.5 text-orange-400" />;
-      case 'wheat_farm':
-        return <WheatIcon className="w-3.5 h-3.5 text-yellow-300" />;
-      case 'windmill':
-        return (
-          <svg className="w-3.5 h-3.5 text-amber-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 12 4 4" />
-            <path d="M12 12 20 4" />
-            <path d="M12 12 20 20" />
-            <path d="M12 12 4 20" />
-            <circle cx="12" cy="12" r="2" fill="currentColor" />
-          </svg>
-        );
-      case 'bakery':
-        return <BreadIcon className="w-3.5 h-3.5 text-amber-200" />;
-      case 'brewery':
-      case 'tavern':
-        return <AleIcon className="w-3.5 h-3.5 text-amber-300" />;
-      case 'brickworks':
-        return (
-          <svg className="w-3.5 h-3.5 text-red-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="5" width="20" height="14" rx="2" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <line x1="12" y1="5" x2="12" y2="12" />
-            <line x1="7" y1="12" x2="7" y2="19" />
-            <line x1="17" y1="12" x2="17" y2="19" />
-          </svg>
-        );
-      case 'weavers_workshop':
-        return (
-          <svg className="w-3.5 h-3.5 text-purple-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <line x1="7" y1="3" x2="7" y2="21" />
-            <line x1="17" y1="3" x2="17" y2="21" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-          </svg>
-        );
-      case 'wooden_church':
-        return (
-          <svg className="w-3.5 h-3.5 text-amber-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="4" x2="12" y2="20" />
-            <line x1="6" y1="9" x2="18" y2="9" />
-          </svg>
-        );
-      case 'barracks':
-        return <WeaponsIcon className="w-3.5 h-3.5 text-red-400" />;
-      case 'wooden_wall':
-      case 'wooden_gate':
-      case 'stone_wall':
-        return <ShieldIcon className="w-3.5 h-3.5 text-stone-200" />;
-      case 'market':
-        return (
-          <svg className="w-3.5 h-3.5 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="8" />
-            <path d="M12 8v8" />
-            <path d="M9 10h6" />
-          </svg>
-        );
-      default:
-        return <PeasantsIcon className="w-3.5 h-3.5 text-amber-200" />;
-    }
-  };
-
   const handleClick = () => {
     audioManager.playUIClick();
     onSelect(blueprint.type);
   };
+  const showTooltip = () => {
+    setTooltipPosition({ left: 0, top: 0 });
+    onTooltipOpen(blueprint.type);
+  };
+  const hideTooltip = () => {
+    setTooltipPosition(null);
+    onTooltipClose(blueprint.type);
+  };
+  const positionTooltip = useCallback(() => {
+    const card = cardRef.current;
+    const tooltip = tooltipRef.current;
+    if (!card || !tooltip) return;
+    const anchor = card.getBoundingClientRect();
+    const width = tooltip.offsetWidth;
+    const height = tooltip.offsetHeight;
+    const gap = 12;
+    const availableWidth = window.innerWidth - gap;
+    const left = anchor.right + width + gap <= availableWidth
+      ? anchor.right + gap
+      : anchor.left - width - gap >= gap
+        ? anchor.left - width - gap
+        : Math.max(gap, Math.min(anchor.left, window.innerWidth - width - gap));
+    const top = Math.max(gap, Math.min(anchor.top, window.innerHeight - height - gap));
+    setTooltipPosition((previous) => previous && previous.left === left && previous.top === top ? previous : { left, top });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isTooltipOpen) return;
+    positionTooltip();
+    const tooltip = tooltipRef.current;
+    const observer = new ResizeObserver(positionTooltip);
+    if (tooltip) observer.observe(tooltip);
+    window.addEventListener('resize', positionTooltip);
+    window.addEventListener('scroll', positionTooltip, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', positionTooltip);
+      window.removeEventListener('scroll', positionTooltip, true);
+    };
+  }, [isTooltipOpen, positionTooltip]);
+  const costEntries = Object.entries(blueprint.cost).filter(([, amount]) => Number(amount) > 0) as [keyof ResourceInventory, number][];
+  const inputEntries = Object.entries(blueprint.produces?.inputs || {}).filter(([, amount]) => Number(amount) > 0) as [keyof ResourceInventory, number][];
+  const outputEntries = Object.entries(blueprint.produces?.outputs || {}).filter(([, amount]) => Number(amount) > 0) as [keyof ResourceInventory, number][];
 
   return (
-    <div className="relative flex flex-col items-center select-none shrink-0 pb-2">
+    <div className="construction-plate-wrap">
       <button
+        ref={cardRef}
         onClick={handleClick}
-        className={`w-26 h-36 rounded-2xl p-1 relative flex flex-col items-center justify-between cursor-pointer transition-all duration-200 ${
-          isSelected
-            ? 'ring-2 ring-amber-400 -translate-y-1.5 shadow-[0_8px_18px_rgba(245,158,11,0.4)] bg-gradient-to-b from-[#b89552] via-[#826130] to-[#453014]'
-            : 'hover:-translate-y-1 hover:ring-1 hover:ring-[#d4af37]/90 hover:shadow-[0_6px_14px_rgba(212,175,55,0.3)] bg-gradient-to-b from-[#7a6039] to-[#3d2c18]'
-        } ${!canAfford ? 'opacity-70 saturate-75' : ''}`}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        onFocus={showTooltip}
+        onBlur={hideTooltip}
+        className={`construction-plate ${isSelected ? 'selected' : ''} ${!canAfford ? 'unaffordable' : ''}`}
+        aria-label={bTrans.name}
       >
-        <div className="w-full h-full rounded-xl overflow-hidden bg-[#ded5c2] relative flex flex-col border border-[#523d24]/70 shadow-inner">
-          <div className="absolute top-1 right-1 w-2.5 h-2.5 border-t-2 border-r-2 border-[#5a4325] opacity-70 pointer-events-none z-10" />
-          <div className="absolute top-1 left-1 w-2.5 h-2.5 border-t-2 border-l-2 border-[#5a4325] opacity-70 pointer-events-none z-10" />
-          <div className="absolute bottom-1 right-1 w-2.5 h-2.5 border-b-2 border-r-2 border-[#5a4325] opacity-70 pointer-events-none z-10" />
-          <div className="absolute bottom-1 left-1 w-2.5 h-2.5 border-b-2 border-l-2 border-[#5a4325] opacity-70 pointer-events-none z-10" />
-
-          <div className="w-full flex flex-col items-center pt-1 pb-0.5 px-1 border-b border-[#523d24]/20 bg-gradient-to-b from-[#f0e7d8] to-[#ded5c2] z-10">
-            <span
-              className="font-cinzel font-bold text-[9.5px] leading-tight text-[#2c1d0e] text-center truncate w-full tracking-tight drop-shadow-[0_1px_0_rgba(255,255,255,0.7)]"
-              title={bTrans.name}
-            >
-              {bTrans.name}
-            </span>
-            <span className="text-[8px] font-mono font-bold text-[#684b23] bg-[#cbbea6]/90 px-1 py-0.2 rounded border border-[#9c896d]/60 mt-0.5">
-              {blueprint.width}x{blueprint.height}
-            </span>
-          </div>
-
-          <div className="w-full flex-1 flex items-center justify-center overflow-hidden relative">
-            <BuildingIllustration type={blueprint.type} className="w-full h-full object-cover" />
-          </div>
-
-          <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-1 h-1.5 bg-[#8c6b38] rounded-r opacity-60" />
-          <div className="absolute -right-1 top-1/2 -translate-y-1/2 w-1 h-1.5 bg-[#8c6b38] rounded-l opacity-60" />
+        <div className="construction-plate-picture">
+          {PAINTED_BUILDING_ART[blueprint.type]
+            ? <img src={PAINTED_BUILDING_ART[blueprint.type]} alt="" loading="lazy" decoding="async" draggable={false} />
+            : <BuildingIllustration type={blueprint.type} className="w-full h-full" />}
+          <span className="construction-plate-symbol"><IlluminatedIcon kind={BADGE_KIND[blueprint.type]} className="w-3.5 h-3.5" /></span>
         </div>
+        <span className="construction-plate-name">{bTrans.name}</span>
+        <span className="construction-plate-cost">
+          {blueprint.cost.wood ? <span className={resources.wood < blueprint.cost.wood ? 'missing' : ''}><WoodIcon size={15} />{blueprint.cost.wood}</span> : null}
+          {blueprint.cost.stone ? <span className={resources.stone < blueprint.cost.stone ? 'missing' : ''}><StoneIcon size={15} />{blueprint.cost.stone}</span> : null}
+          {blueprint.cost.gold ? <span className={resources.gold < blueprint.cost.gold ? 'missing' : ''}><GoldIcon size={15} />{blueprint.cost.gold}</span> : null}
+          {!blueprint.cost.wood && !blueprint.cost.stone && !blueprint.cost.gold && <span>{language === 'uk' ? 'Безкоштовно' : 'Free'}</span>}
+        </span>
       </button>
-
-      <div
-        onClick={handleClick}
-        className={`w-7 h-7 rounded-full bg-[#181a20] border-2 flex items-center justify-center shadow-lg -mt-3.5 z-20 transition-transform cursor-pointer ${
-          isSelected
-            ? 'border-amber-400 bg-[#2d2212] scale-110 shadow-[0_0_8px_rgba(245,158,11,0.6)]'
-            : 'border-[#8c6b38] hover:border-amber-300 hover:scale-105 bg-[#16181e]'
-        }`}
-      >
-        {renderBadgeIcon()}
-      </div>
+      {isTooltipOpen && tooltipPosition && typeof document !== 'undefined' && createPortal(
+        <div ref={tooltipRef} className="building-card-tooltip" style={tooltipPosition} role="tooltip">
+          <h3>{bTrans.name}</h3>
+          {PAINTED_BUILDING_ART[blueprint.type] && <img src={PAINTED_BUILDING_ART[blueprint.type]} alt="" decoding="async" />}
+          <div className="building-card-tooltip-cost">
+            <strong>{language === 'uk' ? 'Будівництво' : 'Construction'}</strong>
+            {costEntries.length ? costEntries.map(([key, amount]) => {
+              const meta = RESOURCE_UI[key];
+              return <span key={key} className={resources[key] < amount ? 'missing' : ''}>
+                <IlluminatedIcon kind={meta.icon} size={18} />
+                {language === 'uk' ? meta.uk : meta.en}: {amount} <small>({resources[key]})</small>
+              </span>;
+            }) : <span>{language === 'uk' ? 'Без витрат' : 'Free'}</span>}
+          </div>
+          <p>{bTrans.description}</p>
+          {blueprint.workSlots > 0 && <div className="building-card-tooltip-workers">
+            {language === 'uk' ? 'Робочі місця' : 'Workplaces'}: {blueprint.workSlots}
+          </div>}
+          {(inputEntries.length > 0 || outputEntries.length > 0) && <div className="building-card-tooltip-production">
+            <strong>{language === 'uk' ? 'Виробництво' : 'Production'}</strong>
+            <div>
+              {inputEntries.map(([key, amount]) => <span key={key}>{amount} {language === 'uk' ? RESOURCE_UI[key].uk : RESOURCE_UI[key].en}</span>)}
+              {inputEntries.length > 0 && <b>→</b>}
+              {outputEntries.map(([key, amount]) => <span key={key}>{amount} {language === 'uk' ? RESOURCE_UI[key].uk : RESOURCE_UI[key].en}</span>)}
+            </div>
+          </div>}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 });

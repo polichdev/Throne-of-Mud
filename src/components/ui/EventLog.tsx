@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { useTranslation } from '../../i18n';
 import {
-  ScrollIcon,
   CrossCloseIcon,
   MedievalAlertIcon,
   MedievalCheckIcon,
   MedievalInfoIcon,
 } from './MedievalIcons';
+import { ChronicleBookIcon } from './ChronicleBookIcon';
 
 export const EventLog: React.FC = React.memo(() => {
   const { dict } = useTranslation();
@@ -22,7 +22,7 @@ export const EventLog: React.FC = React.memo(() => {
           title={dict.chronicle.title}
           className="realm-chronicle-trigger relative w-14 h-14 flex items-center justify-center group cursor-pointer transition-transform duration-200 hover:-translate-y-1 active:translate-y-0"
         >
-          <ScrollIcon size={26} className="realm-chronicle-glyph transition-colors" />
+          <ChronicleBookIcon className="realm-chronicle-glyph transition-colors" />
 
           {chronicle.length > 0 && (
             <span className="realm-chronicle-count absolute -top-1 -right-1 px-2 py-0.5 min-w-[22px] text-[11px] font-mono font-bold leading-none rounded-full shadow-md">
@@ -39,7 +39,7 @@ export const EventLog: React.FC = React.memo(() => {
       <div className="realm-paper-panel bg-[#12141a]/95 backdrop-blur-md rounded-2xl border-2 border-[#6a4f28] shadow-[0_16px_40px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-[#261b11] via-[#18120b] to-[#12141a] border-b border-[#523d1f]">
           <div className="flex items-center gap-2">
-            <ScrollIcon size={16} className="text-amber-400" />
+            <ChronicleBookIcon className="w-5 h-5" />
             <span className="font-bold text-xs text-amber-200 tracking-wider uppercase">
               {dict.chronicle.title}
             </span>

@@ -69,6 +69,7 @@ export function MainMenu({ grid }: MainMenuProps) {
         audioManager.playUISuccess();
         useGameStore.setState({
           selectedEntityId: null,
+          pinnedBuildingId: null,
           isLordsBarOpen: false,
           activeMenuTab: null,
           activeBuildType: null,
@@ -114,9 +115,11 @@ export function MainMenu({ grid }: MainMenuProps) {
     setShowSetupModal(false);
 
     resetWorld(grid, config);
+    useGameStore.getState().resetDiplomacy();
 
     useGameStore.setState({
       selectedEntityId: null,
+      pinnedBuildingId: null,
       isLordsBarOpen: false,
       activeMenuTab: null,
       activeBuildType: null,
@@ -135,7 +138,7 @@ export function MainMenu({ grid }: MainMenuProps) {
   return (
     <div
       onPointerDown={() => audioManager.unlockAudio()}
-      className="fixed inset-0 z-50 flex select-none font-cinzel overflow-hidden"
+      className="realm-main-menu fixed inset-0 z-50 flex select-none font-cinzel overflow-hidden"
     >
       <div className="relative flex flex-col justify-start pt-14 sm:pt-16 md:pt-20 pl-16 sm:pl-20 md:pl-24 pr-6 w-[480px] sm:w-[530px] md:w-[570px] h-full bg-gradient-to-r from-black/75 via-black/55 via-70% to-transparent pointer-events-auto">
 
@@ -202,7 +205,7 @@ export function MainMenu({ grid }: MainMenuProps) {
 
       {showSettingsModal && (
         <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 pointer-events-auto font-cinzel">
-          <div className="bg-[#141720] border-2 border-[#5a4830] rounded-2xl p-6 max-w-md w-full shadow-[0_20px_60px_rgba(0,0,0,0.95)] flex flex-col gap-4 max-h-[90vh] overflow-y-auto pointer-events-auto">
+          <div className="realm-main-menu-dialog bg-[#141720] border-2 border-[#5a4830] rounded-2xl p-6 max-w-md w-full shadow-[0_20px_60px_rgba(0,0,0,0.95)] flex flex-col gap-4 max-h-[90vh] overflow-y-auto pointer-events-auto">
 
             <div className="flex items-center justify-between border-b border-[#3d3222] pb-3">
               <div className="flex items-center gap-2 text-amber-300">
@@ -236,7 +239,7 @@ export function MainMenu({ grid }: MainMenuProps) {
 
       {showConfirmNewGame && (
         <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 pointer-events-auto">
-          <div className="bg-[#181512] border-2 border-amber-600 rounded-2xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 text-center pointer-events-auto">
+          <div className="realm-main-menu-dialog bg-[#181512] border-2 border-amber-600 rounded-2xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4 text-center pointer-events-auto">
             <div className="w-12 h-12 rounded-full bg-amber-950 border border-amber-500 mx-auto flex items-center justify-center text-amber-300">
               <MedievalAlertIcon size={24} className="text-amber-400" />
             </div>
@@ -269,7 +272,7 @@ export function MainMenu({ grid }: MainMenuProps) {
 
       {showGuideModal && (
         <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 pointer-events-auto">
-          <div className="bg-[#141720] border-2 border-[#5a4830] rounded-2xl p-6 max-w-lg w-full shadow-[0_20px_60px_rgba(0,0,0,0.95)] flex flex-col gap-4 max-h-[90vh] overflow-y-auto pointer-events-auto">
+          <div className="realm-main-menu-dialog bg-[#141720] border-2 border-[#5a4830] rounded-2xl p-6 max-w-lg w-full shadow-[0_20px_60px_rgba(0,0,0,0.95)] flex flex-col gap-4 max-h-[90vh] overflow-y-auto pointer-events-auto">
 
             <div className="flex items-center justify-between border-b border-[#3d3222] pb-3">
               <div className="flex items-center gap-2 text-amber-300">

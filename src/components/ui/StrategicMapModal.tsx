@@ -54,7 +54,7 @@ export function StrategicMapModal({ grid }: StrategicMapModalProps) {
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-wider text-amber-200 uppercase drop-shadow">
-                {language === 'uk' ? 'Стратегічна Карта Володінь • Manor Lords' : 'Strategic Realm Map • Manor Lords'}
+                {language === 'uk' ? 'Стратегічна карта володінь' : 'Strategic Realm Map'}
               </h2>
               <p className="text-[11px] text-amber-400/70">
                 {language === 'uk' ? 'Світ 4-х провінцій (256 × 256) • Натисніть [M] або [ESC] для повернення у 3D' : 'Realm of 4 Fiefdoms (256 × 256) • Press [M] or [ESC] to return to 3D'}
