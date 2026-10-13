@@ -159,8 +159,7 @@ export class AStar {
 
     perimeter.sort((a, b) => a.dist - b.dist);
 
-    const candidates = perimeter.slice(0, 3);
-    for (const p of candidates) {
+    for (const p of perimeter) {
       const path = AStar.findPath(grid, [sx, sz], [p.x, p.z], false, regionBounds);
       if (path && path.length > 0) {
         return path;

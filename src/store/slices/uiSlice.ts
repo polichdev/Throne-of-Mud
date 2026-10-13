@@ -1,14 +1,20 @@
 import type { StateCreator } from 'zustand';
 import type { GameState, UISlice } from '../types';
+import { world } from '../../engine/ecs/world';
 
 export type { UISlice };
 
 export const createUISlice: StateCreator<GameState, [], [], UISlice> = (set, get) => ({
   selectedEntityId: null,
-  setSelectedEntityId: (id) => set((state) => ({
-    selectedEntityId: id,
-    houseFloorView: state.selectedEntityId === id ? state.houseFloorView : 1,
-  })),
+  pinnedBuildingId: null,
+  setPinnedBuildingId: (id) => set({ pinnedBuildingId: id }),
+  setSelectedEntityId: (id) => set((state) => state.pinnedBuildingId && state.pinnedBuildingId !== id && world.entities.some(entity => entity.id === state.pinnedBuildingId)
+    ? state
+    : {
+      selectedEntityId: id,
+      pinnedBuildingId: state.pinnedBuildingId && state.pinnedBuildingId !== id ? null : state.pinnedBuildingId,
+      houseFloorView: state.selectedEntityId === id ? state.houseFloorView : 1,
+    }),
   houseFloorView: 1,
   setHouseFloorView: (floor) => set({ houseFloorView: floor }),
 

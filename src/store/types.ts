@@ -65,6 +65,8 @@ export interface AudioSlice {
 export interface UISlice {
   selectedEntityId: string | null;
   setSelectedEntityId: (id: string | null) => void;
+  pinnedBuildingId: string | null;
+  setPinnedBuildingId: (id: string | null) => void;
   houseFloorView: 1 | 2;
   setHouseFloorView: (floor: 1 | 2) => void;
   activeBuildType: BuildingType | null;

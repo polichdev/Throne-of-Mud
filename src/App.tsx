@@ -3,6 +3,7 @@ import { GridMap } from './engine/grid/GridMap';
 import { useGameStore } from './store/useGameStore';
 import { GameCanvas } from './components/canvas/GameCanvas';
 import { TopHUD } from './components/ui/TopHUD';
+import { GameTooltipLayer } from './components/ui/GameTooltipLayer';
 import { BottomActionBar } from './components/ui/BottomActionBar';
 import { InspectorPanel } from './components/ui/InspectorPanel';
 import { EventLog } from './components/ui/EventLog';
@@ -85,6 +86,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <main className={`game-ui w-screen h-screen relative overflow-hidden select-none font-cinzel ${isStrategicView ? 'bg-[#18120c]' : 'bg-[#080c10]'}`}>
+        <GameTooltipLayer />
         <div className="absolute inset-0 z-0 pointer-events-auto overflow-hidden" style={{ isolation: 'isolate' }}>
           <GameCanvas grid={grid} />
         </div>
@@ -96,7 +98,7 @@ export default function App() {
             <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-auto animate-in fade-in slide-in-from-top-3 duration-300 cursor-pointer">
               <div
                 onClick={() => setSaveNotification(null)}
-                className="bg-[#181510]/95 backdrop-blur-md px-4 py-2 rounded-xl border border-amber-500/80 shadow-[0_8px_30px_rgba(0,0,0,0.9)] text-amber-200 text-xs font-bold tracking-wider flex items-center gap-2 hover:bg-[#252018] transition"
+                className="realm-save-notice bg-[#181510]/95 backdrop-blur-md px-4 py-2 rounded-xl border border-amber-500/80 shadow-[0_8px_30px_rgba(0,0,0,0.9)] text-amber-200 text-xs font-bold tracking-wider flex items-center gap-2 hover:bg-[#252018] transition"
               >
                 <span>{saveNotification}</span>
               </div>

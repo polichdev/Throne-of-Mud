@@ -1129,6 +1129,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     set({
       isInitialized: true,
       selectedEntityId: null,
+      pinnedBuildingId: null,
       playerRegionId: result.playerRegionId,
       playerSpawnPoint: result.playerSpawnPoint,
       botCount: result.botCount,

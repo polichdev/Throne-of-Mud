@@ -7,7 +7,8 @@ import { BUILDING_BLUEPRINTS } from '../../buildings/blueprints';
 import { isOverlappingResourceDeposit } from '../../buildings/buildingValidation';
 import { getBuildingDoorInfo } from '../../buildings/buildingNavigation';
 import { HaulingJobHandler } from './jobs/HaulingJobHandler';
-import type { BuildingType, ResourceDeposit, ResourceType, RegionData } from '../../../types/game';
+import type { BackyardExtensionType, BuildingType, HouseTier, ResourceDeposit, ResourceType, RegionData, ResourceInventory } from '../../../types/game';
+import { BACKYARD_EXTENSIONS_CONFIG, FOOD_RESOURCE_KEYS, HOUSE_TIERS_CONFIG } from '../../../constants/housing';
 import {
   BOT_AI_TICK_INTERVAL,
   BOT_AI_WORKER_ASSIGN_INTERVAL,
@@ -37,7 +38,10 @@ interface BotRealmMemory {
   lastActionTick: number;
   lastWorkerAssignTick: number;
   lastImmigrationTick: number;
+  lastHousingActionTick?: number;
+  housingProjectsStarted?: number;
   hasPavedHighwayRoad?: boolean;
+  hasOpenedCampApproaches?: boolean;
 }
 
 const UKRAINIAN_NAMES_MALE = [
@@ -140,6 +144,81 @@ function consumeResourcesFromBotSettlement(
 
     if (remWood <= 0 && remStone <= 0) break;
   }
+}
+
+function countBotFoodTypes(buildings: GameEntity[]): number {
+  const available = new Set<ResourceType>();
+  const foodFromWorkplace: Partial<Record<BuildingType, ResourceType>> = {
+    foragers_hut: 'berries',
+    hunters_hut: 'meat',
+    fishermans_hut: 'fish',
+    bakery: 'bread',
+  };
+  for (const building of buildings) {
+    if (!building.isCompleted) continue;
+    const workplaceFood = building.buildingType && foodFromWorkplace[building.buildingType];
+    if (workplaceFood) available.add(workplaceFood);
+    const backyard = BACKYARD_EXTENSIONS_CONFIG[building.backyardExtension || 'none'];
+    for (const food of FOOD_RESOURCE_KEYS) {
+      if ((backyard.outputs[food] || 0) > 0) available.add(food);
+    }
+    for (const food of FOOD_RESOURCE_KEYS) {
+      if ((building.localInventory?.[food] || 0) > 0) available.add(food);
+    }
+  }
+  return available.size;
+}
+
+function botHasRequiredGoods(buildings: GameEntity[], tier: HouseTier): boolean {
+  return HOUSE_TIERS_CONFIG[tier].upgradeRequiredGoods.every((good) =>
+    buildings.some((building) => building.isCompleted && ((building.localInventory?.[good] || 0) > 0 ||
+      (good === 'ale' && building.buildingType === 'brewery') ||
+      (good === 'clothes' && building.buildingType === 'weavers_workshop')))
+  );
+}
+
+function botHasMaterials(buildings: GameEntity[], cost: Partial<ResourceInventory>, memory: BotRealmMemory): boolean {
+  if (memory.gold < (cost.gold || 0) || memory.wood < (cost.wood || 0) || memory.stone < (cost.stone || 0) || memory.iron < (cost.iron || 0)) return false;
+  for (const material of ['planks', 'cut_stone'] as const) {
+    const available = buildings.reduce((sum, building) => sum + (building.isCompleted ? (building.localInventory?.[material] || 0) : 0), 0);
+    if (available < (cost[material] || 0)) return false;
+  }
+  return true;
+}
+
+function spendBotHousingMaterials(buildings: GameEntity[], cost: Partial<ResourceInventory>, memory: BotRealmMemory): void {
+  memory.gold -= cost.gold || 0;
+  memory.wood -= cost.wood || 0;
+  memory.stone -= cost.stone || 0;
+  memory.iron -= cost.iron || 0;
+  consumeResourcesFromBotSettlement(buildings, cost.wood || 0, cost.stone || 0);
+  for (const material of ['planks', 'cut_stone', 'iron'] as const) {
+    let remaining = cost[material] || 0;
+    for (const building of buildings) {
+      if (!building.isCompleted || !building.localInventory || remaining <= 0) continue;
+      const taken = Math.min(remaining, building.localInventory[material] || 0);
+      if (taken > 0) {
+        building.localInventory[material] = (building.localInventory[material] || 0) - taken;
+        remaining -= taken;
+      }
+    }
+  }
+}
+
+function completeBotHouseProject(building: GameEntity): void {
+  if (building.pendingHouseTier) {
+    building.houseTier = building.pendingHouseTier;
+    building.pendingHouseTier = undefined;
+    building.maxBuildingHealth = (building.maxBuildingHealth || 150) + 100;
+  }
+  if (building.pendingBackyardExtension) {
+    building.backyardExtension = building.pendingBackyardExtension;
+    building.pendingBackyardExtension = undefined;
+    building.backyardProgress = 0;
+  }
+  building.requiredMaterials = undefined;
+  building.deliveredMaterials = undefined;
+  building.buildingHealth = building.maxBuildingHealth || 150;
 }
 
 export class BotAISystem {
@@ -355,6 +434,41 @@ export class BotAISystem {
         this.botMemories.set(botFactionId, memory);
       }
 
+      if (region.id === 2 && !memory.hasOpenedCampApproaches) {
+        memory.hasOpenedCampApproaches = true;
+        const [campX, campZ] = region.campPosition || region.center;
+        let passable = 0;
+        let checked = 0;
+        for (let dx = -9; dx <= 9; dx++) {
+          for (let dz = -9; dz <= 9; dz++) {
+            const tile = grid.getTile(campX + dx, campZ + dz);
+            if (!tile || tile.terrain === 'water') continue;
+            checked++;
+            if (tile.isPassable) passable++;
+          }
+        }
+        if (checked > 0 && passable / checked < 0.75) {
+          let cleared = false;
+          for (let dx = -9; dx <= 9; dx++) {
+            for (let dz = -9; dz <= 9; dz++) {
+              if (dx * dx + dz * dz > 9 * 9) continue;
+              const x = campX + dx;
+              const z = campZ + dz;
+              const tile = grid.getTile(x, z);
+              if (!tile || tile.buildingId || tile.terrain === 'water') continue;
+              if (tile.foliageType === 'tree' || tile.foliageType === 'rock') {
+                grid.removeFoliage(x, z);
+                cleared = true;
+              }
+            }
+          }
+          if (cleared) {
+            AStar.clearUnreachableCache();
+            incrementFoliageVersion();
+          }
+        }
+      }
+
       if (!memory.hasPavedHighwayRoad) {
         const camp = region.campPosition || region.center;
         const [targetX, targetZ] = GridMap.getClosestHighwayTileForRegion(camp[0], camp[1], region.id);
@@ -446,10 +560,42 @@ export class BotAISystem {
       const incompleteBuildings = botBuildings.filter((b) => !b.isCompleted);
       const peasants = botUnits.filter((u) => u.characterClass === 'peasant');
 
+      for (const house of completedBuildings) {
+        if (house.buildingType !== 'peasant_house' && house.buildingType !== 'manor') continue;
+        const extension = BACKYARD_EXTENSIONS_CONFIG[house.backyardExtension || 'none'];
+        if (!extension || extension.productionCycleTicks <= 0) continue;
+        house.backyardProgress = (house.backyardProgress || 0) + tickInterval;
+        if (house.backyardProgress < extension.productionCycleTicks) continue;
+        house.backyardProgress %= extension.productionCycleTicks;
+        const canProduce = Object.entries(extension.inputs).every(([resource, amount]) =>
+          botBuildings.reduce((sum, building) => sum + (building.isCompleted ? (building.localInventory?.[resource as ResourceType] || 0) : 0), 0) >= (amount || 0)
+        );
+        if (!canProduce) continue;
+        for (const [resource, amount] of Object.entries(extension.inputs)) {
+          let remaining = amount || 0;
+          for (const building of completedBuildings) {
+            if (!building.localInventory || remaining <= 0) continue;
+            const key = resource as ResourceType;
+            const taken = Math.min(remaining, building.localInventory[key] || 0);
+            if (taken > 0) {
+              building.localInventory[key] = (building.localInventory[key] || 0) - taken;
+              remaining -= taken;
+            }
+          }
+        }
+        house.localInventory ||= {};
+        for (const [resource, amount] of Object.entries(extension.outputs)) {
+          const key = resource as ResourceType;
+          house.localInventory[key] = Math.min(100, (house.localInventory[key] || 0) + (amount || 0));
+          if (FOOD_RESOURCE_KEYS.includes(key)) memory.food += amount || 0;
+        }
+      }
+
       const foodHolders = completedBuildings.filter(
         (b) =>
           b.localInventory &&
-          (b.buildingType === 'stockpile' ||
+          (b.buildingType === 'peasant_house' ||
+            b.buildingType === 'stockpile' ||
             b.buildingType === 'bakery' ||
             b.buildingType === 'wheat_farm' ||
             b.buildingType === 'fishermans_hut' ||
@@ -457,7 +603,7 @@ export class BotAISystem {
             b.buildingType === 'hunters_hut')
       );
       foodHolders.sort((a, b) => (a.buildingType === 'stockpile' ? -1 : b.buildingType === 'stockpile' ? 1 : 0));
-      const edibleTypes: ResourceType[] = ['bread', 'fish', 'meat', 'berries', 'flour', 'wheat'];
+      const edibleTypes: ResourceType[] = ['bread', 'fish', 'meat', 'berries', 'vegetables', 'eggs', 'flour', 'wheat'];
 
       const completedBuildingMap = new Map<string, typeof completedBuildings[0]>();
       for (const b of completedBuildings) {
@@ -973,12 +1119,12 @@ export class BotAISystem {
           }
         }
 
-        if (matsDelivered && currentTick % 20 === 0) {
+        if (matsDelivered && (currentTick + region.id * 3) % 20 === 0) {
           targetB.constructionProgress = Math.min(100, (targetB.constructionProgress || 0) + 10);
           if (targetB.constructionProgress >= 100) {
             targetB.constructionProgress = 100;
+            completeBotHouseProject(targetB);
             targetB.isCompleted = true;
-            targetB.buildingHealth = targetB.maxBuildingHealth || 150;
             incrementBuildingVersion();
           }
         }
@@ -986,9 +1132,87 @@ export class BotAISystem {
 
       let totalBeds = 0;
       for (const b of completedBuildings) {
-        if (b.buildingType === 'peasant_house') totalBeds += 2;
+        if (b.buildingType === 'peasant_house') totalBeds += HOUSE_TIERS_CONFIG[b.houseTier || 1].capacity;
         else if (b.buildingType === 'tent') totalBeds += 3;
         else if (b.buildingType === 'manor') totalBeds += 5;
+      }
+
+      let startedHousingProject = false;
+      const housingInterval = BOT_AI_BUILD_DECISION_INTERVAL * 2 + region.id * 13;
+      if (incompleteBuildings.length < 2 && currentTick - (memory.lastHousingActionTick || 0) >= housingInterval) {
+        const houses = completedBuildings.filter((b) => b.buildingType === 'peasant_house' && !b.pendingHouseTier && !b.pendingBackyardExtension);
+        const foodTypes = countBotFoodTypes(completedBuildings);
+        const upgrades = houses.filter((b) => {
+          const nextTier = (b.houseTier || 1) + 1;
+          if (nextTier > 3) return false;
+          const tier = nextTier as HouseTier;
+          return foodTypes >= HOUSE_TIERS_CONFIG[tier].upgradeMinFoodTypes &&
+            botHasRequiredGoods(completedBuildings, tier) &&
+            botHasMaterials(botBuildings, HOUSE_TIERS_CONFIG[tier].upgradeCost, memory);
+        });
+        const vacant = houses.filter((b) => !b.backyardExtension || b.backyardExtension === 'none')
+          .sort((a, b) => (b.houseTier || 1) - (a.houseTier || 1));
+        const basicExtensions: BackyardExtensionType[] = ['vegetable_garden', 'chicken_coop', 'goat_shed'];
+        const artisanExtensions: BackyardExtensionType[] = ['artisan_bowyer', 'artisan_shields', 'artisan_brewery'];
+        const extensionCount = (extension: BackyardExtensionType) => houses.filter((b) => b.backyardExtension === extension).length;
+        const pickAffordable = (options: BackyardExtensionType[], house: GameEntity) =>
+          options.filter((extension) => (house.houseTier || 1) >= BACKYARD_EXTENSIONS_CONFIG[extension].requiredTier &&
+            botHasMaterials(botBuildings, BACKYARD_EXTENSIONS_CONFIG[extension].cost, memory))
+            .sort((a, b) => extensionCount(a) - extensionCount(b))[0];
+
+        let targetHouse: GameEntity | undefined;
+        let targetTier: HouseTier | undefined;
+        let targetExtension: BackyardExtensionType | undefined;
+        if (upgrades.length > 0 && ((memory.housingProjectsStarted || 0) % 2 === 1 || vacant.length === 0)) {
+          targetHouse = upgrades[0];
+          targetTier = ((targetHouse.houseTier || 1) + 1) as HouseTier;
+        } else {
+          for (const house of vacant) {
+            const extension = pickAffordable(
+              (house.houseTier || 1) >= 2 && houses.some((b) => basicExtensions.includes(b.backyardExtension || 'none'))
+                ? [...artisanExtensions, ...basicExtensions]
+                : basicExtensions,
+              house
+            );
+            if (extension) {
+              targetHouse = house;
+              targetExtension = extension;
+              break;
+            }
+          }
+          if (!targetHouse && upgrades.length > 0) {
+            targetHouse = upgrades[0];
+            targetTier = ((targetHouse.houseTier || 1) + 1) as HouseTier;
+          }
+          if (!targetHouse && houses.length >= 3) {
+            for (const house of houses) {
+              if ((house.houseTier || 1) < 2 || !basicExtensions.includes(house.backyardExtension || 'none')) continue;
+              const extension = pickAffordable(artisanExtensions, house);
+              if (extension && extensionCount(extension) === 0) {
+                targetHouse = house;
+                targetExtension = extension;
+                break;
+              }
+            }
+          }
+        }
+
+        if (targetHouse && (targetTier || targetExtension)) {
+          const cost = targetTier ? HOUSE_TIERS_CONFIG[targetTier].upgradeCost : BACKYARD_EXTENSIONS_CONFIG[targetExtension!].cost;
+          spendBotHousingMaterials(botBuildings, cost, memory);
+          if (targetTier) targetHouse.pendingHouseTier = targetTier;
+          else targetHouse.pendingBackyardExtension = targetExtension;
+          const materials = { ...cost };
+          delete materials.gold;
+          targetHouse.requiredMaterials = materials;
+          targetHouse.deliveredMaterials = { ...materials };
+          targetHouse.constructionProgress = 0;
+          targetHouse.isCompleted = false;
+          memory.lastHousingActionTick = currentTick;
+          memory.housingProjectsStarted = (memory.housingProjectsStarted || 0) + 1;
+          startedHousingProject = true;
+          incrementBuildingVersion();
+        }
       }
 
       if (currentTick - memory.lastImmigrationTick >= BOT_AI_IMMIGRATION_INTERVAL) {
@@ -1058,7 +1282,7 @@ export class BotAISystem {
       }
 
       const botDecisionInterval = BOT_AI_BUILD_DECISION_INTERVAL + (region.id * 17);
-      if (incompleteBuildings.length < 2 && currentTick - memory.lastActionTick >= botDecisionInterval) {
+      if (!startedHousingProject && incompleteBuildings.length < 2 && currentTick - memory.lastActionTick >= botDecisionInterval) {
         memory.lastActionTick = currentTick;
 
         const completedHitchingPosts = completedBuildings.filter((b) => b.buildingType === 'hitching_post');

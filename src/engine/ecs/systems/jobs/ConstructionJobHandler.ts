@@ -125,6 +125,10 @@ export class ConstructionJobHandler {
     for (const b of buildingEntities) {
       const bEnt = b as GameEntity;
       if (bEnt.id === job.targetBuildingId) {
+        if (bEnt.isCompleted && !bEnt.pendingHouseTier && !bEnt.pendingBackyardExtension) {
+          unit.currentJob = { id: `idle-${unit.id}`, type: 'idle', progress: 0, totalWork: 0 };
+          return;
+        }
         const upgradedTier = bEnt.pendingHouseTier;
         const upgradedYard = bEnt.pendingBackyardExtension;
         if (upgradedTier) {
@@ -155,7 +159,7 @@ export class ConstructionJobHandler {
         } else if (bEnt.factionId && bEnt.factionId.startsWith('bot-')) {
           const reg = regions.find((r: RegionData) => r.id === bEnt.regionId);
           if (reg) {
-            if (bEnt.buildingType === 'peasant_house') {
+            if (bEnt.buildingType === 'peasant_house' && !upgradedTier && !upgradedYard) {
               const newPId = `unit-${bEnt.factionId}-immigrant-${Date.now() % 1000}`;
               world.add({
                 id: newPId,
@@ -182,7 +186,7 @@ export class ConstructionJobHandler {
               }
             }
             updateRegionStats(reg.id, {
-              buildingsCount: reg.buildingsCount + 1,
+              buildingsCount: reg.buildingsCount + (upgradedTier || upgradedYard ? 0 : 1),
               population: botPop,
               wealth: reg.wealth + 15,
             });

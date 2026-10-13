@@ -28,6 +28,7 @@ export interface DiplomaticLetter {
 
 export interface LordDiplomacyState {
   lordId: string;
+  portraitId?: number;
   lordName: string;
   lordTitle: string;
   regionId: number;
@@ -49,6 +50,7 @@ export interface LordDiplomacyState {
 
 export interface DiplomacySlice {
   lordDiplomacy: Record<string, LordDiplomacyState>;
+  resetDiplomacy: () => void;
   selectedDiplomacyLordId: string | null;
   setSelectedDiplomacyLordId: (lordId: string | null) => void;
   sendDiplomaticReply: (lordId: string, letterId: string, replyId: string) => void;

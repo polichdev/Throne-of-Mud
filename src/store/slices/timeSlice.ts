@@ -24,6 +24,7 @@ const initialDateInfo = getDateInfo(1);
 export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set) => ({
   time: {
     tick: 0,
+    calendarTickOffset: 0,
     day: 1,
     dayOfMonth: initialDateInfo.dayOfMonth,
     month: initialDateInfo.month,
@@ -116,7 +117,7 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
       return {
         time: {
           ...state.time,
-          tick: newTick,
+          calendarTickOffset: newTick - state.time.tick,
           day: newDay,
           dayOfMonth: dateInfo.dayOfMonth,
           month: dateInfo.month,
@@ -171,7 +172,7 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
       return {
         time: {
           ...state.time,
-          tick: newTick,
+          calendarTickOffset: newTick - state.time.tick,
           day: newDay,
           dayOfMonth: dateInfo.dayOfMonth,
           month: dateInfo.month,
@@ -250,12 +251,13 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
 
   setTimeOfDay: (targetHour: number) => {
     set((state) => {
-      const h = Math.max(0, Math.min(HOURS_PER_DAY - 1, targetHour));
+      if (!Number.isFinite(targetHour)) return state;
+      const h = Math.max(0, Math.min(HOURS_PER_DAY - 1, Math.floor(targetHour)));
       const newTick = timeToTicks(state.time.day, h, 0);
       return {
         time: {
           ...state.time,
-          tick: newTick,
+          calendarTickOffset: newTick - state.time.tick,
           hour: h,
           minute: 0,
         },
@@ -266,10 +268,11 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
   advanceTick: () => {
     set((state) => {
       const nextTick = state.time.tick + 1;
-      const totalMinutes = Math.floor(nextTick / TICKS_PER_MINUTE);
-      const hour = (DAY_START_HOUR + Math.floor(totalMinutes / MINUTES_PER_HOUR)) % HOURS_PER_DAY;
+      const calendarTick = nextTick + (state.time.calendarTickOffset ?? 0);
+      const totalMinutes = Math.floor(calendarTick / TICKS_PER_MINUTE) + DAY_START_HOUR * MINUTES_PER_HOUR;
+      const hour = Math.floor(totalMinutes / MINUTES_PER_HOUR) % HOURS_PER_DAY;
       const minute = totalMinutes % MINUTES_PER_HOUR;
-      const day = 1 + Math.floor((DAY_START_HOUR * MINUTES_PER_HOUR + totalMinutes) / MINUTES_PER_DAY);
+      const day = 1 + Math.floor(totalMinutes / MINUTES_PER_DAY);
 
       const dateInfo = day !== state.time.day ? getDateInfo(day) : {
         season: state.time.season,

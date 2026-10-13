@@ -176,14 +176,11 @@ export class ManualJobHandler {
         const pathReturn = AStar.findPathToArea(grid, [Math.floor(uX), Math.floor(uZ)], hp.gridPosition ? hp.gridPosition[0] : 0, hp.gridPosition ? hp.gridPosition[1] : 0, hp.buildingWidth || 3, hp.buildingHeight || 2);
         if (pathReturn && pathReturn.length > 0) {
           unit.path = pathReturn;
-          return true;
         }
+        return true;
       }
-      unit.hasMule = false;
-      unit.muleTransition = undefined;
-      unit.assignedMuleHutId = undefined;
       (unit as any).nextPendingJobCheckTick = currentTick + 4;
-      return false;
+      return true;
     }
 
     _viableJobs.length = 0;
@@ -336,12 +333,10 @@ export class ManualJobHandler {
         const pathReturn = AStar.findPathToArea(grid, [Math.floor(uX), Math.floor(uZ)], hp.gridPosition ? hp.gridPosition[0] : 0, hp.gridPosition ? hp.gridPosition[1] : 0, hp.buildingWidth || 3, hp.buildingHeight || 2);
         if (pathReturn && pathReturn.length > 0) {
           unit.path = pathReturn;
-          return;
         }
+        return;
       }
-      unit.hasMule = false;
-      unit.muleTransition = undefined;
-      unit.assignedMuleHutId = undefined;
+      return;
     }
 
     if (!unit.path || unit.path.length === 0) {

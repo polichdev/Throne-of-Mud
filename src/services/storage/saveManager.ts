@@ -1,4 +1,5 @@
 import { GridMap } from '../../engine/grid/GridMap';
+import { ensureEichenauSettlementAccess } from '../../engine/grid/settlementAccess';
 import { world, type GameEntity } from '../../engine/ecs/world';
 import { useGameStore } from '../../store/useGameStore';
 import type { ResourceInventory, GameTime, ChronicleEvent, TileData, RegionData, ResourceDeposit, MilitiaSquad, PlayerIdentity } from '../../types/game';
@@ -309,6 +310,11 @@ export async function loadGameFromIndexedDB(grid: GridMap): Promise<boolean> {
 
     const playerRegionId = saveData.gameState.playerRegionId ?? 0;
     const playerRegion = (saveData.gameState.regions || [])[playerRegionId];
+    if (playerRegionId === 2) {
+      const camp = playerRegion?.campPosition || playerRegion?.center || [80, 285];
+      ensureEichenauSettlementAccess(grid, [Math.round(camp[0]), Math.round(camp[1])],
+        [...world.entities].filter((entity) => entity.isBuilding && entity.regionId === playerRegionId));
+    }
     let campX = playerRegion?.campPosition?.[0] ?? playerRegion?.center?.[0] ?? 52;
     let campZ = playerRegion?.campPosition?.[1] ?? playerRegion?.center?.[1] ?? 52;
 
@@ -392,6 +398,7 @@ export async function loadGameFromIndexedDB(grid: GridMap): Promise<boolean> {
       cameraAngleTarget: targetAngle,
       botCount: saveData.gameState.botCount ?? 2,
       selectedEntityId: null,
+      pinnedBuildingId: null,
       isLordsBarOpen: false,
       activeMenuTab: null,
       activeBuildType: null,

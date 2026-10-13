@@ -5,6 +5,7 @@ import { DEFAULT_REGIONS, PRESET_BOT_LORDS } from '../../constants/world';
 import { DEFAULT_PLAYER_IDENTITY, getHeraldryGlyph } from '../../constants/playerIdentity';
 import { initResourceDeposits } from '../resources/ResourceDeposits';
 import { getSmartRoadPath, isRoadPathValid } from '../grid/roadGeneration';
+import { ensureEichenauSettlementAccess } from '../grid/settlementAccess';
 
 export interface WorldInitResult {
   playerRegionId: number;
@@ -233,7 +234,23 @@ export function initializeWorldEntities(
       botReg.wealth = 40 + activeBotIndex * 10;
       botReg.buildingsCount = 3;
 
-      const bSpawn = botReg.campPosition || ((botReg.spawnPoints && botReg.spawnPoints[0]) ? botReg.spawnPoints[0].position : botReg.center);
+      const campCandidates = [botReg.campPosition, ...(botReg.spawnPoints || []).map((sp) => sp.position)]
+        .filter((pos): pos is [number, number] => Boolean(pos));
+      const scoreCamp = ([x, z]: [number, number]) => {
+        let walkable = 0;
+        for (let dx = -12; dx <= 12; dx++) {
+          for (let dz = -12; dz <= 12; dz++) {
+            if (grid.isWalkable(x + dx, z + dz)) walkable++;
+          }
+        }
+        return walkable;
+      };
+      const bSpawn = regId === 2
+        ? campCandidates.reduce((best, candidate) =>
+            scoreCamp(candidate) > scoreCamp(best) ? candidate : best,
+            campCandidates[0] || botReg.center
+          )
+        : campCandidates[0] || botReg.center;
       const bx = bSpawn[0];
       const bz = bSpawn[1];
       botReg.campPosition = [bx, bz];
@@ -402,6 +419,10 @@ export function initializeWorldEntities(
   }
 
   const deposits = initResourceDeposits(grid);
+
+  if (playerRegionId === 2) {
+    ensureEichenauSettlementAccess(grid, [cx, cz]);
+  }
 
   return {
     playerRegionId,

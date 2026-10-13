@@ -261,6 +261,7 @@ export type WeatherType = 'clear' | 'rain' | 'storm' | 'snow';
 
 export interface GameTime {
   tick: number;
+  calendarTickOffset?: number;
   day: number;
   dayOfMonth?: number;
   month?: MonthName;

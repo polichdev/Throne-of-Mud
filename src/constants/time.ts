@@ -84,7 +84,7 @@ export function getDateInfo(day: number) {
 
 export function timeToTicks(day: number, hour: number, minute: number): number {
   const totalMinutes = (day - 1) * MINUTES_PER_DAY + (hour * MINUTES_PER_HOUR + minute) - DAY_START_MINUTE_OFFSET;
-  return Math.max(0, totalMinutes * TICKS_PER_MINUTE);
+  return totalMinutes * TICKS_PER_MINUTE;
 }
 
 export function ticksToTime(tick: number) {

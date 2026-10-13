@@ -14,7 +14,7 @@ import {
 import { BotAISystem } from '../BotAISystem';
 import { NIGHT_START_HOUR, NIGHT_END_HOUR } from '../../../../constants/needs';
 
-function isNearBuilding(uX: number, uZ: number, b: GameEntity, maxDist = 2.4): boolean {
+function isNearBuilding(uX: number, uZ: number, b: GameEntity, maxDist = 0.85): boolean {
   if (b.gridPosition) {
     const bw = b.buildingWidth || 2;
     const bh = b.buildingHeight || 2;
@@ -176,7 +176,7 @@ export class HaulingJobHandler {
     }
 
     if (unit.currentJob?.type === 'return_mule') {
-      if (hp && isNearBuilding(uX, uZ, hp, 2.2)) {
+      if (hp && isNearBuilding(uX, uZ, hp)) {
         if (unit.muleTransition !== 'returning') {
           unit.muleTransition = 'returning';
           unit.muleTransitionProgress = 0;
@@ -217,12 +217,6 @@ export class HaulingJobHandler {
         }
       }
 
-      unit.hasMule = false;
-      unit.muleTransition = undefined;
-      unit.muleTransitionProgress = undefined;
-      unit.assignedMuleHutId = undefined;
-      unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
-      unit.path = [];
       return true;
     }
 
@@ -230,7 +224,7 @@ export class HaulingJobHandler {
       const job = unit.currentJob;
 
       if (!unit.hasMule && hp) {
-        if (isNearBuilding(uX, uZ, hp, 2.2)) {
+        if (isNearBuilding(uX, uZ, hp)) {
           if (unit.muleTransition !== 'taking') {
             unit.muleTransition = 'taking';
             unit.muleTransitionProgress = 0;
@@ -270,12 +264,14 @@ export class HaulingJobHandler {
         }
       }
 
+      if (!unit.hasMule) return true;
+
       if (!unit.isHaulingLog && job.targetPosition) {
         const [lx, lz] = job.targetPosition;
         const distToLog = distance2D(uX, uZ, lx + 0.5, lz + 0.5);
         const isAdjacent = Math.abs(Math.floor(uX) - lx) <= 1 && Math.abs(Math.floor(uZ) - lz) <= 1;
 
-        if (distToLog <= 2.8 || isAdjacent) {
+        if (distToLog <= 1.45 && isAdjacent) {
           unit.isHaulingLog = true;
           const tile = grid.getTile(lx, lz);
           if (tile) {
@@ -363,7 +359,7 @@ export class HaulingJobHandler {
         unit.assignedMuleHutId = undefined;
         return true;
       } else if (unit.isHaulingLog) {
-        if (isNearBuilding(uX, uZ, storageHub, 3.2)) {
+        if (isNearBuilding(uX, uZ, storageHub)) {
           unit.isHaulingLog = false;
           if (isStockpile) {
             storageHub.localInventory = storageHub.localInventory || {};
@@ -453,7 +449,7 @@ export class HaulingJobHandler {
           unit.path = pathBack;
           return true;
         }
-      } else if (unit.hasMule && hp && isNearBuilding(uX, uZ, hp, 2.4)) {
+      } else if (unit.hasMule && hp && isNearBuilding(uX, uZ, hp)) {
         unit.currentJob = {
           id: `return-mule-${Date.now()}`,
           type: 'return_mule',
@@ -489,15 +485,14 @@ export class HaulingJobHandler {
             return true;
           }
         }
+        if (unit.hasMule && hp) return true;
         unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
         unit.inventory = {};
-        unit.hasMule = false;
-        unit.assignedMuleHutId = undefined;
         return true;
       }
 
       if (!unit.hasMule && hp) {
-        if (isNearBuilding(uX, uZ, hp, 2.2)) {
+        if (isNearBuilding(uX, uZ, hp)) {
           if (unit.muleTransition !== 'taking') {
             unit.muleTransition = 'taking';
             unit.muleTransitionProgress = 0;
@@ -536,10 +531,12 @@ export class HaulingJobHandler {
         }
       }
 
+      if (!unit.hasMule) return true;
+
       const hasLoadedCargo = unit.inventory && Object.values(unit.inventory).some((amt) => (amt || 0) > 0);
 
       if (!hasLoadedCargo) {
-        if (isNearBuilding(uX, uZ, storageHub, 2.4) && bTarget) {
+        if (isNearBuilding(uX, uZ, storageHub) && bTarget) {
           const req = bTarget.requiredMaterials || {};
           const del = bTarget.deliveredMaterials || {};
           unit.inventory = unit.inventory || {};
@@ -601,9 +598,8 @@ export class HaulingJobHandler {
                 return true;
               }
             }
+            if (hp) return true;
             unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
-            unit.hasMule = false;
-            unit.assignedMuleHutId = undefined;
             unit.speechBubble = {
               text: 'Немає достатньо матеріалів у поселенні...',
               expiresAtTick: currentTick + 25,
@@ -624,7 +620,7 @@ export class HaulingJobHandler {
           return true;
         }
       } else if (bTarget) {
-        if (isNearBuilding(uX, uZ, bTarget, 2.4)) {
+        if (isNearBuilding(uX, uZ, bTarget)) {
           bTarget.deliveredMaterials = bTarget.deliveredMaterials || {};
           for (const [resKey, amt] of Object.entries(unit.inventory || {})) {
             const res = resKey as ResourceType;
@@ -655,10 +651,9 @@ export class HaulingJobHandler {
             }
           }
 
+          if (hp) return true;
           unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
           unit.path = [];
-          unit.hasMule = false;
-          unit.assignedMuleHutId = undefined;
           return true;
         }
 
@@ -676,7 +671,7 @@ export class HaulingJobHandler {
     }
 
     if (unit.hasMule && !unit.isHaulingLog && (!unit.inventory || Object.keys(unit.inventory).length === 0)) {
-      if (hp && isNearBuilding(uX, uZ, hp, 2.4)) {
+      if (hp && isNearBuilding(uX, uZ, hp)) {
         unit.hasMule = false;
         unit.assignedMuleHutId = undefined;
         unit.speechBubble = {

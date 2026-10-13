@@ -181,14 +181,30 @@ const INITIAL_BOT_LORDS_DIPLOMACY: Record<string, LordDiplomacyState> = {
   },
 };
 
+const MALE_PORTRAITS = [0, 2, 5, 7, 8];
+const FEMALE_PORTRAITS = [1, 3, 4, 6, 9];
+const pickPortrait = (pool: number[]) => pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+
+function freshBotDiplomacy(): Record<string, LordDiplomacyState> {
+  const male = [...MALE_PORTRAITS];
+  const female = [...FEMALE_PORTRAITS];
+  return Object.fromEntries(Object.entries(INITIAL_BOT_LORDS_DIPLOMACY).map(([id, lord]) => [id, {
+    ...lord,
+    portraitId: pickPortrait(id === 'bot-2' ? female : male),
+    letters: lord.letters.map((letter) => ({ ...letter, replyOptions: letter.replyOptions.map((option) => ({ ...option })) })),
+  }]));
+}
+
 export const createDiplomacySlice: StateCreator<
   GameState,
   [],
   [],
   DiplomacySlice
 > = (set, get) => ({
-  lordDiplomacy: INITIAL_BOT_LORDS_DIPLOMACY,
+  lordDiplomacy: freshBotDiplomacy(),
   selectedDiplomacyLordId: 'bot-2',
+
+  resetDiplomacy: () => set({ lordDiplomacy: freshBotDiplomacy(), selectedDiplomacyLordId: 'bot-2' }),
 
   setSelectedDiplomacyLordId: (lordId) => {
     set({ selectedDiplomacyLordId: lordId });
