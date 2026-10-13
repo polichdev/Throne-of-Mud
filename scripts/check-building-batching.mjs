@@ -34,6 +34,7 @@ const { BuildingsRenderer, clearBuildingFrameStates } = await import('../src/com
 const { BuildingMeshBatches } = await import('../src/components/canvas/buildings/BuildingMeshBatches.ts');
 const { addSceneRenderTask } = await import('../src/components/canvas/performance/sceneRenderTasks.ts');
 const { StablePointLights } = await import('../src/components/canvas/performance/StablePointLights.tsx');
+const { cacheBatchedDrawList } = await import('../src/components/canvas/performance/batchedDrawCache.ts');
 const { buildingEntities } = await import('../src/engine/ecs/world.ts');
 extend(THREE); globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.window = { __lastCameraTarget: [16, 16], __lastCameraZoom: 38 };
@@ -166,6 +167,17 @@ fixture.visible = false; batches.update(); assert.equal(batches.group.visible, f
 fixture.visible = true; b.scale.x = -1; testScene.updateMatrixWorld(); batches.update();
 assert.equal(b.layers.mask, 1, 'Animated reflected transforms return to ordinary renderer'); assert.equal(batch.getVisibleAt(1), false);
 b.scale.x = 1; testScene.updateMatrixWorld(); batches.update(); assert.equal(b.layers.mask, 0, 'Safe transforms resume batching');
+for (let i = 0; i < 20; i++) {
+  fixture.scale.set(2, 1, 1); b.rotation.z = .5;
+  testScene.updateMatrixWorld(); batches.sync(fixture); batches.update();
+  assert.equal(batches.group.children[0], batch, 'Sync during an unsafe animated pose retains the batch');
+  assert.equal(b.layers.mask, 1, 'Sheared pose retains native source rendering and normals');
+  assert.equal(batch.getVisibleAt(1), false, 'Sheared pose is not drawn twice');
+  fixture.scale.set(1, 1, 1); b.rotation.z = 0;
+  testScene.updateMatrixWorld(); batches.sync(fixture); batches.update();
+  assert.equal(batches.group.children[0], batch, 'Returning to a safe pose reuses the same GPU buffers');
+  assert.equal(b.layers.mask, 0); assert.equal(batch.getVisibleAt(1), true);
+}
 const camera = new THREE.OrthographicCamera(-2, 2, 2, -2, .1, 20); camera.position.z = 5; camera.updateMatrixWorld();
 batch.onBeforeRender(renderer, testScene, camera, batch.geometry, batch.material); assert.equal(batch._multiDrawCount, 2, 'Three generates both visible multi-draw commands');
 const drawVersion = batch._indirectTexture.version;
@@ -186,7 +198,8 @@ assert.equal(batch._multiDrawCount, 2, 'Main camera commands are restored after 
 camera.zoom = 2; camera.updateProjectionMatrix();
 const projectionVersion = batch._indirectTexture.version;
 batch.onBeforeRender(renderer, testScene, camera, batch.geometry, batch.material);
-assert.ok(batch._indirectTexture.version > projectionVersion, 'Zoom projection changes invalidate draw commands');
+assert.equal(batch._multiDrawCount, 2, 'Zoom projection regenerates both visible commands');
+assert.equal(batch._indirectTexture.version, projectionVersion, 'Zoom with unchanged instance IDs does not upload the same lookup texture');
 camera.zoom = 1; camera.updateProjectionMatrix();
 b.position.x = 100; testScene.updateMatrixWorld(); batches.update();
 batch.onBeforeRender(renderer, testScene, camera, batch.geometry, batch.material); assert.equal(batch._multiDrawCount, 1, 'Three per-object frustum culling removes a distant detail');
@@ -195,6 +208,58 @@ batch.onBeforeRender(renderer, testScene, camera, batch.geometry, batch.material
 assert.equal(batch._multiDrawCount, 0, 'Removal invalidates cached commands without a React commit');
 let geometryDisposed = false, materialDisposed = false; geometry.addEventListener('dispose', () => geometryDisposed = true); mat.addEventListener('dispose', () => materialDisposed = true);
 batches.dispose(); assert.equal(a.layers.mask, 1); assert.equal(b.layers.mask, 1); assert.equal(geometryDisposed, false); assert.equal(materialDisposed, false);
+
+// Compare native Three draw lists throughout animation, culling, sorting and shadows.
+const box = new THREE.BoxGeometry(.2, .2, .2);
+function makeLookupBatch(cached) {
+  const mesh = new THREE.BatchedMesh(8, box.attributes.position.count, box.index.count, mat);
+  const id = mesh.addGeometry(box); for (let i = 0; i < 3; i++) mesh.addInstance(id);
+  if (cached) cacheBatchedDrawList(mesh);
+  return mesh;
+}
+const nativeLookup = makeLookupBatch(false), cachedLookup = makeLookupBatch(true);
+const lookupCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, .1, 20);
+lookupCamera.position.z = 5; lookupCamera.updateMatrixWorld();
+const pose = new THREE.Matrix4();
+function checkLookup(frame, camera = lookupCamera, shadow = false) {
+  for (let i = 0; i < 3; i++) {
+    pose.makeTranslation(Math.sin(frame / 20 + i) * .2, i * .3, i * .25);
+    nativeLookup.setMatrixAt(i, pose); cachedLookup.setMatrixAt(i, pose);
+  }
+  for (const mesh of [nativeLookup, cachedLookup]) {
+    if (shadow) mesh.onBeforeShadow(renderer, mesh, lookupCamera, camera, mesh.geometry, depth);
+    else mesh.onBeforeRender(renderer, testScene, camera, mesh.geometry, mat);
+  }
+  assert.equal(cachedLookup._multiDrawCount, nativeLookup._multiDrawCount, 'Native and cached command counts match');
+  const count = nativeLookup._multiDrawCount;
+  for (const field of ['_multiDrawStarts', '_multiDrawCounts']) assert.deepEqual(cachedLookup[field].slice(0, count), nativeLookup[field].slice(0, count));
+  assert.deepEqual(cachedLookup._indirectTexture.image.data.slice(0, count), nativeLookup._indirectTexture.image.data.slice(0, count), 'Instance ordering matches native Three');
+  assert.deepEqual(cachedLookup._matricesTexture.image.data, nativeLookup._matricesTexture.image.data, 'Every animated transform remains unchanged');
+}
+checkLookup(0);
+const nativeLookupVersion = nativeLookup._indirectTexture.version, cachedLookupVersion = cachedLookup._indirectTexture.version;
+const lookupMatrixVersion = cachedLookup._matricesTexture.version;
+for (let i = 1; i <= 90; i++) { lookupCamera.position.x = Math.sin(i / 20) * .1; lookupCamera.updateMatrixWorld(); checkLookup(i); }
+assert.equal(nativeLookup._indirectTexture.version - nativeLookupVersion, 90);
+assert.equal(cachedLookup._indirectTexture.version, cachedLookupVersion, '90 animated/camera frames with the same IDs skip all redundant lookup uploads');
+assert.ok(cachedLookup._matricesTexture.version > lookupMatrixVersion, 'Animation matrix uploads continue');
+const uploadSourceVersion = cachedLookup._indirectTexture.source.version;
+for (let i = 0; i < 10; i++) checkLookup(i);
+assert.equal(cachedLookup._indirectTexture.source.version, uploadSourceVersion, 'Unchanged lookups also preserve the source upload version');
+cachedLookup.setVisibleAt(1, false); nativeLookup.setVisibleAt(1, false); checkLookup(91);
+assert.ok(cachedLookup._indirectTexture.version > cachedLookupVersion, 'Removing a middle instance uploads the changed lookup');
+cachedLookup.setVisibleAt(1, true); nativeLookup.setVisibleAt(1, true); checkLookup(92);
+lookupCamera.position.z = -5; lookupCamera.lookAt(0, 0, 0); lookupCamera.updateMatrixWorld(); checkLookup(93);
+const lookupShadow = lookupCamera.clone(); lookupShadow.position.x = 100; lookupShadow.updateMatrixWorld();
+checkLookup(94, lookupShadow, true); checkLookup(95);
+lookupCamera.zoom = 20; lookupCamera.updateProjectionMatrix(); checkLookup(96);
+cachedLookup._indirectTexture.needsUpdate = true;
+const externalLookupVersion = cachedLookup._indirectTexture.version; checkLookup(97);
+assert.ok(cachedLookup._indirectTexture.version > externalLookupVersion, 'External update requests invalidate cached contents');
+nativeLookup.setInstanceCount(16); cachedLookup.setInstanceCount(16); checkLookup(98);
+console.log(JSON.stringify({ animatedFrames: 90, nativeLookupUploadRequests: 90, cachedLookupUploadRequests: 0,
+  checks: 'Native Three commands, animation matrices, moving camera, sort reversal, visibility, zoom, shadows, external invalidation and resize fallback; no GPU/FPS measurement' }));
+nativeLookup.dispose(); cachedLookup.dispose(); box.dispose();
 
 const hiddenRoot = new THREE.Group(), hiddenBatches = new BuildingMeshBatches();
 const branches = [], details = [];

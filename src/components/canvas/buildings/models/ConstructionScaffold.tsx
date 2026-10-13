@@ -34,6 +34,26 @@ export function ConstructionScaffold({
     type === 'wheat_farm' ||
     type === 'campfire';
 
+  if (type === 'hitching_post') {
+    return <group>
+      <mesh material={mats.richSoil} position={[0, 0.02, 0]} receiveShadow>
+        <boxGeometry args={[width * 0.95, 0.04, height * 0.95]} />
+      </mesh>
+      {[-width * 0.35, 0, width * 0.35].map((x, index) => (
+        <mesh key={index} material={mats.timberDark} position={[x, 0.42, -height * 0.12]} castShadow>
+          <cylinderGeometry args={[0.07, 0.09, 0.84, 6]} />
+        </mesh>
+      ))}
+      <mesh material={mats.timberMed} position={[0, 0.68, -height * 0.12]} castShadow>
+        <boxGeometry args={[width * 0.75, 0.07, 0.08]} />
+      </mesh>
+      <mesh material={mats.timberMed} position={[0, 0.24, height * 0.2]} castShadow>
+        <boxGeometry args={[width * 0.52, 0.2, 0.26]} />
+      </mesh>
+      <ConstructionHUD progress={progress} progressTextRef={progressTextRef} progressBarRef={progressBarRef} />
+    </group>;
+  }
+
   return (
     <group>
       {!isMinimal && !isUpgrade && (
@@ -189,16 +209,10 @@ function ConstructionHUD({
   return (
     <group ref={groupRef}>
       <Html position={[0, 1.45, 0]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-        <div className="bg-slate-950 text-amber-300 text-[11px] px-3 py-1.5 rounded-xl border border-amber-500/70 shadow-2xl font-mono flex items-center gap-2 whitespace-nowrap pointer-events-none">
-          <span ref={progressTextRef} className="font-bold flex items-center gap-1 text-amber-400">
-            🔨 {Math.round(progress)}%
-          </span>
-          <div className="w-16 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60 p-0.5">
-            <div
-              ref={progressBarRef}
-              className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-200 shadow-sm"
-              style={{ width: `${Math.max(4, progress)}%` }}
-            />
+        <div className="construction-progress-shell">
+          <div ref={progressBarRef} className="construction-progress-ring" style={{ background: `conic-gradient(#f3eee2 ${progress}%, #f3eee238 0)` }}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 20 10-10m-3-4 4-4 6 6-4 4-6-6ZM4 21l3-1-2-2-1 3Z" /></svg>
+            <span ref={progressTextRef}>{Math.round(progress)}%</span>
           </div>
         </div>
       </Html>
@@ -256,16 +270,10 @@ export function DemolitionHUD({
   return (
     <group ref={groupRef}>
       <Html position={[0, 1.45, 0]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
-        <div className="bg-slate-950 text-rose-300 text-[11px] px-3 py-1.5 rounded-xl border border-rose-500/70 shadow-2xl font-mono flex items-center gap-2 whitespace-nowrap pointer-events-none">
-          <span ref={progressTextRef} className="font-bold flex items-center gap-1 text-rose-400">
-            💣 {Math.round(demolitionProgress)}%
-          </span>
-          <div className="w-16 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700/60 p-0.5">
-            <div
-              ref={progressBarRef}
-              className="h-full bg-gradient-to-r from-rose-500 to-amber-500 rounded-full transition-all duration-200 shadow-sm"
-              style={{ width: `${Math.max(4, demolitionProgress)}%` }}
-            />
+        <div className="construction-progress-shell demolition">
+          <div ref={progressBarRef} className="construction-progress-ring" style={{ background: `conic-gradient(#f3eee2 ${demolitionProgress}%, #f3eee238 0)` }}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 20 10-10m-3-4 4-4 6 6-4 4-6-6ZM4 21l3-1-2-2-1 3Z" /></svg>
+            <span ref={progressTextRef}>{Math.round(demolitionProgress)}%</span>
           </div>
         </div>
       </Html>

@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { markInstancePrefixForUpload } from '../performance/instanceUploads';
+import { isGroundShadow } from '../performance/groundShadows';
+import { getColorBatchMaterial } from '../performance/colorBatchMaterials';
 
 interface Batch {
   mesh: THREE.InstancedMesh;
   sources: THREE.Mesh[];
-  slots: { source: THREE.Mesh; world: THREE.Matrix4 }[];
+  slots: { source: THREE.Mesh; world: THREE.Matrix4; color?: THREE.Color }[];
+  colors: Map<THREE.Mesh, THREE.Color>;
 }
 
 export class AnimatedMeshBatches {
@@ -17,6 +20,8 @@ export class AnimatedMeshBatches {
   private sourceRoot: THREE.Group | null = null;
   private groupWorld = new THREE.Matrix4();
   private visibility = new Map<THREE.Object3D, boolean>();
+  private sortViewProjection = new THREE.Matrix4();
+  private depths = new WeakMap<THREE.Mesh, number>();
 
   sync(root: THREE.Group) {
     this.restoreLayers();
@@ -26,12 +31,12 @@ export class AnimatedMeshBatches {
     root.traverse(object => {
       if (!(object instanceof THREE.Mesh) || object instanceof THREE.InstancedMesh || object instanceof THREE.SkinnedMesh) return;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
-      if (materials.some(material => !material.visible || material.transparent) || object.morphTargetInfluences?.length) return;
+      if (materials.some(material => !material.visible || (material.transparent && !isGroundShadow(object, material))) || object.morphTargetInfluences?.length) return;
       sources.push(object);
       uses.set(object.geometry, (uses.get(object.geometry) ?? 0) + 1);
     });
 
-    const next = new Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material; source: THREE.Mesh; sources: THREE.Mesh[] }>();
+    const next = new Map<string, { geometry: THREE.BufferGeometry; material: THREE.Material; source: THREE.Mesh; sources: THREE.Mesh[]; colors: Map<THREE.Mesh, THREE.Color> }>();
     for (const source of sources) {
       if ((uses.get(source.geometry) ?? 0) < 2) continue;
       const materials = source.material;
@@ -39,14 +44,17 @@ export class AnimatedMeshBatches {
         ? source.geometry.groups.map(part => ({ geometry: this.slice(source.geometry, part.start, part.count), material: materials[part.materialIndex ?? 0] }))
         : [{ geometry: source.geometry, material: materials }];
       if (!parts.length || parts.some(part => !part.material)) continue;
-      for (const { geometry, material } of parts) {
+      for (const { geometry, material: originalMaterial } of parts) {
+        const colorMaterial = getColorBatchMaterial(originalMaterial);
+        const material = colorMaterial ?? originalMaterial;
         const key = `${geometry.uuid}:${material.uuid}:${source.castShadow}:${source.receiveShadow}:${source.renderOrder}:${source.layers.mask}`;
         let entry = next.get(key);
         if (!entry) {
-          entry = { geometry, material, source, sources: [] };
+          entry = { geometry, material, source, sources: [], colors: new Map() };
           next.set(key, entry);
         }
         entry.sources.push(source);
+        if (colorMaterial) entry.colors.set(source, (originalMaterial as THREE.MeshStandardMaterial).color);
       }
       this.originalLayers.set(source, source.layers.mask);
       source.layers.mask = 0;
@@ -78,16 +86,17 @@ export class AnimatedMeshBatches {
         mesh.raycast = () => {};
         mesh.count = 0;
         mesh.visible = false;
-        batch = { mesh, sources: [], slots: [] };
+        batch = { mesh, sources: [], slots: [], colors: new Map() };
         this.batches.set(key, batch);
         this.group.add(mesh);
       }
       batch.sources = entry.sources;
+      batch.colors = entry.colors;
       batch.slots.length = Math.min(batch.slots.length, entry.sources.length);
     }
   }
 
-  update() {
+  update(camera?: THREE.Camera) {
     const root = this.sourceRoot;
     this.group.visible = Boolean(root && this.isVisible(root, root));
     if (!root || !this.group.visible) return;
@@ -95,10 +104,20 @@ export class AnimatedMeshBatches {
     const moved = !this.groupWorld.equals(this.group.matrixWorld);
     if (moved) this.inverse.copy(this.group.matrixWorld).invert();
     this.groupWorld.copy(this.group.matrixWorld);
+    if (camera) this.sortViewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     for (const batch of this.batches.values()) {
       batch.mesh.matrixWorld.copy(this.group.matrixWorld);
+      if (!Array.isArray(batch.mesh.material) && batch.mesh.material.transparent && camera) {
+        const e = this.sortViewProjection.elements;
+        for (const source of batch.sources) {
+          const world = source.matrixWorld.elements, x = world[12], y = world[13], z = world[14];
+          this.depths.set(source, (e[2] * x + e[6] * y + e[10] * z + e[14]) / (e[3] * x + e[7] * y + e[11] * z + e[15]));
+        }
+        batch.sources.sort((a, b) => this.depths.get(b)! - this.depths.get(a)! || a.id - b.id);
+      }
       let count = 0;
       let changed = false;
+      let colorChanged = false;
       for (const source of batch.sources) {
         if (!this.visibleWithinRoot(source)) continue;
         let slot = batch.slots[count];
@@ -109,11 +128,18 @@ export class AnimatedMeshBatches {
           slot.source = source; slot.world.copy(source.matrixWorld);
           changed = true;
         }
+        const color = batch.colors.get(source);
+        if (color && (!slot.color || !slot.color.equals(color))) {
+          batch.mesh.setColorAt(count, color);
+          if (slot.color) slot.color.copy(color); else slot.color = color.clone();
+          colorChanged = true;
+        }
         count++;
       }
       batch.mesh.count = count;
       batch.mesh.visible = count > 0;
       if (changed) markInstancePrefixForUpload(batch.mesh.instanceMatrix, count);
+      if (colorChanged) markInstancePrefixForUpload(batch.mesh.instanceColor!, count);
     }
   }
 

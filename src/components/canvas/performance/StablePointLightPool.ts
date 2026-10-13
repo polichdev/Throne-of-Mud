@@ -5,6 +5,11 @@ export class StablePointLightPool {
   private sources = new Map<THREE.PointLight, number>();
   private owners = new Map<object, Set<THREE.PointLight>>();
   private active = false;
+  private underusedSince: number | null = null;
+  private activeCount = 0;
+  private spare: THREE.PointLight[] = [];
+
+  get diagnostics() { return { active: this.activeCount, slots: this.group.children.length, registered: this.sources.size }; }
 
   sync(owner: object, root: THREE.Object3D) {
     const next = new Set<THREE.PointLight>();
@@ -15,7 +20,6 @@ export class StablePointLightPool {
       if (!this.sources.has(light)) this.sources.set(light, light.layers.mask);
       if (this.active) light.layers.mask = 0;
     }
-    if (this.active) this.reserve(this.sources.size);
   }
 
   remove(owner: object) {
@@ -25,7 +29,8 @@ export class StablePointLightPool {
 
   start() {
     this.active = true;
-    this.reserve(Math.max(16, this.sources.size));
+    this.underusedSince = null;
+    this.reserve(16);
     for (const light of this.sources.keys()) light.layers.mask = 0;
   }
 
@@ -33,9 +38,12 @@ export class StablePointLightPool {
     this.active = false;
     for (const [light, mask] of this.sources) light.layers.mask = mask;
     this.group.clear();
+    this.underusedSince = null;
+    this.activeCount = 0;
+    this.spare.length = 0;
   }
 
-  update(camera: THREE.Camera) {
+  update(camera: THREE.Camera, now = performance.now()) {
     if (!this.active) return;
     let count = 0;
     for (const [source, mask] of this.sources) {
@@ -54,6 +62,18 @@ export class StablePointLightPool {
       light.position.setFromMatrixPosition(source.matrixWorld);
       light.matrixWorld.copy(source.matrixWorld);
     }
+    this.activeCount = count;
+    const required = 2 ** Math.ceil(Math.log2(Math.max(16, count)));
+    if (required <= this.group.children.length / 2) {
+      this.underusedSince ??= now;
+      if (now - this.underusedSince >= 30_000) {
+        while (this.group.children.length > required) {
+          const light = this.group.children[this.group.children.length - 1] as THREE.PointLight;
+          this.group.remove(light); this.spare.push(light);
+        }
+        this.underusedSince = null;
+      }
+    } else this.underusedSince = null;
     for (let i = count; i < this.group.children.length; i++) {
       const light = this.group.children[i] as THREE.PointLight;
       light.layers.mask = camera.layers.mask;
@@ -75,7 +95,7 @@ export class StablePointLightPool {
     if (required <= this.group.children.length) return;
     const capacity = 2 ** Math.ceil(Math.log2(required));
     while (this.group.children.length < capacity) {
-      const light = new THREE.PointLight(0, 0, 1);
+      const light = this.spare.pop() ?? new THREE.PointLight(0, 0, 1);
       light.matrixAutoUpdate = false;
       this.group.add(light);
     }

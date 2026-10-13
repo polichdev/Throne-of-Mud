@@ -1,9 +1,10 @@
 import { Canvas, useFrame, useThree, addEffect, addAfterEffect } from '@react-three/fiber';
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GridMap } from '../../engine/grid/GridMap';
 import { GameLoop } from '../../engine/time/GameLoop';
 import { TopDownCamera } from './TopDownCamera';
+import { BuildingInspectorAnchor } from './BuildingInspectorAnchor';
 import { DayNightLighting } from './DayNightLighting';
 import { TerrainRenderer } from './TerrainRenderer';
 import { FoliageRenderer } from './FoliageRenderer';
@@ -21,7 +22,8 @@ import { WeatherRenderer } from './WeatherRenderer';
 import { SpatialAudioListener } from './SpatialAudioListener';
 import { AmbientFaunaRenderer } from './fauna/AmbientFaunaRenderer';
 import { GpuFrameTimer } from './performance/GpuFrameTimer';
-import { getSceneRenderTaskMs } from './performance/sceneRenderTasks';
+import { getSceneRenderTaskMs, getSceneRenderTaskCount } from './performance/sceneRenderTasks';
+import { getScenePointLightPool } from './performance/StablePointLightPool';
 import { StablePointLights } from './performance/StablePointLights';
 import { measureRenderSubmission } from './performance/renderSubmission';
 
@@ -51,7 +53,7 @@ function GameLoopSync({ grid }: { grid: GridMap }) {
 }
 
 function RendererMetrics() {
-  const { gl, scene: trackedScene } = useThree();
+  const { gl, scene: trackedScene, get } = useThree();
   useEffect(() => {
     const timer = new GpuFrameTimer(gl.getContext());
     const originalRender = gl.render;
@@ -99,7 +101,16 @@ function RendererMetrics() {
       simulationPeakMs = Math.max(simulationPeakMs, (window as any).__simulationMs || 0);
       if (now - lastPublish < 200) return;
       lastPublish = now;
+      let sceneObjects = 0;
+      trackedScene.traverse(() => { sceneObjects++; });
+      const lights = getScenePointLightPool(trackedScene).diagnostics;
       (window as any).__renderMetrics = {
+        frameSubscribers: get().internal.subscribers.length,
+        renderTasks: getSceneRenderTaskCount(trackedScene),
+        sceneObjects,
+        activePointLights: lights.active,
+        pointLightSlots: lights.slots,
+        registeredPointLights: lights.registered,
         calls: gl.info.render.calls,
         triangles: gl.info.render.triangles,
         geometries: gl.info.memory.geometries,
@@ -129,12 +140,13 @@ function RendererMetrics() {
       timer.dispose();
       delete (window as any).__renderMetrics;
     };
-  }, [gl, trackedScene]);
+  }, [gl, trackedScene, get]);
 
   return null;
 }
 
 export function GameCanvas({ grid }: Props) {
+  const [worldInteractive, setWorldInteractive] = useState(false);
   const playerSpawnPoint = useGameStore((state) => state.playerSpawnPoint);
   const cameraFocusTarget = useGameStore((state) => state.cameraFocusTarget);
   const cameraZoomTarget = useGameStore((state) => state.cameraZoomTarget);
@@ -175,7 +187,7 @@ export function GameCanvas({ grid }: Props) {
           toneMappingExposure: 1.0,
           outputColorSpace: THREE.SRGBColorSpace,
         }}
-        className="w-full h-full cursor-crosshair"
+        className={`w-full h-full cursor-crosshair ${worldInteractive || isStrategicView ? 'cursor-world-interactive' : ''}`}
       >
         <color attach="background" args={[isStrategicView ? '#18120c' : '#090d16']} />
 
@@ -190,12 +202,15 @@ export function GameCanvas({ grid }: Props) {
         />
 
         <DayNightLighting />
+        <BuildingInspectorAnchor />
 
         <TerrainRenderer grid={grid} />
-        <ResourceDepositsRenderer grid={grid} />
-        <BuildingsRenderer />
+        <group onPointerOver={() => setWorldInteractive(true)} onPointerOut={() => setWorldInteractive(false)}>
+          <ResourceDepositsRenderer grid={grid} />
+          <BuildingsRenderer />
+          <UnitsRenderer grid={grid} />
+        </group>
         <FoliageRenderer grid={grid} />
-        <UnitsRenderer grid={grid} />
         <WoodChipsRenderer />
         <PlacementPreview grid={grid} />
         <WeatherRenderer />

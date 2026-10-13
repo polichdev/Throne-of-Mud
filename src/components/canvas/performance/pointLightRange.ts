@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 const optimized = new WeakSet<THREE.Material>();
-const cacheVersion = 'point-light-range-v2';
+const cacheVersion = 'point-light-range-v2-restored';
 
 export function pointLightRangeChunk(chunk: string) {
   const start = chunk.indexOf('#if ( NUM_POINT_LIGHTS > 0 )');

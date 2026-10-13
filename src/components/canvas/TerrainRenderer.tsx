@@ -4,6 +4,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { GridMap } from '../../engine/grid/GridMap';
+import { ensureEichenauSettlementAccess } from '../../engine/grid/settlementAccess';
 import { useGameStore } from '../../store/useGameStore';
 import { BUILDING_BLUEPRINTS } from '../../engine/buildings/blueprints';
 import { world, buildingEntities } from '../../engine/ecs/world';
@@ -1169,6 +1170,12 @@ export function TerrainRenderer({ grid }: Props) {
         factionId: 'player',
         regionId: playerRegionId ?? 0,
       });
+
+      if (playerRegionId === 2) {
+        const camp = useGameStore.getState().regions.find((region) => region.id === 2)?.campPosition;
+        const placedBuilding = [...buildingEntities].find((building) => building.id === buildingId);
+        if (camp && placedBuilding) ensureEichenauSettlementAccess(grid, camp, [placedBuilding]);
+      }
 
       useGameStore.getState().incrementBuildingVersion();
       useGameStore.getState().incrementFoliageVersion();

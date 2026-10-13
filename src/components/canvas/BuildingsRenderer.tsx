@@ -265,12 +265,12 @@ function Building3D({
 
     if (building.isDemolishing && progressTextRef.current && progressBarRef.current) {
       const curProg = Math.round(building.demolitionProgress || 0);
-      progressTextRef.current.innerText = `💣 ${curProg}%`;
-      progressBarRef.current.style.width = `${Math.max(4, curProg)}%`;
+      progressTextRef.current.innerText = `${curProg}%`;
+      progressBarRef.current.style.background = `conic-gradient(#f3eee2 ${curProg}%, #f3eee238 0)`;
     } else if (!completed && progressTextRef.current && progressBarRef.current) {
       const curProg = Math.round(building.constructionProgress || 0);
-      progressTextRef.current.innerText = `🔨 ${curProg}%`;
-      progressBarRef.current.style.width = `${Math.max(4, curProg)}%`;
+      progressTextRef.current.innerText = `${curProg}%`;
+      progressBarRef.current.style.background = `conic-gradient(#f3eee2 ${curProg}%, #f3eee238 0)`;
     }
   });
 

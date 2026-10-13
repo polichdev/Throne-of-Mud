@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { cacheBatchedDrawList } from '../performance/batchedDrawCache';
+import { isGroundShadow } from '../performance/groundShadows';
+import { getColorBatchMaterial } from '../performance/colorBatchMaterials';
 
-interface Part { source: THREE.Mesh; geometry: THREE.BufferGeometry; material: THREE.Material; }
-interface Binding { source: THREE.Mesh; id: number; initialized: boolean; enabled: boolean | null; }
+interface Part { source: THREE.Mesh; geometry: THREE.BufferGeometry; material: THREE.Material; color?: THREE.Color; }
+interface Binding { source: THREE.Mesh; id: number; initialized: boolean; enabled: boolean | null; color?: THREE.Color; }
 interface Batch { mesh: THREE.BatchedMesh; geometries: string; bindings: Binding[]; visibleCount: number; }
 interface Source { mesh: THREE.Mesh; bindings: { batch: Batch; binding: Binding }[]; world: THREE.Matrix4; initialized: boolean; safe: boolean; }
 interface Branch { root: THREE.Object3D; sources: Source[]; visible: boolean | null; }
@@ -29,8 +31,7 @@ export class BuildingMeshBatches {
     root.traverse(object => {
       if (!(object instanceof THREE.Mesh) || object instanceof THREE.InstancedMesh || object instanceof THREE.BatchedMesh || object instanceof THREE.SkinnedMesh) return;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
-      if (materials.some(mat => !mat.visible || mat.transparent || ('wireframe' in mat && mat.wireframe)) || object.morphTargetInfluences?.length || object.customDepthMaterial || object.customDistanceMaterial) return;
-      if (!batchableTransform(object.matrixWorld)) return;
+      if (materials.some(mat => !mat.visible || (mat.transparent && !isGroundShadow(object, mat)) || ('wireframe' in mat && mat.wireframe)) || object.morphTargetInfluences?.length || object.customDepthMaterial || object.customDistanceMaterial) return;
       const geometry: THREE.BufferGeometry = object.geometry;
       if (!geometry.attributes.position || Object.keys(geometry.morphAttributes).length) return;
       const groups = Array.isArray(object.material) ? geometry.groups : [{ start: 0, count: Infinity, materialIndex: 0 }];
@@ -52,11 +53,13 @@ export class BuildingMeshBatches {
           prepared.setIndex(new THREE.BufferAttribute(index, 1));
           this.prepared.set(geometryKey, prepared);
         }
-        const material = materials[part.materialIndex ?? 0];
+        const originalMaterial = materials[part.materialIndex ?? 0];
+        const colorMaterial = getColorBatchMaterial(originalMaterial);
+        const material = colorMaterial ?? originalMaterial;
         const key = `${material.uuid}:${object.castShadow}:${object.receiveShadow}:${object.renderOrder}:${object.layers.mask}:${object.frustumCulled}:${schema}`;
         let list = entries.get(key);
         if (!list) { list = []; entries.set(key, list); }
-        list.push({ source: object, geometry: prepared, material });
+        list.push({ source: object, geometry: prepared, material, color: colorMaterial ? (originalMaterial as THREE.MeshStandardMaterial).color : undefined });
       }
     });
 
@@ -85,11 +88,19 @@ export class BuildingMeshBatches {
         mesh.raycast = () => {};
         const ids = new Map(geometries.map(geo => [geo, mesh.addGeometry(geo)]));
         batch = { mesh, geometries: signature, bindings: [], visibleCount: 0 };
-        for (const part of parts) batch.bindings.push({ source: part.source, id: mesh.addInstance(ids.get(part.geometry)!), initialized: false, enabled: null });
+        for (const part of parts) {
+          const id = mesh.addInstance(ids.get(part.geometry)!);
+          batch.bindings.push({ source: part.source, id, initialized: false, enabled: null });
+        }
         cacheBatchedDrawList(mesh);
         this.batches.set(key, batch); this.group.add(mesh);
       }
-      for (const part of parts) {
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i], binding = batch.bindings[i];
+        if (part.color && (!binding.color || !binding.color.equals(part.color))) {
+          batch.mesh.setColorAt(binding.id, part.color);
+          if (binding.color) binding.color.copy(part.color); else binding.color = part.color.clone();
+        }
         if (!this.originalLayers.has(part.source)) this.originalLayers.set(part.source, part.source.layers.mask);
         part.source.layers.mask = 0;
       }

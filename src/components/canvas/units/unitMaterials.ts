@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { optimizePointLightMaterial } from '../performance/pointLightRange';
+import { registerColorBatchMaterial } from '../performance/colorBatchMaterials';
 import {
   createTunicCanvas,
   createTrousersCanvas,
@@ -363,7 +364,10 @@ export function getUnitAppearance(unitId: string, characterClass = 'peasant', is
     shieldMat,
   };
 
-  for (const value of Object.values(app)) if (value instanceof THREE.MeshStandardMaterial) optimizePointLightMaterial(value);
+  for (const value of Object.values(app)) if (value instanceof THREE.MeshStandardMaterial) {
+    optimizePointLightMaterial(value);
+    registerColorBatchMaterial(value);
+  }
   unitAppearanceCache.set(cacheKey, app);
   return app;
 }

@@ -33,6 +33,7 @@ import {
   ForestersHutModel,
   WoodenChurchModel,
   TavernModel,
+  HitchingPostModel,
   TradingPostModel,
 } from './models';
 
@@ -65,6 +66,8 @@ export const BuildingPlacementGhost: React.FC<BuildingPlacementGhostProps> = Rea
         return <LumberjackHutModel isLightOn={false} />;
       case 'campfire':
         return <CampfireModel />;
+      case 'hitching_post':
+        return <HitchingPostModel isLightOn={false} />;
       case 'peasant_house':
         return <PeasantHouseModel isLightOn={false} />;
       case 'market':

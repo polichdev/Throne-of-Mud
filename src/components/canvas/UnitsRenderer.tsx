@@ -1,4 +1,4 @@
-import { useRef, useState, memo, useMemo } from 'react';
+import { useRef, useState, memo, useMemo, useLayoutEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -12,7 +12,9 @@ import { isHouseSleeperVisible } from './units/houseFloorVisibility';
 import { createUnitHeadGeometry } from './units/unitHeadGeometry';
 import { useHiddenGroupCulling } from './performance/hiddenGroupCulling';
 import { useAnimatedMeshBatches } from './units/useAnimatedMeshBatches';
+import { useStaticUnitMeshMatrices } from './units/useStaticUnitMeshMatrices';
 import { optimizePointLightMaterial } from './performance/pointLightRange';
+import { groundShadowMaterial, GROUND_SHADOW_RENDER_ORDER } from './performance/groundShadows';
 
 const SHARED_STATIC_MATS = {
   ironSteel: new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.3, metalness: 0.6, flatShading: true }),
@@ -103,7 +105,7 @@ const SHARED_GEOS = {
 export function UnitsRenderer({ grid }: { grid?: GridMap }) {
   const unitsRootRef = useRef<THREE.Group>(null);
   useHiddenGroupCulling(unitsRootRef);
-  useAnimatedMeshBatches(unitsRootRef);
+  const invalidateBatches = useAnimatedMeshBatches(unitsRootRef);
   const selectedEntityId = useGameStore((state) => state.selectedEntityId);
   const setSelectedEntityId = useGameStore((state) => state.setSelectedEntityId);
   const setSelectedMilitiaSquadId = useGameStore((state) => state.setSelectedMilitiaSquadId);
@@ -130,6 +132,7 @@ export function UnitsRenderer({ grid }: { grid?: GridMap }) {
           <Unit3DMemo
             key={unit.id}
             unit={unit}
+            onModelCommit={invalidateBatches}
             grid={grid}
             isSelected={selectedEntityId === unit.id && !unit.isLevy}
             isGamePaused={isGamePaused}
@@ -258,6 +261,15 @@ function ActiveBubbleItem({ unit, text, isBanditLeader }: { unit: GameEntity; te
   );
 }
 
+function companionMask(unit: GameEntity): number {
+  return (unit.hasMule || unit.muleTransition ? 1 : 0) | (unit.hasHorseCart || unit.isMerchant ? 2 : 0);
+}
+
+function companionParentVisible(root: THREE.Group): boolean {
+  for (let parent = root.parent; parent; parent = parent.parent) if (!parent.visible) return false;
+  return true;
+}
+
 function Unit3D({
   unit,
   grid,
@@ -265,6 +277,7 @@ function Unit3D({
   isGamePaused,
   previewAnimation,
   onSelect,
+  onModelCommit,
 }: {
   unit: GameEntity;
   grid?: GridMap;
@@ -273,10 +286,12 @@ function Unit3D({
   isGamePaused: boolean;
   previewAnimation: { anim: 'idle' | 'walk' | 'attack' | 'chop'; expiresAt: number } | null;
   onSelect: () => void;
+  onModelCommit: () => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const characterBodyRef = useRef<THREE.Group>(null);
   useHiddenGroupCulling(groupRef);
+  useStaticUnitMeshMatrices(groupRef);
   const torsoRef = useRef<THREE.Group>(null);
   const leftLegRef = useRef<THREE.Group>(null);
   const rightLegRef = useRef<THREE.Group>(null);
@@ -293,6 +308,9 @@ function Unit3D({
   const shadowDiscRef = useRef<THREE.Mesh>(null);
   const detailsRef = useRef<THREE.Group>(null);
   const headMeshRef = useRef<THREE.Mesh>(null);
+  const [companions, setCompanions] = useState(() => companionMask(unit));
+  const mountedCompanions = useRef(companions);
+  useLayoutEffect(onModelCommit);
 
   const prevPos = useRef<[number, number]>([unit.position?.[0] || 0, unit.position?.[2] || 0]);
   const facingAngle = useRef<number>((unit.id.charCodeAt(unit.id.length - 1) * 1.2) % (Math.PI * 2));
@@ -317,7 +335,13 @@ function Unit3D({
   const targetBuildingTypeRef = useRef<string | undefined>(undefined);
 
   useFrame(({ clock }, delta) => {
+    const nextCompanions = companionMask(unit);
+    if (nextCompanions !== mountedCompanions.current) {
+      mountedCompanions.current = nextCompanions;
+      setCompanions(nextCompanions);
+    }
     if (!groupRef.current || !unit.position) return;
+    if (!groupRef.current.parent?.visible) return;
 
     const [ux, uy, uz] = unit.position;
 
@@ -833,9 +857,7 @@ function Unit3D({
 
   return (
     <group ref={groupRef}>
-      <mesh ref={shadowDiscRef} position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={SHARED_GEOS.shadowDisc} raycast={() => null}>
-        <meshBasicMaterial color="#0f172a" transparent opacity={0.35} />
-      </mesh>
+      <mesh ref={shadowDiscRef} position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={SHARED_GEOS.shadowDisc} material={groundShadowMaterial} renderOrder={GROUND_SHADOW_RENDER_ORDER} raycast={() => null} />
 
       <group ref={characterBodyRef} scale={[0.8, 0.8, 0.8]} raycast={() => null}>
         <group ref={leftLegRef} position={[-0.1, 0.16, 0]}>
@@ -1083,8 +1105,8 @@ function Unit3D({
             </group>
           </group>
 
-          <MuleCompanion unit={unit} isGamePaused={isGamePaused} />
-          <HorseCartCompanion unit={unit} isGamePaused={isGamePaused} />
+          {Boolean(companions & 1) && <MuleCompanion unit={unit} isGamePaused={isGamePaused} />}
+          {Boolean(companions & 2) && <HorseCartCompanion unit={unit} isGamePaused={isGamePaused} />}
         </group>
       </group>
 
@@ -1119,6 +1141,40 @@ function Unit3D({
   );
 }
 
+const COMPANION_GEOS = {
+  muleBody: new THREE.BoxGeometry(0.32, 0.36, 0.65),
+  muleHarness: new THREE.BoxGeometry(0.34, 0.22, 0.28),
+  muleNeck: new THREE.BoxGeometry(0.18, 0.32, 0.22),
+  muleHead: new THREE.BoxGeometry(0.19, 0.2, 0.28),
+  muleMuzzle: new THREE.BoxGeometry(0.15, 0.14, 0.12),
+  muleEar: new THREE.BoxGeometry(0.04, 0.24, 0.08),
+  muleLeg: new THREE.BoxGeometry(0.09, 0.36, 0.09),
+  muleHoof: new THREE.BoxGeometry(0.1, 0.06, 0.1),
+  muleRein: new THREE.CylinderGeometry(0.01, 0.01, 0.6, 4),
+  haulLog: new THREE.CylinderGeometry(0.16, 0.18, 1.4, 8),
+  logStrap: new THREE.CylinderGeometry(0.01, 0.01, 0.65, 4),
+  muleCargo: new THREE.BoxGeometry(0.18, 0.22, 0.26),
+  horseBody: new THREE.BoxGeometry(0.36, 0.44, 0.85),
+  horseHarness: new THREE.BoxGeometry(0.38, 0.3, 0.36),
+  horseNeck: new THREE.BoxGeometry(0.22, 0.42, 0.28),
+  horseMane: new THREE.BoxGeometry(0.06, 0.36, 0.12),
+  horseHead: new THREE.BoxGeometry(0.22, 0.24, 0.36),
+  horseMuzzle: new THREE.BoxGeometry(0.18, 0.16, 0.16),
+  horseEar: new THREE.BoxGeometry(0.04, 0.18, 0.08),
+  horseLeg: new THREE.BoxGeometry(0.10, 0.44, 0.10),
+  horseHoof: new THREE.BoxGeometry(0.11, 0.07, 0.11),
+  cartShaft: new THREE.BoxGeometry(0.04, 0.04, 0.9),
+  cartFloor: new THREE.BoxGeometry(0.82, 0.05, 0.95),
+  cartSide: new THREE.BoxGeometry(0.04, 0.28, 0.95),
+  cartBack: new THREE.BoxGeometry(0.82, 0.28, 0.04),
+  cartWheelRim: new THREE.CylinderGeometry(0.28, 0.28, 0.04, 12),
+  cartWheel: new THREE.CylinderGeometry(0.26, 0.26, 0.05, 8),
+  cartCrate: new THREE.BoxGeometry(0.32, 0.32, 0.34),
+  cartBox: new THREE.BoxGeometry(0.30, 0.28, 0.32),
+  largeSack: new THREE.SphereGeometry(0.18, 8, 8),
+  smallSack: new THREE.SphereGeometry(0.15, 8, 8),
+};
+
 function MuleCompanion({
   unit,
   isGamePaused,
@@ -1149,7 +1205,11 @@ function MuleCompanion({
     const isWorkingOnBuilding = unit.currentJob?.type === 'work_at_building' || unit.currentJob?.type === 'harvest_wheat';
     const isVisible = Boolean(unit.hasMule || unit.muleTransition) && !isWorkingOnBuilding;
     rootRef.current.visible = isVisible;
-    if (!isVisible) return;
+    if (!isVisible || !companionParentVisible(rootRef.current)) {
+      prevUnitPos.current[0] = unit.position?.[0] || 0;
+      prevUnitPos.current[1] = unit.position?.[2] || 0;
+      return;
+    }
 
     const uX = unit.position?.[0] || 0;
     const uZ = unit.position?.[2] || 0;
@@ -1232,95 +1292,51 @@ function MuleCompanion({
   });
 
   return (
-    <group ref={rootRef} position={[-0.55, 0, -0.1]} visible={false}>
-      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[0.9, 1.45, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} raycast={() => null}>
-        <meshBasicMaterial color="#0f172a" transparent opacity={0.35} />
-      </mesh>
+    <group ref={rootRef} name="mule-companion" position={[-0.55, 0, -0.1]} visible={false}>
+      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[0.9, 1.45, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} material={groundShadowMaterial} renderOrder={GROUND_SHADOW_RENDER_ORDER} raycast={() => null} />
 
-      <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0.42, 0]}>
-        <boxGeometry args={[0.32, 0.36, 0.65]} />
-      </mesh>
+      <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0.42, 0]} geometry={COMPANION_GEOS.muleBody} />
 
-      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0, 0.44, 0.02]}>
-        <boxGeometry args={[0.34, 0.22, 0.28]} />
-      </mesh>
+      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0, 0.44, 0.02]} geometry={COMPANION_GEOS.muleHarness} />
 
       <group position={[0, 0.48, 0.28]}>
-        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0.16, 0.08]} rotation={[-0.4, 0, 0]}>
-          <boxGeometry args={[0.18, 0.32, 0.22]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0.16, 0.08]} rotation={[-0.4, 0, 0]} geometry={COMPANION_GEOS.muleNeck} />
         <group ref={headRef} position={[0, 0.3, 0.15]}>
-          <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0.08]}>
-            <boxGeometry args={[0.19, 0.2, 0.28]} />
-          </mesh>
-          <mesh material={SHARED_STATIC_MATS.muleMuzzle} position={[0, -0.04, 0.24]}>
-            <boxGeometry args={[0.15, 0.14, 0.12]} />
-          </mesh>
-          <mesh material={SHARED_STATIC_MATS.muleCoat} position={[-0.08, 0.16, -0.02]} rotation={[0, 0, -0.25]}>
-            <boxGeometry args={[0.04, 0.24, 0.08]} />
-          </mesh>
-          <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0.08, 0.16, -0.02]} rotation={[0, 0, 0.25]}>
-            <boxGeometry args={[0.04, 0.24, 0.08]} />
-          </mesh>
+          <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0.08]} geometry={COMPANION_GEOS.muleHead} />
+          <mesh material={SHARED_STATIC_MATS.muleMuzzle} position={[0, -0.04, 0.24]} geometry={COMPANION_GEOS.muleMuzzle} />
+          <mesh material={SHARED_STATIC_MATS.muleCoat} position={[-0.08, 0.16, -0.02]} rotation={[0, 0, -0.25]} geometry={COMPANION_GEOS.muleEar} />
+          <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0.08, 0.16, -0.02]} rotation={[0, 0, 0.25]} geometry={COMPANION_GEOS.muleEar} />
         </group>
       </group>
 
       <group ref={legFLRef} position={[-0.12, 0.18, 0.22]}>
-        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]}>
-          <boxGeometry args={[0.09, 0.36, 0.09]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]}>
-          <boxGeometry args={[0.1, 0.06, 0.1]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.muleLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]} geometry={COMPANION_GEOS.muleHoof} />
       </group>
       <group ref={legFRRef} position={[0.12, 0.18, 0.22]}>
-        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]}>
-          <boxGeometry args={[0.09, 0.36, 0.09]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]}>
-          <boxGeometry args={[0.1, 0.06, 0.1]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.muleLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]} geometry={COMPANION_GEOS.muleHoof} />
       </group>
       <group ref={legBLRef} position={[-0.12, 0.18, -0.22]}>
-        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]}>
-          <boxGeometry args={[0.09, 0.36, 0.09]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]}>
-          <boxGeometry args={[0.1, 0.06, 0.1]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.muleLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]} geometry={COMPANION_GEOS.muleHoof} />
       </group>
       <group ref={legBRRef} position={[0.12, 0.18, -0.22]}>
-        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]}>
-          <boxGeometry args={[0.09, 0.36, 0.09]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]}>
-          <boxGeometry args={[0.1, 0.06, 0.1]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.muleLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]} geometry={COMPANION_GEOS.muleHoof} />
       </group>
 
-      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0.26, 0.5, 0.28]} rotation={[0, 0.7, 0]}>
-        <cylinderGeometry args={[0.01, 0.01, 0.6, 4]} />
-      </mesh>
+      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0.26, 0.5, 0.28]} rotation={[0, 0.7, 0]} geometry={COMPANION_GEOS.muleRein} />
 
       <group ref={logRef} position={[0, 0.12, -1.05]} visible={false}>
-        <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.16, 0.18, 1.4, 8]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHarness} position={[-0.08, 0.14, 0.5]} rotation={[-0.45, 0, 0]}>
-          <cylinderGeometry args={[0.01, 0.01, 0.65, 4]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0.08, 0.14, 0.5]} rotation={[-0.45, 0, 0]}>
-          <cylinderGeometry args={[0.01, 0.01, 0.65, 4]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[Math.PI / 2, 0, 0]} geometry={COMPANION_GEOS.haulLog} />
+        <mesh material={SHARED_STATIC_MATS.muleHarness} position={[-0.08, 0.14, 0.5]} rotation={[-0.45, 0, 0]} geometry={COMPANION_GEOS.logStrap} />
+        <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0.08, 0.14, 0.5]} rotation={[-0.45, 0, 0]} geometry={COMPANION_GEOS.logStrap} />
       </group>
 
       <group ref={materialsRef} position={[0, 0.46, 0]} visible={false}>
-        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[-0.22, 0.06, 0]}>
-          <boxGeometry args={[0.18, 0.22, 0.26]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[0.22, 0.06, 0]}>
-          <boxGeometry args={[0.18, 0.22, 0.26]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[-0.22, 0.06, 0]} geometry={COMPANION_GEOS.muleCargo} />
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[0.22, 0.06, 0]} geometry={COMPANION_GEOS.muleCargo} />
       </group>
     </group>
   );
@@ -1351,7 +1367,11 @@ function HorseCartCompanion({
     if (!rootRef.current) return;
     const isVisible = Boolean(unit.hasHorseCart || unit.isMerchant);
     rootRef.current.visible = isVisible;
-    if (!isVisible) return;
+    if (!isVisible || !companionParentVisible(rootRef.current)) {
+      prevUnitPos.current[0] = unit.position?.[0] || 0;
+      prevUnitPos.current[1] = unit.position?.[2] || 0;
+      return;
+    }
 
     const uX = unit.position?.[0] || 0;
     const uZ = unit.position?.[2] || 0;
@@ -1385,129 +1405,65 @@ function HorseCartCompanion({
   });
 
   return (
-    <group ref={rootRef} position={[-0.65, 0, -0.45]} visible={false}>
-      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.1, 1.8, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} raycast={() => null}>
-        <meshBasicMaterial color="#0f172a" transparent opacity={0.35} />
-      </mesh>
+    <group ref={rootRef} name="horse-cart-companion" position={[-0.65, 0, -0.45]} visible={false}>
+      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.1, 1.8, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} material={groundShadowMaterial} renderOrder={GROUND_SHADOW_RENDER_ORDER} raycast={() => null} />
 
-      <mesh position={[0, 0.015, -1.05]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.4, 1.6, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} raycast={() => null}>
-        <meshBasicMaterial color="#0f172a" transparent opacity={0.35} />
-      </mesh>
+      <mesh position={[0, 0.015, -1.05]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.4, 1.6, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} material={groundShadowMaterial} renderOrder={GROUND_SHADOW_RENDER_ORDER} raycast={() => null} />
 
-      <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0.52, 0]}>
-        <boxGeometry args={[0.36, 0.44, 0.85]} />
-      </mesh>
+      <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0.52, 0]} geometry={COMPANION_GEOS.horseBody} />
 
-      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0, 0.54, 0.02]}>
-        <boxGeometry args={[0.38, 0.3, 0.36]} />
-      </mesh>
+      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0, 0.54, 0.02]} geometry={COMPANION_GEOS.horseHarness} />
 
       <group position={[0, 0.60, 0.38]}>
-        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0.22, 0.12]} rotation={[-0.45, 0, 0]}>
-          <boxGeometry args={[0.22, 0.42, 0.28]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.darkIron} position={[0, 0.32, 0.02]} rotation={[-0.45, 0, 0]}>
-          <boxGeometry args={[0.06, 0.36, 0.12]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0.22, 0.12]} rotation={[-0.45, 0, 0]} geometry={COMPANION_GEOS.horseNeck} />
+        <mesh material={SHARED_STATIC_MATS.darkIron} position={[0, 0.32, 0.02]} rotation={[-0.45, 0, 0]} geometry={COMPANION_GEOS.horseMane} />
         <group ref={horseHeadRef} position={[0, 0.42, 0.22]}>
-          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0.12]}>
-            <boxGeometry args={[0.22, 0.24, 0.36]} />
-          </mesh>
-          <mesh material={SHARED_STATIC_MATS.muleMuzzle} position={[0, -0.06, 0.32]}>
-            <boxGeometry args={[0.18, 0.16, 0.16]} />
-          </mesh>
-          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[-0.09, 0.18, 0]} rotation={[0, 0, -0.2]}>
-            <boxGeometry args={[0.04, 0.18, 0.08]} />
-          </mesh>
-          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0.09, 0.18, 0]} rotation={[0, 0, 0.2]}>
-            <boxGeometry args={[0.04, 0.18, 0.08]} />
-          </mesh>
+          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0.12]} geometry={COMPANION_GEOS.horseHead} />
+          <mesh material={SHARED_STATIC_MATS.muleMuzzle} position={[0, -0.06, 0.32]} geometry={COMPANION_GEOS.horseMuzzle} />
+          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[-0.09, 0.18, 0]} rotation={[0, 0, -0.2]} geometry={COMPANION_GEOS.horseEar} />
+          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0.09, 0.18, 0]} rotation={[0, 0, 0.2]} geometry={COMPANION_GEOS.horseEar} />
         </group>
       </group>
 
       <group ref={horseLegFLRef} position={[-0.14, 0.22, 0.28]}>
-        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]}>
-          <boxGeometry args={[0.10, 0.44, 0.10]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]}>
-          <boxGeometry args={[0.11, 0.07, 0.11]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.horseLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]} geometry={COMPANION_GEOS.horseHoof} />
       </group>
       <group ref={horseLegFRRef} position={[0.14, 0.22, 0.28]}>
-        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]}>
-          <boxGeometry args={[0.10, 0.44, 0.10]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]}>
-          <boxGeometry args={[0.11, 0.07, 0.11]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.horseLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]} geometry={COMPANION_GEOS.horseHoof} />
       </group>
       <group ref={horseLegBLRef} position={[-0.14, 0.22, -0.28]}>
-        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]}>
-          <boxGeometry args={[0.10, 0.44, 0.10]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]}>
-          <boxGeometry args={[0.11, 0.07, 0.11]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.horseLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]} geometry={COMPANION_GEOS.horseHoof} />
       </group>
       <group ref={horseLegBRRef} position={[0.14, 0.22, -0.28]}>
-        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]}>
-          <boxGeometry args={[0.10, 0.44, 0.10]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]}>
-          <boxGeometry args={[0.11, 0.07, 0.11]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.horseLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]} geometry={COMPANION_GEOS.horseHoof} />
       </group>
 
-      <mesh material={SHARED_STATIC_MATS.timberDark} position={[-0.24, 0.38, -0.55]} rotation={[0.08, 0, 0]}>
-        <boxGeometry args={[0.04, 0.04, 0.9]} />
-      </mesh>
-      <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.24, 0.38, -0.55]} rotation={[0.08, 0, 0]}>
-        <boxGeometry args={[0.04, 0.04, 0.9]} />
-      </mesh>
+      <mesh material={SHARED_STATIC_MATS.timberDark} position={[-0.24, 0.38, -0.55]} rotation={[0.08, 0, 0]} geometry={COMPANION_GEOS.cartShaft} />
+      <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.24, 0.38, -0.55]} rotation={[0.08, 0, 0]} geometry={COMPANION_GEOS.cartShaft} />
 
       <group position={[0, 0.24, -1.05]}>
-        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[0, 0.16, 0]}>
-          <boxGeometry args={[0.82, 0.05, 0.95]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.timberDark} position={[-0.40, 0.32, 0]}>
-          <boxGeometry args={[0.04, 0.28, 0.95]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.40, 0.32, 0]}>
-          <boxGeometry args={[0.04, 0.28, 0.95]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0, 0.32, -0.46]}>
-          <boxGeometry args={[0.82, 0.28, 0.04]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[0, 0.16, 0]} geometry={COMPANION_GEOS.cartFloor} />
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[-0.40, 0.32, 0]} geometry={COMPANION_GEOS.cartSide} />
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.40, 0.32, 0]} geometry={COMPANION_GEOS.cartSide} />
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0, 0.32, -0.46]} geometry={COMPANION_GEOS.cartBack} />
 
         <group ref={cartWheelLRef} position={[-0.45, 0.08, 0]}>
-          <mesh material={SHARED_STATIC_MATS.darkIron} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.28, 0.28, 0.04, 12]} />
-          </mesh>
-          <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.26, 0.26, 0.05, 8]} />
-          </mesh>
+          <mesh material={SHARED_STATIC_MATS.darkIron} rotation={[0, 0, Math.PI / 2]} geometry={COMPANION_GEOS.cartWheelRim} />
+          <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[0, 0, Math.PI / 2]} geometry={COMPANION_GEOS.cartWheel} />
         </group>
         <group ref={cartWheelRRef} position={[0.45, 0.08, 0]}>
-          <mesh material={SHARED_STATIC_MATS.darkIron} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.28, 0.28, 0.04, 12]} />
-          </mesh>
-          <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.26, 0.26, 0.05, 8]} />
-          </mesh>
+          <mesh material={SHARED_STATIC_MATS.darkIron} rotation={[0, 0, Math.PI / 2]} geometry={COMPANION_GEOS.cartWheelRim} />
+          <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[0, 0, Math.PI / 2]} geometry={COMPANION_GEOS.cartWheel} />
         </group>
 
-        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[-0.18, 0.35, -0.15]}>
-          <boxGeometry args={[0.32, 0.32, 0.34]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.18, 0.32, -0.15]}>
-          <boxGeometry args={[0.30, 0.28, 0.32]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.clothSack} position={[0, 0.34, 0.24]} rotation={[0, 0.3, 0]}>
-          <sphereGeometry args={[0.18, 8, 8]} />
-        </mesh>
-        <mesh material={SHARED_STATIC_MATS.clothSack} position={[-0.16, 0.44, 0.16]} rotation={[0, -0.4, 0]}>
-          <sphereGeometry args={[0.15, 8, 8]} />
-        </mesh>
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[-0.18, 0.35, -0.15]} geometry={COMPANION_GEOS.cartCrate} />
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.18, 0.32, -0.15]} geometry={COMPANION_GEOS.cartBox} />
+        <mesh material={SHARED_STATIC_MATS.clothSack} position={[0, 0.34, 0.24]} rotation={[0, 0.3, 0]} geometry={COMPANION_GEOS.largeSack} />
+        <mesh material={SHARED_STATIC_MATS.clothSack} position={[-0.16, 0.44, 0.16]} rotation={[0, -0.4, 0]} geometry={COMPANION_GEOS.smallSack} />
       </group>
     </group>
   );
@@ -1526,6 +1482,7 @@ const Unit3DMemo = memo(Unit3D, (prev, next) => {
     prev.unit.isLevy === next.unit.isLevy &&
     prev.unit.militiaWeapon === next.unit.militiaWeapon &&
     prev.unit.militiaSquadId === next.unit.militiaSquadId &&
-    prev.grid === next.grid
+    prev.grid === next.grid &&
+    prev.onModelCommit === next.onModelCommit
   );
 });

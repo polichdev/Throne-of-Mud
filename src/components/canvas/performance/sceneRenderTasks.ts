@@ -3,6 +3,7 @@ import type { Scene } from 'three';
 const registries = new WeakMap<Scene, { original: Scene['onBeforeRender']; wrapper: Scene['onBeforeRender']; tasks: Set<() => void>; durationMs: number }>();
 
 export function getSceneRenderTaskMs(scene: Scene): number { return registries.get(scene)?.durationMs ?? 0; }
+export function getSceneRenderTaskCount(scene: Scene): number { return registries.get(scene)?.tasks.size ?? 0; }
 
 export function addSceneRenderTask(scene: Scene, task: () => void) {
   let registry = registries.get(scene);

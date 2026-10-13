@@ -45,9 +45,13 @@ for (const cutoff of [-1, 0, 3.5, 5, 7]) for (const decay of [0, 1, 2]) for (let
 for (const radius of [3.5, 5, 7]) assert.equal(attenuation(radius, radius, 2), 0, 'Exact radius boundary contributes zero');
 
 const material = new THREE.MeshStandardMaterial();
+let beforeRenderCalled = 0;
+const beforeRender = () => { beforeRenderCalled++; };
+material.onBeforeRender = beforeRender;
 material.onBeforeCompile = shader => { shader.uniforms.animationTime = { value: 1 }; shader.vertexShader += '\n// existing animation'; };
 const key = material.customProgramCacheKey(); const version = material.version;
 optimizePointLightMaterial(material);
+assert.equal(material.onBeforeRender, beforeRender, 'Range optimization leaves per-draw material hooks unchanged');
 assert.notEqual(material.customProgramCacheKey(), key, 'Cache key forces a distinct shader variant');
 assert.equal(material.version, version + 1, 'Already mounted materials invalidate their program');
 optimizePointLightMaterial(material); assert.equal(material.version, version + 1, 'Repeated material setup is idempotent');
@@ -56,7 +60,11 @@ for (const name of ['standard', 'physical', 'lambert']) {
   material.onBeforeCompile(shader, {});
   assert.equal(shader.uniforms.animationTime.value, 1); assert.ok(shader.vertexShader.includes('// existing animation'));
   assert.ok(shader.fragmentShader.includes('pointLightOffset')); assert.ok(!shader.fragmentShader.includes('#include <lights_fragment_begin>'));
+  assert.ok(!shader.fragmentShader.includes('tomPointLightPadding'), 'No padding uniform or dynamic light loop is injected');
+  assert.ok(shader.fragmentShader.includes('#pragma unroll_loop_start'), 'Three retains its constant-index light loop');
 }
+material.onBeforeRender({}, new THREE.Scene(), new THREE.Camera(), null, null, null);
+assert.equal(beforeRenderCalled, 1, 'Existing per-draw material hook still executes');
 const other = new THREE.MeshStandardMaterial(); other.onBeforeCompile = shader => { shader.vertexShader += '\n// another animation'; };
 optimizePointLightMaterial(other); assert.notEqual(other.customProgramCacheKey(), material.customProgramCacheKey(), 'Distinct custom animations keep distinct cache keys');
 let revision = 1; const custom = new THREE.MeshStandardMaterial(); custom.customProgramCacheKey = () => `custom-${revision}`;

@@ -37,7 +37,8 @@ function uniforms(lights) {
   engine.setup([...lights]); engine.setupView(lights, camera);
   return engine.state;
 }
-function draw() { scene.updateMatrixWorld(); pool.update(camera); return uniforms(pool.group.children); }
+let now = 0;
+function draw() { scene.updateMatrixWorld(); pool.update(camera, now); return uniforms(pool.group.children); }
 function parity(expected) {
   const actual = draw().point.filter(light => light.color.r || light.color.g || light.color.b);
   const reference = uniforms(expected).point;
@@ -63,10 +64,23 @@ pool.sync(secondOwner, root); pool.remove(owner); assert.equal(second.layers.mas
 pool.remove(secondOwner); assert.equal(first.layers.mask, 8); assert.equal(second.layers.mask, 1); parity([]);
 const large = new THREE.Group(); scene.add(large);
 for (let i = 0; i < 65; i++) { const light = new THREE.PointLight('#ffe19a', 1 + i / 100, 5); light.position.x = i; large.add(light); }
-pool.sync(owner, large); assert.equal(pool.group.children.length, 128, 'Slots grow for all registered lights; no light count cap');
+large.visible = false;
+pool.sync(owner, large); assert.equal(pool.group.children.length, 16, 'Hidden registrations do not increase shader light slots');
+parity([]); large.visible = true;
 parity(large.children);
-large.visible = false; parity([]); assert.equal(pool.group.children.length, 128, 'Region changes never shrink slots');
+assert.equal(pool.group.children.length, 128, 'All 65 visible sources fit without truncation');
+const peakIds = pool.group.children.map(light => light.id).sort((a, b) => a - b);
+large.visible = false; parity([]);
+now = 29_999; parity([]); assert.equal(pool.group.children.length, 128, 'Short region transitions preserve stable shader capacity');
+now = 30_000; parity([]); assert.equal(pool.group.children.length, 16, 'Sustained surplus releases peak light slots');
+large.visible = true; parity(large.children); assert.equal(pool.group.children.length, 128, 'Returning to a lit city restores every light immediately');
+for (let round = 0; round < 20; round++) {
+  large.visible = false; parity([]); now += 30_001; parity([]);
+  assert.equal(pool.group.children.length, 16, 'Repeated transitions do not retain historical peaks');
+  large.visible = true; parity(large.children);
+  assert.deepEqual(pool.group.children.map(light => light.id).sort((a, b) => a - b), peakIds, 'Capacity cycles reuse light IDs instead of accumulating native uniform-cache entries');
+}
 pool.stop(); assert.ok(large.children.every(light => light.layers.mask === 1), 'Cleanup restores every original layer');
 pool.start(); large.visible = true; parity(large.children); pool.stop(); pool.remove(owner);
 assert.equal(pool.group.children.length, 0, 'Strict-mode cleanup releases proxy lights');
-console.log('Stable point lights: installed Three uniform parity, flicker, movement, hidden regions, custom layers, shadow fallback, multiple owners, 65 sources without truncation, and restart/cleanup passed. No GPU timing claimed.');
+console.log('Stable point lights: native uniform parity, hidden registrations, delayed capacity release, 20 repeated transitions, 65 visible sources without truncation, flicker, movement, layers, shadow fallback and restart/cleanup passed. No GPU timing claimed.');
