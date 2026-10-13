@@ -5,9 +5,10 @@ import { STRATEGIC_ZOOM_THRESHOLD, STRATEGIC_VIEW_ZOOM, DEFAULT_CAMERA_ZOOM } fr
 
 interface UseKeyboardShortcutsOptions {
   onFocusTownCenter: () => void;
+  onToggleFpsMonitor: () => void;
 }
 
-export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcutsOptions) {
+export function useKeyboardShortcuts({ onFocusTownCenter, onToggleFpsMonitor }: UseKeyboardShortcutsOptions) {
   const gameMode = useGameStore((s) => s.gameMode);
   const togglePause = useGameStore((s) => s.togglePause);
   const setSpeedMultiplier = useGameStore((s) => s.setSpeedMultiplier);
@@ -22,7 +23,9 @@ export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcuts
         e.preventDefault();
         togglePause();
       } else if (e.key === '1') {
-        setSpeedMultiplier(1);
+        const target = e.target;
+        if (e.repeat || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return;
+        onToggleFpsMonitor();
       } else if (e.key === '2') {
         setSpeedMultiplier(2);
       } else if (e.key === '3') {
@@ -136,5 +139,5 @@ export function useKeyboardShortcuts({ onFocusTownCenter }: UseKeyboardShortcuts
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [gameMode, togglePause, setSpeedMultiplier, onFocusTownCenter]);
+  }, [gameMode, togglePause, setSpeedMultiplier, onFocusTownCenter, onToggleFpsMonitor]);
 }

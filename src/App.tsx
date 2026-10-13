@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GridMap } from './engine/grid/GridMap';
 import { useGameStore } from './store/useGameStore';
 import { GameCanvas } from './components/canvas/GameCanvas';
@@ -30,12 +30,14 @@ export default function App() {
   const isLordsBarOpen = useGameStore((s) => s.isLordsBarOpen);
   const isInitialized = useGameStore((s) => s.isInitialized);
   const initWorld = useGameStore((s) => s.initWorld);
+  const [isFpsMonitorVisible, setIsFpsMonitorVisible] = useState(false);
 
   const grid = useMemo(() => new GridMap(MAP_SIZE, MAP_SIZE, DEFAULT_MAP_SEED), []);
 
   const { focusTownCenter } = useTownCenterFocus();
+  const toggleFpsMonitor = useCallback(() => setIsFpsMonitorVisible((visible) => !visible), []);
 
-  useKeyboardShortcuts({ onFocusTownCenter: focusTownCenter });
+  useKeyboardShortcuts({ onFocusTownCenter: focusTownCenter, onToggleFpsMonitor: toggleFpsMonitor });
   useAutoSave(grid);
 
   useEffect(() => {
@@ -119,7 +121,7 @@ export default function App() {
                 <RoadToolPanel />
                 <InspectorPanel />
                 <EventLog />
-                <FpsMonitor />
+                {isFpsMonitorVisible && <FpsMonitor />}
               </div>
               <BottomActionBar grid={grid} />
               <StrategicMapModal grid={grid} />

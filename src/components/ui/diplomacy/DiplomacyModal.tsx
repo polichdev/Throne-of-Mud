@@ -16,6 +16,7 @@ import {
 } from './DiplomacyIcons';
 import { RulerPortrait } from '../PlayerHeraldry';
 import type { DiplomaticStatus } from '../../../types/diplomacy';
+import { localizeDiplomacyLord } from './diplomacyCopy';
 
 interface DiplomacyModalProps {
   onClose: () => void;
@@ -39,12 +40,14 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
   const realBotLords = useMemo(() => {
     return ['bot-1', 'bot-2', 'bot-3']
       .map((id) => lordDiplomacy[id])
-      .filter(Boolean);
-  }, [lordDiplomacy]);
+      .filter(Boolean)
+      .map((lord) => localizeDiplomacyLord(lord, language));
+  }, [lordDiplomacy, language]);
 
   const activeLord = useMemo(() => {
-    return selectedLordId ? lordDiplomacy[selectedLordId] ?? null : null;
-  }, [selectedLordId, lordDiplomacy]);
+    const lord = selectedLordId ? lordDiplomacy[selectedLordId] : null;
+    return lord ? localizeDiplomacyLord(lord, language) : null;
+  }, [selectedLordId, lordDiplomacy, language]);
 
   const handleSelectLord = (id: string) => {
     audioManager.playUIClick();

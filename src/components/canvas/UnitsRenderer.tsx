@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { characterEntities, buildingEntities } from '../../engine/ecs/world';
 import type { GameEntity } from '../../engine/ecs/world';
 import { useGameStore } from '../../store/useGameStore';
+import { localizeSpeech } from '../../i18n/speech';
 import { GridMap } from '../../engine/grid/GridMap';
 import { audioManager } from '../../engine/audio/AudioManager';
 import { getUnitAppearance } from './units/unitMaterials';
@@ -164,6 +165,7 @@ export function UnitsRenderer({ grid }: { grid?: GridMap }) {
 
 function ActiveSpeechBubblesRenderer() {
   const isStrategicView = useGameStore((s) => s.isStrategicView);
+  const language = useGameStore((s) => s.language);
   const [bubbles, setBubbles] = useState<Array<{ id: string; unit: GameEntity; text: string; isBanditLeader: boolean }>>([]);
   const lastKeyRef = useRef('');
 
@@ -209,8 +211,9 @@ function ActiveSpeechBubblesRenderer() {
 
         const isBandit = unit.characterClass === 'bandit' || unit.factionId === 'bandit' || unit.id.startsWith('bandit-');
         const isBanditLeader = isBandit && (unit.id.includes('leader') || unit.title === 'Ватажок розбійників' || unit.title === 'Ватажок');
-        active.push({ id: unit.id, unit, text: bubble.text, isBanditLeader });
-        key += `${unit.id}:${bubble.text};`;
+        const text = localizeSpeech(bubble.text, language, bubble.type);
+        active.push({ id: unit.id, unit, text, isBanditLeader });
+        key += `${unit.id}:${text};`;
         if (active.length >= 4) break;
       }
     }
