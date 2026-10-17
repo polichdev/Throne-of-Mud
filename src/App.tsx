@@ -1,3 +1,5 @@
+import { SAVE_STORAGE } from './constants/storage';
+import { assetLoader } from './engine/assets/AssetLoader';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GridMap } from './engine/grid/GridMap';
 import { useGameStore } from './store/useGameStore';
@@ -9,20 +11,22 @@ import { InspectorPanel } from './components/ui/InspectorPanel';
 import { EventLog } from './components/ui/EventLog';
 import { MainMenu } from './components/ui/MainMenu';
 import { LordsBar } from './components/ui/LordsBar';
-import { StrategicMapModal } from './components/ui/StrategicMapModal';
+import { StrategicMapModal } from './components/ui/strategic-map';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AudioController } from './components/audio/AudioController';
 import RoadToolPanel from './components/ui/RoadToolPanel';
 import { FpsMonitor } from './components/ui/FpsMonitor';
-import { CrownIcon } from './components/ui/MedievalIcons';
+import { CrownIcon } from './components/ui/icons';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useTownCenterFocus } from './hooks/useTownCenterFocus';
 import { MAP_SIZE, DEFAULT_MAP_SEED } from './constants/world';
 import { INITIAL_RESOURCES } from './constants/economy';
 import { loadGameFromIndexedDB } from './services/storage/saveManager';
+import { translations } from './i18n';
 
 export default function App() {
+  const language = useGameStore((s) => s.language);
   const gameMode = useGameStore((s) => s.gameMode);
   const isStrategicView = useGameStore((s) => s.isStrategicView);
   const saveNotification = useGameStore((s) => s.saveNotification);
@@ -45,7 +49,7 @@ export default function App() {
 
     async function initGameSession() {
       try {
-        const hasActiveSave = localStorage.getItem('throne_of_mud_has_save') === 'true';
+        const hasActiveSave = localStorage.getItem(SAVE_STORAGE.hasSave) === 'true';
         if (hasActiveSave) {
           const loaded = await loadGameFromIndexedDB(grid);
           if (loaded && isMounted) {
@@ -78,7 +82,7 @@ export default function App() {
         <div className="flex flex-col items-center gap-3">
           <CrownIcon size={44} className="text-amber-400 animate-pulse" />
           <p className="text-sm font-semibold tracking-widest uppercase">
-            Завантаження королівства Throne of Mud...
+            {translations[language].common.loadingKingdom}
           </p>
         </div>
       </div>
@@ -86,7 +90,7 @@ export default function App() {
   }
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary onReset={() => assetLoader.retryFailed()}>
       <main className={`game-ui w-screen h-screen relative overflow-hidden select-none font-cinzel ${isStrategicView ? 'bg-[#18120c]' : 'bg-[#080c10]'}`}>
         <GameTooltipLayer />
         <div className="absolute inset-0 z-0 pointer-events-auto overflow-hidden" style={{ isolation: 'isolate' }}>

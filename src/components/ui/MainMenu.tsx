@@ -15,8 +15,7 @@ import {
   CompassIcon,
   PlayCrestIcon,
   MedievalAlertIcon,
-  SettingsIcon,
-} from './MedievalIcons';
+} from './icons';
 import { NewGameSetupModal } from './NewGameSetupModal';
 import type { WorldSetupConfig } from '../../types/game';
 import { audioManager } from '../../engine/audio/AudioManager';
@@ -33,7 +32,7 @@ export function MainMenu({ grid }: MainMenuProps) {
   const setGameMode = useGameStore((s) => s.setGameMode);
   const resetWorld = useGameStore((s) => s.resetWorld);
   const setSaveNotification = useGameStore((s) => s.setSaveNotification);
-  const { t, dict, language } = useTranslation();
+  const { t, dict } = useTranslation();
 
   const [saveMeta, setSaveMeta] = useState<SaveMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,6 +56,21 @@ export function MainMenu({ grid }: MainMenuProps) {
     }
     checkSave();
   }, []);
+
+  useEffect(() => {
+    if (!showSettingsModal && !showGuideModal && !showConfirmNewGame) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        audioManager.playUIPanelClose();
+        setShowSettingsModal(false);
+        setShowGuideModal(false);
+        setShowConfirmNewGame(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showSettingsModal, showGuideModal, showConfirmNewGame]);
 
   const handleContinue = async () => {
     if (!saveMeta || isProcessing) return;
@@ -125,7 +139,7 @@ export function MainMenu({ grid }: MainMenuProps) {
       activeBuildType: null,
     });
 
-    setSaveNotification(language === 'uk' ? 'Засновано нове королівство Throne of Mud!' : 'New Realm founded: Throne of Mud!');
+    setSaveNotification(dict.menu.newRealmFounded);
     setGameMode('playing');
     saveGameToIndexedDB(grid);
     setIsProcessing(false);
@@ -204,35 +218,37 @@ export function MainMenu({ grid }: MainMenuProps) {
       </div>
 
       {showSettingsModal && (
-        <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200 pointer-events-auto font-cinzel">
-          <div className="realm-main-menu-dialog bg-[#141720] border-2 border-[#5a4830] rounded-2xl p-6 max-w-md w-full shadow-[0_20px_60px_rgba(0,0,0,0.95)] flex flex-col gap-4 max-h-[90vh] overflow-y-auto pointer-events-auto">
-
-            <div className="flex items-center justify-between border-b border-[#3d3222] pb-3">
-              <div className="flex items-center gap-2 text-amber-300">
-                <SettingsIcon className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-sm uppercase tracking-wider text-amber-100">
+        <div className="realm-pause-screen fixed inset-0 z-60 pointer-events-auto overflow-y-auto font-cinzel animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-label={dict.settings.title}>
+          <div className="relative z-10 flex min-h-full items-center justify-center px-5 py-10 sm:px-10">
+            <div className="realm-pause-panel w-full max-w-[600px]">
+              <div className="realm-pause-masthead text-center">
+                <div className="text-[11px] font-bold uppercase tracking-[0.42em] text-[#a48d63]">{dict.menu.title}</div>
+                <div className="realm-pause-rule my-5" aria-hidden="true"><span>◆</span></div>
+                <h2 className="text-[clamp(2rem,4vw,3.15rem)] font-bold uppercase tracking-[0.18em] text-[#e4d6b8] leading-tight">
                   {dict.settings.title}
-                </h3>
+                </h2>
+                <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-[#9e8a67]">{dict.menu.subtitle}</p>
               </div>
-              <button
-                onClick={() => setShowSettingsModal(false)}
-                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-                title={dict.common.close}
-              >
-                <CrossCloseIcon size={16} />
-              </button>
+
+              <div className="mt-7">
+                <div className="realm-pause-settings max-h-[min(56vh,550px)] overflow-y-auto pr-1 flex flex-col gap-3">
+                  <LanguageSelector />
+                  <AudioSettingsControls />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    audioManager.playUIPanelClose();
+                    setShowSettingsModal(false);
+                  }}
+                  className="realm-pause-choice mt-5 w-full cursor-pointer"
+                >
+                  <span>{dict.common.back}</span>
+                </button>
+              </div>
+
+              <p className="mt-7 text-center text-[10px] uppercase tracking-[0.19em] text-[#86765a]">Esc · {dict.common.back}</p>
             </div>
-
-            <LanguageSelector />
-            <AudioSettingsControls />
-
-            <button
-              onClick={() => setShowSettingsModal(false)}
-              className="mt-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#8c6b38] to-[#422d10] text-amber-100 font-cinzel font-bold text-xs uppercase border border-[#d4af37] shadow hover:brightness-110 transition cursor-pointer"
-            >
-              {dict.common.confirm}
-            </button>
-
           </div>
         </div>
       )}

@@ -1,7 +1,8 @@
+import { SAVE_STORAGE } from '../constants/storage';
 import type { SupportedLanguage } from './types';
 
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'uk';
-export const STORAGE_KEY = 'throne_of_mud_language';
+export const STORAGE_KEY = SAVE_STORAGE.language;
 
 export function getStoredLanguage(): SupportedLanguage {
   if (typeof window === 'undefined') return DEFAULT_LANGUAGE;

@@ -23,7 +23,7 @@ export const LanguageSelector: React.FC = React.memo(() => {
                 : 'text-stone-400 hover:text-amber-200'
             }`}
           >
-            УКР
+            {dict.settings.ukrainian}
           </button>
           <button
             onClick={() => {
@@ -36,7 +36,7 @@ export const LanguageSelector: React.FC = React.memo(() => {
                 : 'text-stone-400 hover:text-amber-200'
             }`}
           >
-            ENG
+            {dict.settings.english}
           </button>
         </div>
       </div>

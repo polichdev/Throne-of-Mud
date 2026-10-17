@@ -1,7 +1,7 @@
 import React from 'react';
 import { useGameStore } from '../../../store/useGameStore';
 import { useTranslation } from '../../../i18n';
-import { ClarionHornIcon } from '../MedievalIcons';
+import { ClarionHornIcon } from '../icons';
 
 export const AudioSettingsControls: React.FC = React.memo(() => {
   const { dict } = useTranslation();
