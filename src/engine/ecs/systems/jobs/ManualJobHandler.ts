@@ -9,6 +9,19 @@ import { isNoble } from '../../entityHelpers';
 import { useGameStore } from '../../../../store/useGameStore';
 import { HaulingJobHandler } from './HaulingJobHandler';
 import { AStar } from '../../../pathfinding/AStar';
+import {
+  MAX_ACTIVE_BUILDERS_PER_STRUCTURE,
+  WANDER_TOTAL_WORK,
+  IDLE_COOLDOWN_BASE,
+  IDLE_COOLDOWN_VARIATION,
+  IDLE_WANDER_SPEECH_CHANCE,
+} from '../../../../constants/jobs';
+import { translations } from '../../../../i18n';
+
+const MULE_FETCH_SPEECH_DURATION_TICKS = 25;
+const IDLE_MOOD_SPEECH_DURATION_TICKS = 30;
+const IDLE_RETRY_VARIATION = 8;
+const IDLE_RETRY_BASE = 6;
 
 const _activeBuildersCount = new Map<string, number>();
 const _takenJobIds = new Set<string>();
@@ -70,15 +83,22 @@ export class ManualJobHandler {
       _buildingMap.set(b.id, b);
     }
 
+    const targetRegionId = unit.regionId !== undefined ? unit.regionId : uBounds?.regionId;
+
     _candidateJobs.length = 0;
     for (const j of pendingJobs) {
       if (j.type === 'build_structure' || j.type === 'demolish_structure') {
+        if (targetRegionId !== undefined && j.targetBuildingId) {
+          const b = _buildingMap.get(j.targetBuildingId);
+          if (b && b.regionId !== undefined && b.regionId !== targetRegionId) continue;
+        }
         const count = j.targetBuildingId ? (_activeBuildersCount.get(j.targetBuildingId) || 0) : 0;
-        if (count >= 4) continue;
+        if (count >= MAX_ACTIVE_BUILDERS_PER_STRUCTURE) continue;
       } else {
         if (j.assignedUnitId && j.assignedUnitId !== unit.id) continue;
         if (_takenJobIds.has(j.id)) continue;
         if (j.targetPosition) {
+          if (targetRegionId !== undefined && !GridMap.isCoordInRegion(targetRegionId, j.targetPosition[0], j.targetPosition[1])) continue;
           const posKey = (Math.floor(j.targetPosition[1]) << 16) | Math.floor(j.targetPosition[0]);
           if (_takenPositions.has(posKey)) continue;
         }
@@ -135,9 +155,10 @@ export class ManualJobHandler {
                   if (path && path.length > 0) {
                     unit.path = path;
                   }
+                  const dict = translations[useGameStore.getState().language];
                   unit.speechBubble = {
-                    text: "Іду по мула до прив'язі...",
-                    expiresAtTick: currentTick + 25,
+                    text: dict.jobs.goingForMule,
+                    expiresAtTick: currentTick + MULE_FETCH_SPEECH_DURATION_TICKS,
                     type: 'work',
                   };
                 } else {
@@ -148,9 +169,11 @@ export class ManualJobHandler {
                     if (path && path.length > 0) {
                       unit.path = path;
                     }
+                    const dict = translations[useGameStore.getState().language];
+                    const bName = (b.buildingType ? dict.buildings.items[b.buildingType]?.name : undefined) || b.name || dict.jobs.defaultConstructionTarget;
                     unit.speechBubble = {
-                      text: `Веду мула за матеріалами для ${b.name || 'будівництва'}...`,
-                      expiresAtTick: currentTick + 25,
+                      text: dict.jobs.leadingMuleForMaterials(bName),
+                      expiresAtTick: currentTick + MULE_FETCH_SPEECH_DURATION_TICKS,
                       type: 'work',
                     };
                   }
@@ -495,35 +518,37 @@ export class ManualJobHandler {
               id: `wander-${Date.now()}`,
               type: 'wander',
               progress: 0,
-              totalWork: 15,
+              totalWork: WANDER_TOTAL_WORK,
             };
-            (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * 20 + 20);
+            (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * IDLE_COOLDOWN_VARIATION + IDLE_COOLDOWN_BASE);
 
-            if (Math.random() < 0.12) {
+            if (Math.random() < IDLE_WANDER_SPEECH_CHANCE) {
+              const lang = useGameStore.getState().language;
+              const dict = translations[lang];
               const isLord = isNoble(unit);
               let text = '';
               if (isLord) {
                 const lordPhrases = [
-                  'Оглядаю володіння',
-                  'Село зростає на очах',
-                  'Свіже повітря піде на користь',
-                  'Усе йде за планом',
-                  'Вітаю, жителі моїх земель!',
+                  dict.jobs.nobleWander1,
+                  dict.jobs.nobleWander2,
+                  dict.jobs.nobleWander3,
+                  dict.jobs.nobleWander4,
+                  dict.jobs.nobleWander5,
                 ];
                 text = lordPhrases[Math.floor(Math.random() * lordPhrases.length)];
               } else {
                 const peasantPhrases = [
-                  "Розім'яти б ноги",
-                  'Піду гляну, як там справи',
-                  'Гарна нині погода',
-                  'Час перепочити',
-                  'Наше поселення гарнішає',
+                  dict.jobs.peasantWander1,
+                  dict.jobs.peasantWander2,
+                  dict.jobs.peasantWander3,
+                  dict.jobs.peasantWander4,
+                  dict.jobs.peasantWander5,
                 ];
                 text = peasantPhrases[Math.floor(Math.random() * peasantPhrases.length)];
               }
               unit.speechBubble = {
                 text,
-                expiresAtTick: (useGameStore.getState().time.tick || 0) + 30,
+                expiresAtTick: (useGameStore.getState().time.tick || 0) + IDLE_MOOD_SPEECH_DURATION_TICKS,
                 type: 'mood',
               };
             }
@@ -531,38 +556,40 @@ export class ManualJobHandler {
           }
         }
 
-        (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * 8 + 6);
+        (unit as any).idleCooldownTicks = tick + Math.floor(Math.random() * IDLE_RETRY_VARIATION + IDLE_RETRY_BASE);
       }
     }
   }
 
   public static getJobAnnouncement(type: string): string {
+    const lang = useGameStore.getState().language;
+    const dict = translations[lang];
     switch (type) {
       case 'chop_tree':
       case 'chop_fallen_log':
-        return 'Іду рубати ліс';
+        return dict.jobs.orderStatusChopWood;
       case 'mine_rock':
-        return 'Іду видобувати камінь';
+        return dict.jobs.orderStatusMineStone;
       case 'build_structure':
-        return 'Іду на будівництво';
+        return dict.jobs.orderStatusBuild;
       case 'demolish_structure':
-        return 'Іду розбирати споруду';
+        return dict.jobs.orderStatusDismantle;
       case 'harvest_wheat':
-        return 'Час збирати врожай';
+        return dict.jobs.orderStatusHarvest;
       case 'work_at_building':
-        return 'Іду на робоче місце';
+        return dict.jobs.orderStatusWorkstation;
       case 'haul_construction_mule':
-        return 'Веду мула за матеріалами';
+        return dict.jobs.orderStatusMuleMaterials;
       case 'haul_log_with_mule':
-        return 'Веду мула по колоду';
+        return dict.jobs.orderStatusMuleLog;
       case 'patrol':
-        return 'Патрулюю володіння';
+        return dict.jobs.orderStatusPatrol;
       case 'sleep':
-        return 'Іду відпочивати';
+        return dict.jobs.orderStatusRest;
       case 'sit_by_fire':
-        return 'Іду грітися біля вогню';
+        return dict.jobs.orderStatusWarmAtFire;
       default:
-        return 'Виконую наказ';
+        return dict.jobs.orderStatusExecute;
     }
   }
 }

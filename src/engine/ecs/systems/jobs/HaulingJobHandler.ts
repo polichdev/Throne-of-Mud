@@ -13,8 +13,22 @@ import {
 } from '../../../buildings/buildingNavigation';
 import { BotAISystem } from '../BotAISystem';
 import { NIGHT_START_HOUR, NIGHT_END_HOUR } from '../../../../constants/needs';
+import {
+  MULE_TRANSITION_STEP,
+  MULE_HAUL_LOG_WORK,
+  MULE_RETURN_WORK,
+  MULE_DELIVERED_WOOD_AMOUNT,
+  MULE_LOG_SEARCH_RADIUS_WIDE,
+  MULE_LOG_SEARCH_RADIUS_CAMP,
+  UNREACHABLE_LOG_COOLDOWN_TICKS,
+  HAULING_PROXIMITY_THRESHOLD,
+} from '../../../../constants/jobs';
+import { translations } from '../../../../i18n';
 
-function isNearBuilding(uX: number, uZ: number, b: GameEntity, maxDist = 0.85): boolean {
+const HAULING_SPEECH_DURATION_TICKS = 25;
+const DELIVERED_SPEECH_DURATION_TICKS = 30;
+
+function isNearBuilding(uX: number, uZ: number, b: GameEntity, maxDist = HAULING_PROXIMITY_THRESHOLD): boolean {
   if (b.gridPosition) {
     const bw = b.buildingWidth || 2;
     const bh = b.buildingHeight || 2;
@@ -182,21 +196,23 @@ export class HaulingJobHandler {
           unit.muleTransitionProgress = 0;
           unit.assignedMuleHutId = hp.id;
           unit.path = [];
+          const dict = translations[useGameStore.getState().language];
           unit.speechBubble = {
-            text: "Заводжу мула до прив'язі...",
-            expiresAtTick: currentTick + 25,
+            text: dict.jobs.leadingMuleToHitch,
+            expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
             type: 'work',
           };
         }
-        unit.muleTransitionProgress = (unit.muleTransitionProgress || 0) + 0.04;
+        unit.muleTransitionProgress = (unit.muleTransitionProgress || 0) + MULE_TRANSITION_STEP;
         if (unit.muleTransitionProgress >= 1) {
           unit.hasMule = false;
           unit.muleTransition = undefined;
           unit.muleTransitionProgress = undefined;
           unit.assignedMuleHutId = undefined;
+          const dict = translations[useGameStore.getState().language];
           unit.speechBubble = {
-            text: "Повернув мула до прив'язі",
-            expiresAtTick: currentTick + 25,
+            text: dict.jobs.returnedMuleToHitch,
+            expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
             type: 'work',
           };
           unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
@@ -223,6 +239,29 @@ export class HaulingJobHandler {
     if (unit.currentJob?.type === 'haul_log_with_mule') {
       const job = unit.currentJob;
 
+      if (job.targetPosition && targetRegionId !== undefined && !GridMap.isCoordInRegion(targetRegionId, job.targetPosition[0], job.targetPosition[1])) {
+        if (unit.hasMule && hp) {
+          unit.currentJob = {
+            id: `return-mule-${Date.now()}`,
+            type: 'return_mule',
+            targetBuildingId: hp.id,
+            progress: 0,
+            totalWork: MULE_RETURN_WORK,
+          };
+          const pathReturn = AStar.findPathToArea(grid, [Math.floor(uX), Math.floor(uZ)], hp.gridPosition ? hp.gridPosition[0] : 0, hp.gridPosition ? hp.gridPosition[1] : 0, hp.buildingWidth || 3, hp.buildingHeight || 2);
+          if (pathReturn && pathReturn.length > 0) {
+            unit.path = pathReturn;
+          }
+          return true;
+        }
+        unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
+        unit.path = [];
+        unit.hasMule = false;
+        unit.isHaulingLog = false;
+        unit.assignedMuleHutId = undefined;
+        return true;
+      }
+
       if (!unit.hasMule && hp) {
         if (isNearBuilding(uX, uZ, hp)) {
           if (unit.muleTransition !== 'taking') {
@@ -230,20 +269,22 @@ export class HaulingJobHandler {
             unit.muleTransitionProgress = 0;
             unit.assignedMuleHutId = hp.id;
             unit.path = [];
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: "Беру мула з прив'язі...",
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.takingMuleFromHitch,
+              expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
           }
-          unit.muleTransitionProgress = (unit.muleTransitionProgress || 0) + 0.04;
+          unit.muleTransitionProgress = (unit.muleTransitionProgress || 0) + MULE_TRANSITION_STEP;
           if (unit.muleTransitionProgress >= 1) {
             unit.hasMule = true;
             unit.muleTransition = undefined;
             unit.muleTransitionProgress = undefined;
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: "Взяв мула з прив'язі!",
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.tookMuleFromHitch,
+              expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
             if (job.targetPosition) {
@@ -284,9 +325,10 @@ export class HaulingJobHandler {
           }
           useGameStore.getState().incrementFoliageVersion();
 
+          const dict = translations[useGameStore.getState().language];
           unit.speechBubble = {
-            text: isStockpile ? 'Зачепив колоду до мула! Везу на склад' : 'Зачепив колоду до мула! Везу до табору',
-            expiresAtTick: currentTick + 25,
+            text: isStockpile ? dict.jobs.logSecuredToMuleStorehouse : dict.jobs.logSecuredToMuleCamp,
+            expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
             type: 'work',
           };
 
@@ -308,10 +350,11 @@ export class HaulingJobHandler {
           return true;
         }
 
-        unreachableLogCooldowns.set(`${unit.id}:${lx},${lz}`, currentTick + 40);
+        unreachableLogCooldowns.set(`${unit.id}:${lx},${lz}`, currentTick + UNREACHABLE_LOG_COOLDOWN_TICKS);
         const nextLogs: Array<{ pos: [number, number]; dist: number }> = [];
-        for (let rx = Math.max(0, cx - 75); rx <= Math.min(grid.width - 1, cx + 75); rx++) {
-          for (let rz = Math.max(0, cz - 75); rz <= Math.min(grid.height - 1, cz + 75); rz++) {
+        for (let rx = Math.max(0, cx - MULE_LOG_SEARCH_RADIUS_WIDE); rx <= Math.min(grid.width - 1, cx + MULE_LOG_SEARCH_RADIUS_WIDE); rx++) {
+          for (let rz = Math.max(0, cz - MULE_LOG_SEARCH_RADIUS_WIDE); rz <= Math.min(grid.height - 1, cz + MULE_LOG_SEARCH_RADIUS_WIDE); rz++) {
+            if (targetRegionId !== undefined && !GridMap.isCoordInRegion(targetRegionId, rx, rz)) continue;
             const coolUntil = unreachableLogCooldowns.get(`${unit.id}:${rx},${rz}`);
             if (coolUntil && currentTick < coolUntil) continue;
             const t = grid.tiles[rx]?.[rz];
@@ -326,14 +369,15 @@ export class HaulingJobHandler {
           if (p && p.length > 0) {
             job.targetPosition = nLog.pos;
             unit.path = p;
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: 'Вирушаю з мулом за іншою колодою...',
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.headingWithMuleAnotherLog,
+              expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
             return true;
           } else {
-            unreachableLogCooldowns.set(`${unit.id}:${nLog.pos[0]},${nLog.pos[1]}`, currentTick + 40);
+            unreachableLogCooldowns.set(`${unit.id}:${nLog.pos[0]},${nLog.pos[1]}`, currentTick + UNREACHABLE_LOG_COOLDOWN_TICKS);
           }
         }
 
@@ -343,7 +387,7 @@ export class HaulingJobHandler {
             type: 'return_mule',
             targetBuildingId: hp.id,
             progress: 0,
-            totalWork: 20,
+            totalWork: MULE_RETURN_WORK,
           };
           const pathReturn = AStar.findPathToArea(grid, [Math.floor(uX), Math.floor(uZ)], hp.gridPosition ? hp.gridPosition[0] : 0, hp.gridPosition ? hp.gridPosition[1] : 0, hp.buildingWidth || 3, hp.buildingHeight || 2);
           if (pathReturn && pathReturn.length > 0) {
@@ -363,25 +407,29 @@ export class HaulingJobHandler {
           unit.isHaulingLog = false;
           if (isStockpile) {
             storageHub.localInventory = storageHub.localInventory || {};
-            storageHub.localInventory.wood = (storageHub.localInventory.wood || 0) + 5;
+            storageHub.localInventory.wood = (storageHub.localInventory.wood || 0) + MULE_DELIVERED_WOOD_AMOUNT;
           }
 
           if (isPlayerStorage) {
-            useGameStore.getState().addResource('wood', 5);
+            useGameStore.getState().addResource('wood', MULE_DELIVERED_WOOD_AMOUNT);
           } else if (botFactionId) {
-            BotAISystem.addResource(botFactionId, 'wood', 5);
+            BotAISystem.addResource(botFactionId, 'wood', MULE_DELIVERED_WOOD_AMOUNT);
           }
 
+          const dict = translations[useGameStore.getState().language];
           unit.speechBubble = {
-            text: isStockpile ? 'Доставив колоду на склад мулом! (+5 деревини)' : 'Доставив колоду до табору мулом! (+5 деревини)',
-            expiresAtTick: currentTick + 30,
+            text: isStockpile
+              ? dict.jobs.deliveredLogToStorehouse(MULE_DELIVERED_WOOD_AMOUNT)
+              : dict.jobs.deliveredLogToCamp(MULE_DELIVERED_WOOD_AMOUNT),
+            expiresAtTick: currentTick + DELIVERED_SPEECH_DURATION_TICKS,
             type: 'work',
           };
 
           const remainingLogs: Array<{ pos: [number, number]; dist: number }> = [];
           if (!isNightTime) {
-            for (let rx = Math.max(0, cx - 75); rx <= Math.min(grid.width - 1, cx + 75); rx++) {
-              for (let rz = Math.max(0, cz - 75); rz <= Math.min(grid.height - 1, cz + 75); rz++) {
+            for (let rx = Math.max(0, cx - MULE_LOG_SEARCH_RADIUS_WIDE); rx <= Math.min(grid.width - 1, cx + MULE_LOG_SEARCH_RADIUS_WIDE); rx++) {
+              for (let rz = Math.max(0, cz - MULE_LOG_SEARCH_RADIUS_WIDE); rz <= Math.min(grid.height - 1, cz + MULE_LOG_SEARCH_RADIUS_WIDE); rz++) {
+                if (targetRegionId !== undefined && !GridMap.isCoordInRegion(targetRegionId, rx, rz)) continue;
                 const coolUntil = unreachableLogCooldowns.get(`${unit.id}:${rx},${rz}`);
                 if (coolUntil && currentTick < coolUntil) continue;
                 const t = grid.tiles[rx]?.[rz];
@@ -402,17 +450,18 @@ export class HaulingJobHandler {
                   type: 'haul_log_with_mule',
                   targetPosition: nextLog.pos,
                   progress: 0,
-                  totalWork: 30,
+                  totalWork: MULE_HAUL_LOG_WORK,
                 };
                 unit.path = pathNext;
+                const dict = translations[useGameStore.getState().language];
                 unit.speechBubble = {
-                  text: 'Вирушаю з мулом за наступною колодою...',
-                  expiresAtTick: currentTick + 25,
+                  text: dict.jobs.headingWithMuleNextLog,
+                  expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
                   type: 'work',
                 };
                 return true;
               } else {
-                unreachableLogCooldowns.set(`${unit.id}:${nextLog.pos[0]},${nextLog.pos[1]}`, currentTick + 40);
+                unreachableLogCooldowns.set(`${unit.id}:${nextLog.pos[0]},${nextLog.pos[1]}`, currentTick + UNREACHABLE_LOG_COOLDOWN_TICKS);
               }
             }
           }
@@ -423,7 +472,7 @@ export class HaulingJobHandler {
               type: 'return_mule',
               targetBuildingId: hp.id,
               progress: 0,
-              totalWork: 20,
+              totalWork: MULE_RETURN_WORK,
             };
             const pathReturn = AStar.findPathToArea(grid, [Math.floor(uX), Math.floor(uZ)], hp.gridPosition ? hp.gridPosition[0] : 0, hp.gridPosition ? hp.gridPosition[1] : 0, hp.buildingWidth || 3, hp.buildingHeight || 2);
             if (pathReturn && pathReturn.length > 0) {
@@ -498,20 +547,22 @@ export class HaulingJobHandler {
             unit.muleTransitionProgress = 0;
             unit.assignedMuleHutId = hp.id;
             unit.path = [];
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: "Беру мула з прив'язі...",
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.takingMuleFromHitch,
+              expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
           }
-          unit.muleTransitionProgress = (unit.muleTransitionProgress || 0) + 0.04;
+          unit.muleTransitionProgress = (unit.muleTransitionProgress || 0) + MULE_TRANSITION_STEP;
           if (unit.muleTransitionProgress >= 1) {
             unit.hasMule = true;
             unit.muleTransition = undefined;
             unit.muleTransitionProgress = undefined;
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: "Взяв мула з прив'язі!",
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.tookMuleFromHitch,
+              expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
             const sPos = storageHub.gridPosition || [0, 0];
@@ -571,9 +622,10 @@ export class HaulingJobHandler {
           }
 
           if (loadedAny) {
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: 'Завантажив матеріали на мула! Везу на будівництво',
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.materialsLoadedOnMule,
+              expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
 
@@ -600,9 +652,10 @@ export class HaulingJobHandler {
             }
             if (hp) return true;
             unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: 'Немає достатньо матеріалів у поселенні...',
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.notEnoughMaterialsInSettlement,
+              expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
             return true;
@@ -630,9 +683,10 @@ export class HaulingJobHandler {
           }
           unit.inventory = {};
 
+          const dict = translations[useGameStore.getState().language];
           unit.speechBubble = {
-            text: 'Матеріали для будівництва доставлено мулом!',
-            expiresAtTick: currentTick + 30,
+            text: dict.jobs.constructionMaterialsDelivered,
+            expiresAtTick: currentTick + DELIVERED_SPEECH_DURATION_TICKS,
             type: 'work',
           };
 
@@ -674,9 +728,10 @@ export class HaulingJobHandler {
       if (hp && isNearBuilding(uX, uZ, hp)) {
         unit.hasMule = false;
         unit.assignedMuleHutId = undefined;
+        const dict = translations[useGameStore.getState().language];
         unit.speechBubble = {
-          text: "Повернув мула до прив'язі",
-          expiresAtTick: currentTick + 25,
+          text: dict.jobs.returnedMuleToHitch,
+          expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
           type: 'work',
         };
         unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
@@ -725,9 +780,10 @@ export class HaulingJobHandler {
             }
           }
 
+          const dict = translations[useGameStore.getState().language];
           unit.speechBubble = {
-            text: `Доставив ${depositAmt} од. на склад! (${currentStockpileStored + depositAmt}/${maxStockpileCap})`,
-            expiresAtTick: currentTick + 25,
+            text: dict.jobs.deliveredGoodsToStorage(depositAmt, currentStockpileStored + depositAmt, maxStockpileCap),
+            expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
             type: 'work',
           };
 
@@ -814,9 +870,10 @@ export class HaulingJobHandler {
               if (path && path.length > 0) {
                 unit.path = path;
               }
+              const dict = translations[useGameStore.getState().language];
               unit.speechBubble = {
-                text: "Іду по мула до прив'язі...",
-                expiresAtTick: currentTick + 25,
+                text: dict.jobs.goingForMule,
+                expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
                 type: 'work',
               };
             } else {
@@ -825,9 +882,11 @@ export class HaulingJobHandler {
               if (pathHome && pathHome.length > 0) {
                 unit.path = pathHome;
               }
+              const dict = translations[useGameStore.getState().language];
+              const bName = (b.buildingType ? dict.buildings.items[b.buildingType]?.name : undefined) || b.name || dict.jobs.defaultConstructionTarget;
               unit.speechBubble = {
-                text: `Веду мула за матеріалами для ${b.name || 'будівництва'}...`,
-                expiresAtTick: currentTick + 25,
+                text: dict.jobs.leadingMuleForMaterials(bName),
+                expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
                 type: 'work',
               };
             }
@@ -837,10 +896,10 @@ export class HaulingJobHandler {
       }
     }
 
-    const minX = Math.max(0, cx - 38);
-    const maxX = Math.min(grid.width - 1, cx + 38);
-    const minZ = Math.max(0, cz - 38);
-    const maxZ = Math.min(grid.height - 1, cz + 38);
+    const minX = Math.max(0, cx - MULE_LOG_SEARCH_RADIUS_CAMP);
+    const maxX = Math.min(grid.width - 1, cx + MULE_LOG_SEARCH_RADIUS_CAMP);
+    const minZ = Math.max(0, cz - MULE_LOG_SEARCH_RADIUS_CAMP);
+    const maxZ = Math.min(grid.height - 1, cz + MULE_LOG_SEARCH_RADIUS_CAMP);
 
     _takenLogPositions.clear();
     for (const c of characterEntities) {
@@ -858,6 +917,7 @@ export class HaulingJobHandler {
 
     for (let x = minX; x <= maxX; x++) {
       for (let z = minZ; z <= maxZ; z++) {
+        if (targetRegionId !== undefined && !GridMap.isCoordInRegion(targetRegionId, x, z)) continue;
         const key = (z << 16) | x;
         if (_takenLogPositions.has(key)) continue;
         const coolUntil = unreachableLogCooldowns.get(`${unit.id}:${x},${z}`);
@@ -889,7 +949,7 @@ export class HaulingJobHandler {
               logPath = p;
               break;
             } else {
-              unreachableLogCooldowns.set(`${unit.id}:${cand.pos[0]},${cand.pos[1]}`, currentTick + 40);
+              unreachableLogCooldowns.set(`${unit.id}:${cand.pos[0]},${cand.pos[1]}`, currentTick + UNREACHABLE_LOG_COOLDOWN_TICKS);
             }
           }
         } else {
@@ -911,16 +971,18 @@ export class HaulingJobHandler {
             if (path && path.length > 0) {
               unit.path = path;
             }
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: "Іду по мула до прив'язі...",
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.goingForMule,
+              expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
           } else if (logPath && logPath.length > 0) {
             unit.path = logPath;
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: 'Вирушаю з мулом за підготовленою колодою...',
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.headingWithMulePreparedLog,
+              expiresAtTick: currentTick + HAULING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
           }
