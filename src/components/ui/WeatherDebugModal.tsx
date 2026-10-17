@@ -14,7 +14,7 @@ import {
   CompassIcon,
   HourglassIcon,
   FleurDeLisIcon,
-} from './MedievalIcons';
+} from './icons';
 import {
   Lock,
   Unlock,

@@ -20,6 +20,7 @@ import {
 } from '../../engine/buildings/buildingValidation';
 import { isMilitiaDestinationAllowed } from '../../engine/combat/formationUtils';
 import { BuildingPlacementGhost } from './buildings/BuildingPlacementGhost';
+import { useTranslation } from '../../i18n';
 
 const COVERED_TILE_GEO = new THREE.PlaneGeometry(0.96, 0.96);
 const SNAP_RING_GEO = new THREE.RingGeometry(0.42, 0.49, 24);
@@ -42,6 +43,7 @@ export interface BuildingSnapNode {
 }
 
 export function TerrainRenderer({ grid }: Props) {
+  const { dict } = useTranslation();
   const activeTool = useGameStore((s) => s.activeTool);
   const activeBuildType = useGameStore((s) => s.activeBuildType);
   const buildingVersion = useGameStore((s) => s.buildingVersion);
@@ -93,45 +95,8 @@ export function TerrainRenderer({ grid }: Props) {
     return tex;
   }, [grid]);
 
-  const grassTexture = useMemo(() => {
-    const tex = AssetLoader.getInstance().load('/assets/terrain/grass.png');
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(16, 16);
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    return tex;
-  }, []);
-
-  const mudTexture = useMemo(() => {
-    const tex = AssetLoader.getInstance().load('/assets/terrain/mud.png');
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(16, 16);
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    return tex;
-  }, []);
-
-  const stoneTexture = useMemo(() => {
-    const tex = AssetLoader.getInstance().load('/assets/terrain/stone.png');
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(20, 20);
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    return tex;
-  }, []);
-
-  const waterTexture = useMemo(() => {
-    const tex = AssetLoader.getInstance().load('/assets/terrain/water.png');
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(12, 12);
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    tex.magFilter = THREE.LinearFilter;
-    return tex;
-  }, []);
+  const { grass: grassTexture, mud: mudTexture, stone: stoneTexture, water: waterTexture } =
+    AssetLoader.getInstance().readTerrainTextures();
 
   const customShaderRef = useRef<{ uniforms: Record<string, THREE.IUniform> } | null>(null);
   const keysRef = useRef<{ [key: string]: boolean }>({});
@@ -554,7 +519,7 @@ export function TerrainRenderer({ grid }: Props) {
               x: cx,
               z: cz,
               buildingId: b.id,
-              buildingName: b.name || 'Будівля',
+              buildingName: b.name || (b.buildingType ? dict.buildings.items[b.buildingType]?.name : dict.inspector.entity) || '',
             });
           }
         }
@@ -775,7 +740,7 @@ export function TerrainRenderer({ grid }: Props) {
               z: tz,
               dist: d,
               type: isHighway ? 'highway' : 'road',
-              label: isHighway ? 'Королівський тракт' : 'Дорога',
+              label: isHighway ? dict.roadsUI.highwayLabel : dict.roadsUI.roadLength,
             });
           }
         }
@@ -1150,7 +1115,7 @@ export function TerrainRenderer({ grid }: Props) {
 
       world.add({
         id: buildingId,
-        name: blueprint.name,
+        name: dict.buildings.items[activeBuildType]?.name || activeBuildType,
         isBuilding: true,
         buildingType: activeBuildType,
         buildingHealth: blueprint.health,
@@ -1189,9 +1154,10 @@ export function TerrainRenderer({ grid }: Props) {
         totalWork: 30 + footprint.coveredTiles.length * 8,
       });
 
+      const buildingName = dict.buildings.items[activeBuildType]?.name || activeBuildType;
       addChronicleEvent({
-        title: 'Закладено фундамент',
-        description: `Розпочато будівництво: ${blueprint.name}. Робітники вирушають на майданчик.`,
+        title: dict.chronicle.foundationLaidTitle,
+        description: dict.chronicle.foundationLaidDesc(buildingName),
         type: 'info',
       });
       return;
@@ -1332,7 +1298,7 @@ export function TerrainRenderer({ grid }: Props) {
                     : 'bg-[#181212]/95 border-red-500/80 text-red-200 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
                 }`}
               >
-                <span>{buildPreviewData.blueprint.name}</span>
+                <span>{dict.buildings.items[buildPreviewData.blueprint.type]?.name || buildPreviewData.blueprint.name}</span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/80 border border-amber-600/70 text-amber-200 font-sans">
                   [Q / E] {Math.round((((buildRotation * 180) / Math.PI) % 360 + 360) % 360)}°
                 </span>
@@ -1351,9 +1317,9 @@ export function TerrainRenderer({ grid }: Props) {
         >
           <div className="bg-stone-950/95 text-red-300 text-[10px] px-2.5 py-1 rounded-md border border-red-500/70 whitespace-nowrap shadow-xl backdrop-blur-md flex items-center gap-1.5 animate-pulse">
             <span>🧹</span>
-            <span className="font-semibold text-white">Режим знесення:</span>
-            <span>ЛКМ — стерти шлях</span>
-            <span className="text-stone-400">[ПКМ: вийти]</span>
+            <span className="font-semibold text-white">{dict.roadsUI.demolishMode}</span>
+            <span>{dict.roadsUI.lmbErase}</span>
+            <span className="text-stone-400">{dict.roadsUI.rmbExit}</span>
           </div>
         </Html>
       )}
@@ -1383,7 +1349,7 @@ export function TerrainRenderer({ grid }: Props) {
               <Html position={[0, 0.48, 0]} center zIndexRange={[12, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
                 <div className="bg-slate-950/95 text-cyan-200 text-[10px] px-2.5 py-0.5 rounded border border-cyan-500/70 whitespace-nowrap shadow-xl backdrop-blur-md flex items-center gap-1">
                   <span>🚪</span>
-                  <span>{node.buildingName} (Вхід)</span>
+                  <span>{node.buildingName} ({dict.roadsUI.entranceLabel})</span>
                 </div>
               </Html>
             )}

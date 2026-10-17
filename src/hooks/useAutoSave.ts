@@ -1,13 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { GridMap } from '../engine/grid/GridMap';
 import { useGameStore } from '../store/useGameStore';
 import { saveGameToIndexedDB } from '../services/storage/saveManager';
 
-const AUTO_SAVE_INTERVAL_MS = 180000;
+import { SAVE_STORAGE } from '../constants/storage';
 
 export function useAutoSave(grid: GridMap) {
   const gameMode = useGameStore((s) => s.gameMode);
-  const lastSaveTime = useRef(Date.now());
 
   useEffect(() => {
     const handleSaveOnExit = () => {
@@ -36,22 +35,32 @@ export function useAutoSave(grid: GridMap) {
   useEffect(() => {
     if (gameMode !== 'playing') return;
 
+    let idleId: number | undefined;
+    let timeoutId: number | undefined;
+    let disposed = false;
+    const save = () => {
+      idleId = timeoutId = undefined;
+      const state = useGameStore.getState();
+      if (!disposed && state.gameMode === 'playing' && !state.time.isPaused) {
+        void saveGameToIndexedDB(grid);
+      }
+    };
+
     const interval = setInterval(() => {
-      if (!useGameStore.getState().time.isPaused) {
-        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-          (window as any).requestIdleCallback(() => {
-            saveGameToIndexedDB(grid);
-            lastSaveTime.current = Date.now();
-          }, { timeout: 3000 });
+      if (!useGameStore.getState().time.isPaused && idleId === undefined && timeoutId === undefined) {
+        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+          idleId = window.requestIdleCallback(save, { timeout: SAVE_STORAGE.idleTimeoutMs });
         } else {
-          setTimeout(() => {
-            saveGameToIndexedDB(grid);
-            lastSaveTime.current = Date.now();
-          }, 0);
+          timeoutId = window.setTimeout(save, 0);
         }
       }
-    }, AUTO_SAVE_INTERVAL_MS);
+    }, SAVE_STORAGE.autoSaveIntervalMs);
 
-    return () => clearInterval(interval);
+    return () => {
+      disposed = true;
+      clearInterval(interval);
+      if (idleId !== undefined) window.cancelIdleCallback(idleId);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
   }, [grid, gameMode]);
 }

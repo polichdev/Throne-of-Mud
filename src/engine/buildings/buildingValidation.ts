@@ -2,6 +2,20 @@ import type { BuildingType, ResourceDeposit, ResourceDepositType } from '../../t
 import { GridMap } from '../grid/GridMap';
 import { buildingEntities } from '../ecs/world';
 import { BUILDING_BLUEPRINTS } from './blueprints';
+import { translations, type SupportedLanguage } from '../../i18n';
+import { useGameStore } from '../../store/useGameStore';
+
+function getValidationDict(lang?: SupportedLanguage) {
+  let selectedLang: SupportedLanguage = lang || 'uk';
+  if (!lang) {
+    try {
+      selectedLang = useGameStore.getState?.()?.language || 'uk';
+    } catch {
+      selectedLang = 'uk';
+    }
+  }
+  return (translations[selectedLang] || translations.uk).validation;
+}
 
 export interface PlacementValidationResult {
   allowed: boolean;
@@ -134,15 +148,17 @@ export function validateRotatedBuildingPlacement(
   grid: GridMap,
   resourceDeposits: ResourceDeposit[],
   regionBounds?: { minX: number; maxX: number; minZ: number; maxZ: number },
-  regionId?: number
+  regionId?: number,
+  lang?: SupportedLanguage
 ): PlacementValidationResult {
+  const dict = getValidationDict(lang);
   const { coveredTiles, centerX, centerZ } = footprint;
 
   for (const [tx, tz] of coveredTiles) {
     if (tx < 0 || tz < 0 || tx >= grid.width || tz >= grid.height) {
       return {
         allowed: false,
-        reason: 'За межами карти!',
+        reason: dict.outOfBounds,
       };
     }
 
@@ -150,20 +166,20 @@ export function validateRotatedBuildingPlacement(
       if (!GridMap.isCoordInRegion(regionId, tx, tz, 0)) {
         return {
           allowed: false,
-          reason: 'Ви не маєте права будувати за межами свого володіння!',
+          reason: dict.outsideRealm,
         };
       }
       if (GridMap.getDistanceToHighway(tx, tz) < 3.5) {
         return {
           allowed: false,
-          reason: 'Заборонено зводити споруди впритул до Королівського тракту!',
+          reason: dict.highwayClearance,
         };
       }
     } else if (regionBounds) {
       if (tx < regionBounds.minX || tx > regionBounds.maxX || tz < regionBounds.minZ || tz > regionBounds.maxZ) {
         return {
           allowed: false,
-          reason: 'Ви не маєте права будувати за межами свого регіону!',
+          reason: dict.outsideRegion,
         };
       }
     }
@@ -172,28 +188,28 @@ export function validateRotatedBuildingPlacement(
     if (!tile) {
       return {
         allowed: false,
-        reason: 'Недійсна клітинка місцевості!',
+        reason: dict.invalidTile,
       };
     }
 
     if (tile.terrain === 'water') {
       return {
         allowed: false,
-        reason: 'Неможливо будувати на воді!',
+        reason: dict.water,
       };
     }
 
     if (tile.terrain === 'road') {
       return {
         allowed: false,
-        reason: 'Неможливо будувати на прокладеній дорозі!',
+        reason: dict.onRoad,
       };
     }
 
     if (tile.buildingId) {
       return {
         allowed: false,
-        reason: 'Місце вже зайняте іншою спорудою!',
+        reason: dict.occupied,
       };
     }
   }
@@ -219,7 +235,7 @@ export function validateRotatedBuildingPlacement(
         if (distSq < radiusSq) {
           return {
             allowed: false,
-            reason: 'Не можна зводити будівлю прямо на покладах ресурсів або чагарниках!',
+            reason: dict.resourceOverlap,
           };
         }
       }
@@ -239,7 +255,7 @@ export function validateRotatedBuildingPlacement(
       if (dist < 3.2) {
         return {
           allowed: false,
-          reason: 'Млин потребує додаткового вільного простору для обертання лопатей!',
+          reason: dict.windmillClearance,
         };
       }
     }
@@ -264,7 +280,7 @@ export function validateRotatedBuildingPlacement(
     if (!touchesWater) {
       return {
         allowed: false,
-        reason: 'Хатину рибалки можна будувати лише на березі водойми (біля води)!',
+        reason: dict.fishermansHutWaterOnly,
       };
     }
   }
@@ -273,22 +289,22 @@ export function validateRotatedBuildingPlacement(
     iron_mine: {
       depositType: 'iron',
       maxDistance: 2.2,
-      errorMsg: 'Копальню заліза можна зводити лише безпосередньо на родовищі залізної руди!',
+      errorMsg: dict.ironMineDepositOnly,
     },
     stone_quarry: {
       depositType: 'stone',
       maxDistance: 2.2,
-      errorMsg: 'Каменоломню можна зводити лише безпосередньо на покладах каменю!',
+      errorMsg: dict.stoneQuarryDepositOnly,
     },
     clay_pit: {
       depositType: 'clay',
       maxDistance: 2.2,
-      errorMsg: 'Глиняний карʼєр можна зводити лише безпосередньо на родовищі глини!',
+      errorMsg: dict.clayPitDepositOnly,
     },
     salt_works: {
       depositType: 'salt',
       maxDistance: 2.5,
-      errorMsg: 'Солеварню можна зводити лише безпосередньо на родовищі солі або соляних джерелах!',
+      errorMsg: dict.saltWorksDepositOnly,
     },
   };
 
@@ -372,13 +388,15 @@ export function validateBuildingPlacement(
   height: number,
   grid: GridMap,
   resourceDeposits: ResourceDeposit[],
-  regionId?: number
+  regionId?: number,
+  lang?: SupportedLanguage
 ): PlacementValidationResult {
+  const dict = getValidationDict(lang);
   if (regionId !== undefined) {
     if (!GridMap.isBuildingInRegion(regionId, x, z, width, height, 3.5)) {
       return {
         allowed: false,
-        reason: 'Заборонено будувати за межами володіння або впритул до Королівського тракту!',
+        reason: dict.outsideRealmOrHighway,
       };
     }
   }
@@ -386,7 +404,7 @@ export function validateBuildingPlacement(
   if (!grid.canPlaceBuilding(x, z, width, height)) {
     return {
       allowed: false,
-      reason: 'Місце зайняте дорогою, водою, іншою будівлею або перешкодами.',
+      reason: dict.occupiedOrBlocked,
     };
   }
 
@@ -401,7 +419,7 @@ export function validateBuildingPlacement(
   if (isOverlappingResourceDeposit(x, z, width, height, resourceDeposits, ignoredType)) {
     return {
       allowed: false,
-      reason: 'Не можна зводити будівлю прямо на покладах ресурсів або чагарниках!',
+      reason: dict.resourceOverlap,
     };
   }
 
@@ -420,7 +438,7 @@ export function validateBuildingPlacement(
     if (overlapX && overlapZ) {
       return {
         allowed: false,
-        reason: 'Місце перетинається з іншою спорудою!',
+        reason: dict.occupied,
       };
     }
 
@@ -433,7 +451,7 @@ export function validateBuildingPlacement(
         if (nearX && nearZ) {
           return {
             allowed: false,
-            reason: 'Млин потребує додаткового вільного простору для обертання лопатей!',
+            reason: dict.windmillClearance,
           };
         }
       }
@@ -458,7 +476,7 @@ export function validateBuildingPlacement(
     if (!touchesWater) {
       return {
         allowed: false,
-        reason: 'Хатину рибалки можна будувати лише на березі водойми (біля води)!',
+        reason: dict.fishermansHutWaterOnly,
       };
     }
   }
@@ -467,22 +485,22 @@ export function validateBuildingPlacement(
     iron_mine: {
       depositType: 'iron',
       maxDistance: 2.2,
-      errorMsg: 'Копальню заліза можна зводити лише безпосередньо на родовищі залізної руди!',
+      errorMsg: dict.ironMineDepositOnly,
     },
     stone_quarry: {
       depositType: 'stone',
       maxDistance: 2.2,
-      errorMsg: 'Каменоломню можна зводити лише безпосередньо на покладах каменю!',
+      errorMsg: dict.stoneQuarryDepositOnly,
     },
     clay_pit: {
       depositType: 'clay',
       maxDistance: 2.2,
-      errorMsg: 'Глиняний карʼєр можна зводити лише безпосередньо на родовищі глини!',
+      errorMsg: dict.clayPitDepositOnly,
     },
     salt_works: {
       depositType: 'salt',
       maxDistance: 2.5,
-      errorMsg: 'Солеварню можна зводити лише безпосередньо на родовищі солі або соляних джерелах!',
+      errorMsg: dict.saltWorksDepositOnly,
     },
   };
 

@@ -51,3 +51,8 @@ export const MOOD_LERP_FACTOR = 0.05;
 
 export const LOW_MOOD_THRESHOLD = 20;
 export const LOW_MOOD_SPEECH_CHANCE = 0.005;
+
+export const VARIED_DIET_MIN_FOOD_TYPES = 2;
+export const VARIED_DIET_MOOD_MODIFIER = 12;
+export const VARIED_DIET_DURATION_TICKS = 800;
+

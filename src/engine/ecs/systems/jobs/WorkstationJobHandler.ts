@@ -9,6 +9,26 @@ import {
   createPathFromInterior,
 } from '../../../buildings/buildingNavigation';
 import { distance2D } from '../../../../utils/mathUtils';
+import { useGameStore } from '../../../../store/useGameStore';
+import { translations } from '../../../../i18n';
+
+const WORK_SPEECH_INTERVAL_TICKS = 70;
+const WORK_SPEECH_CHANCE = 0.25;
+const WORK_SPEECH_DURATION_TICKS = 25;
+const SHIFT_SPEECH_DURATION_TICKS = 20;
+const WORK_TOTAL_TICKS = 100;
+const STATION_PROXIMITY_THRESHOLD = 0.6;
+const FLOOR_HEIGHT_OFFSET = 0.05;
+const HALF_TILE_OFFSET = 0.5;
+const OFF_WORK_CENTER_DISTANCE_THRESHOLD = 15;
+const OFF_WORK_WANDER_OFFSET_RANGE = 5;
+const OFF_WORK_WANDER_OFFSET_BIAS = 2;
+
+function getLocalizedBuildingName(b: GameEntity): string {
+  const lang = useGameStore.getState().language;
+  const dict = translations[lang];
+  return (b.buildingType ? dict.buildings.items[b.buildingType]?.name : undefined) || b.name || dict.jobs.defaultBuildingFallback;
+}
 
 export class WorkstationJobHandler {
   public static assignWorkstationJob(
@@ -31,18 +51,18 @@ export class WorkstationJobHandler {
     const station = getBuildingWorkstation(building, workerIndex, currentTick);
 
     const baseH = grid.getTile(Math.floor(station.workWorldPos[0]), Math.floor(station.workWorldPos[1]))?.height || 0;
-    const floorY = baseH + getBuildingFloorHeight(building.buildingType) + 0.05;
+    const floorY = baseH + getBuildingFloorHeight(building.buildingType) + FLOOR_HEIGHT_OFFSET;
 
     const facingAngle = Math.atan2(
       station.facingTarget[0] - station.workWorldPos[0],
       station.facingTarget[1] - station.workWorldPos[1]
     );
 
-    const uX = unit.position ? unit.position[0] : (unit.gridPosition ? unit.gridPosition[0] + 0.5 : 0);
-    const uZ = unit.position ? unit.position[2] : (unit.gridPosition ? unit.gridPosition[1] + 0.5 : 0);
+    const uX = unit.position ? unit.position[0] : (unit.gridPosition ? unit.gridPosition[0] + HALF_TILE_OFFSET : 0);
+    const uZ = unit.position ? unit.position[2] : (unit.gridPosition ? unit.gridPosition[1] + HALF_TILE_OFFSET : 0);
     const distToStation = Math.hypot(uX - station.workWorldPos[0], uZ - station.workWorldPos[1]);
 
-    const isAlreadyAtStation = distToStation < 0.6 && (!unit.path || unit.path.length === 0);
+    const isAlreadyAtStation = distToStation < STATION_PROXIMITY_THRESHOLD && (!unit.path || unit.path.length === 0);
 
     if (isAlreadyAtStation) {
       if (unit.currentJob?.type !== 'work_at_building') {
@@ -54,7 +74,7 @@ export class WorkstationJobHandler {
           targetAngle: facingAngle,
           targetY: floorY,
           progress: 0,
-          totalWork: 100,
+          totalWork: WORK_TOTAL_TICKS,
         };
         unit.position = [station.workWorldPos[0], floorY, station.workWorldPos[1]];
         unit.gridPosition = [Math.floor(station.workWorldPos[0]), Math.floor(station.workWorldPos[1])];
@@ -63,10 +83,11 @@ export class WorkstationJobHandler {
         unit.currentJob.targetAngle = facingAngle;
       }
 
-      if (currentTick % 70 === 0 && Math.random() < 0.25) {
+      if (currentTick % WORK_SPEECH_INTERVAL_TICKS === 0 && Math.random() < WORK_SPEECH_CHANCE) {
+        const dict = translations[useGameStore.getState().language];
         unit.speechBubble = {
-          text: `Працюю: ${building.name || 'споруда'}`,
-          expiresAtTick: currentTick + 25,
+          text: dict.jobs.workingAtBuilding(getLocalizedBuildingName(building)),
+          expiresAtTick: currentTick + WORK_SPEECH_DURATION_TICKS,
           type: 'work',
         };
       }
@@ -102,14 +123,15 @@ export class WorkstationJobHandler {
       targetAngle: facingAngle,
       targetY: floorY,
       progress: 0,
-      totalWork: 100,
+      totalWork: WORK_TOTAL_TICKS,
     };
 
     if (path && path.length > 0) {
+      const dict = translations[useGameStore.getState().language];
       unit.path = path;
       unit.speechBubble = {
-        text: `Іду на зміну: ${building.name || 'споруда'}`,
-        expiresAtTick: currentTick + 20,
+        text: dict.jobs.goingToShift(getLocalizedBuildingName(building)),
+        expiresAtTick: currentTick + SHIFT_SPEECH_DURATION_TICKS,
         type: 'work',
       };
     } else {
@@ -173,10 +195,10 @@ export class WorkstationJobHandler {
       if (unit.gridPosition) {
         const [ux, uz] = unit.gridPosition;
         const distToCenter = distance2D(ux, uz, cx, cz);
-        if (distToCenter > 15 && (!unit.path || unit.path.length === 0)) {
+        if (distToCenter > OFF_WORK_CENTER_DISTANCE_THRESHOLD && (!unit.path || unit.path.length === 0)) {
           const wanderTarget: [number, number] = [
-            cx + Math.floor(Math.random() * 5 - 2),
-            cz + Math.floor(Math.random() * 5 - 2),
+            cx + Math.floor(Math.random() * OFF_WORK_WANDER_OFFSET_RANGE - OFF_WORK_WANDER_OFFSET_BIAS),
+            cz + Math.floor(Math.random() * OFF_WORK_WANDER_OFFSET_RANGE - OFF_WORK_WANDER_OFFSET_BIAS),
           ];
           const returnPath = AStar.findPath(grid, [ux, uz], wanderTarget, true, uBounds);
           if (returnPath && returnPath.length > 0) {

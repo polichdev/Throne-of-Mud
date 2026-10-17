@@ -1,4 +1,5 @@
 import type { MilitiaUnitType } from '../../types/game';
+import { MILITIA_CONFIG } from '../../constants/militia';
 
 export function getFormationOffsets(count: number, facingAngle = 0, type: MilitiaUnitType = 'spearmen'): [number, number][] {
   let localOffsets: [number, number][];
@@ -39,7 +40,11 @@ export function getFormationOffsets(count: number, facingAngle = 0, type: Militi
   const fwdZ = Math.cos(facingAngle);
   const rightX = Math.cos(facingAngle);
   const rightZ = -Math.sin(facingAngle);
-  const spacing = type === 'archers' ? 1.6 : type === 'pikemen' ? 0.85 : 1;
+  const spacing = type === 'archers'
+    ? MILITIA_CONFIG.formationSpacing.archers
+    : type === 'pikemen'
+    ? MILITIA_CONFIG.formationSpacing.pikemen
+    : MILITIA_CONFIG.formationSpacing.default;
 
   return active.map(([colX, rowZ]) => [
     (rightX * colX - fwdX * rowZ) * spacing,

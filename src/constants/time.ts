@@ -1,3 +1,4 @@
+import { SNOW_SEASON } from './weather';
 import type { SeasonType, MonthName } from '../types/game';
 
 export const TICKS_PER_MINUTE = 6;
@@ -103,21 +104,21 @@ export function getTargetSnowAccumulation(
   hour: number = 12,
   minute: number = 0
 ): number {
-  const fractionalDay = dayInSeason + (hour * 60 + minute) / (24 * 60);
+  const fractionalDay = dayInSeason + (hour * MINUTES_PER_HOUR + minute) / MINUTES_PER_DAY;
 
   if (season === 'Winter') {
-    if (fractionalDay <= 15) {
-      return Math.min(1.0, Math.max(0.0, fractionalDay / 15));
-    } else if (fractionalDay <= 20) {
+    if (fractionalDay <= SNOW_SEASON.winterPeakDay) {
+      return Math.min(1.0, Math.max(0.0, fractionalDay / SNOW_SEASON.winterPeakDay));
+    } else if (fractionalDay <= SNOW_SEASON.winterMeltStartDay) {
       return 1.0;
     } else {
-      const meltProgress = (fractionalDay - 20) / 10;
-      return Math.max(0.35, Math.min(1.0, 1.0 - meltProgress * 0.65));
+      const meltProgress = (fractionalDay - SNOW_SEASON.winterMeltStartDay) / SNOW_SEASON.winterMeltDurationDays;
+      return Math.max(SNOW_SEASON.winterResidual, Math.min(1.0, 1.0 - meltProgress * SNOW_SEASON.winterMeltFraction));
     }
   } else if (season === 'Spring') {
-    if (fractionalDay < 5.0) {
-      const meltRatio = (5.0 - fractionalDay) / 4.0;
-      return Math.max(0.0, Math.min(0.30, 0.30 * meltRatio));
+    if (fractionalDay < SNOW_SEASON.springMeltEndDay) {
+      const meltRatio = (SNOW_SEASON.springMeltEndDay - fractionalDay) / SNOW_SEASON.springMeltDurationDays;
+      return Math.max(0.0, Math.min(SNOW_SEASON.springInitial, SNOW_SEASON.springInitial * meltRatio));
     } else {
       return 0.0;
     }

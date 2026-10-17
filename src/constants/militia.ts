@@ -1,0 +1,23 @@
+export const MILITIA_CONFIG = {
+  maxSquadMembers: 5,
+  levyMaxPeasants: 3,
+  levyThoughtModifier: -5,
+  levyThoughtDurationTicks: 1500,
+  lordPreachMoodBoost: 15,
+  lordPreachThoughtDurationTicks: 1200,
+  squadSpacingOffset: 4.5,
+  rallyOffsetX: 5,
+  rallyOffsetZ: 3,
+  speechDurationTicks: 35,
+  rallySpeechDurationTicks: 45,
+  disbandSpeechDurationTicks: 35,
+  preachSpeechDurationTicks: 35,
+  preachPeasantSpeechDurationTicks: 30,
+  marchPhrasesSpeechDurationTicks: 35,
+  marchArrivalDistance: 1.0,
+  formationSpacing: {
+    archers: 1.6,
+    pikemen: 0.85,
+    default: 1.0,
+  },
+} as const;

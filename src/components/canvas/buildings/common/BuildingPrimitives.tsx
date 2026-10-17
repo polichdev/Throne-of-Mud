@@ -1,3 +1,4 @@
+import { DEFAULT_CAMERA_ZOOM } from '../../../../constants/camera';
 import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -121,7 +122,7 @@ export function MedievalDoor({
   useFrame((_, delta) => {
     if (!rootRef.current || !leftHingeRef.current) return;
     if (!rootRef.current.visible) return;
-    const currentZoom = (window as any).__lastCameraZoom ?? 38;
+    const currentZoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
     if (currentZoom < 42) {
       if (leftHingeRef.current.rotation.y !== 0) leftHingeRef.current.rotation.y = 0;
       if (rightHingeRef.current && rightHingeRef.current.rotation.y !== 0) rightHingeRef.current.rotation.y = 0;
@@ -455,7 +456,7 @@ export function ChimneySmoke({
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
-    const currentZoom = (window as any).__lastCameraZoom ?? 38;
+    const currentZoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
     const state = useGameStore.getState();
     const hasSmoke = residentialBuildingId === undefined || residentialSmokeState.hasSleepingResident(
       residentialBuildingId, Math.floor(clock.elapsedTime * 10), state.time?.hour ?? 12, characterEntities,
@@ -710,7 +711,7 @@ export function GothicPortal({
   useFrame((_, delta) => {
     if (!rootRef.current || !leftHingeRef.current || !rightHingeRef.current) return;
     if (!rootRef.current.visible) return;
-    const currentZoom = (window as any).__lastCameraZoom ?? 38;
+    const currentZoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
     if (currentZoom < 26) return;
 
     frameCount.current++;
@@ -1509,7 +1510,7 @@ export function IndoorFireplaceFire({
 
   useFrame(({ clock }) => {
     if (!flameRef.current || !isLit || !isObjectEffectivelyVisible(flameRef.current)) return;
-    const currentZoom = (window as any).__lastCameraZoom ?? 38;
+    const currentZoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
     if (currentZoom <= 18.5) return;
     const t = clock.getElapsedTime();
 

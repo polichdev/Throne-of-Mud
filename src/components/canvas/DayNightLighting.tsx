@@ -1,21 +1,11 @@
+import { LIGHTING, createLightingTimeline, createLightingColors } from './lightingSettings';
+import { HOURS_PER_DAY, MINUTES_PER_HOUR } from '../../constants/time';
 import { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 import { buildingEntities } from '../../engine/ecs/world';
 import { BuildingShadowState } from './performance/BuildingShadowState';
-
-interface LightingKey {
-  hour: number;
-  sunColor: THREE.Color;
-  sunIntensity: number;
-  ambientColor: THREE.Color;
-  ambientIntensity: number;
-  hemiSkyColor: THREE.Color;
-  hemiGroundColor: THREE.Color;
-}
-
-const SHADOW_RECENTER_DISTANCE = 10;
 
 export function DayNightLighting() {
   const { gl } = useThree();
@@ -27,7 +17,7 @@ export function DayNightLighting() {
   const sunLightRef = useRef<THREE.DirectionalLight>(null);
   const ambientLightRef = useRef<THREE.AmbientLight>(null);
   const hemiLightRef = useRef<THREE.HemisphereLight>(null);
-  const lastLightPosRef = useRef<[number, number]>([24, 24]);
+  const lastLightPosRef = useRef<[number, number]>([...LIGHTING.initialTarget]);
 
   useEffect(() => {
     gl.shadowMap.autoUpdate = false;
@@ -36,115 +26,13 @@ export function DayNightLighting() {
 
   const lightTarget = useMemo(() => {
     const obj = new THREE.Object3D();
-    obj.position.set(24, 0, 24);
+    obj.position.set(LIGHTING.initialTarget[0], 0, LIGHTING.initialTarget[1]);
     return obj;
   }, []);
 
-  const timeline = useMemo<LightingKey[]>(() => [
-    {
-      hour: 0,
-      sunColor: new THREE.Color('#93c5fd'),
-      sunIntensity: 0.50,
-      ambientColor: new THREE.Color('#475569'),
-      ambientIntensity: 0.45,
-      hemiSkyColor: new THREE.Color('#64748b'),
-      hemiGroundColor: new THREE.Color('#334155'),
-    },
-    {
-      hour: 5.0,
-      sunColor: new THREE.Color('#f97316'),
-      sunIntensity: 0.65,
-      ambientColor: new THREE.Color('#334155'),
-      ambientIntensity: 0.38,
-      hemiSkyColor: new THREE.Color('#475569'),
-      hemiGroundColor: new THREE.Color('#1e293b'),
-    },
-    {
-      hour: 6.5,
-      sunColor: new THREE.Color('#f59e0b'),
-      sunIntensity: 1.15,
-      ambientColor: new THREE.Color('#64748b'),
-      ambientIntensity: 0.42,
-      hemiSkyColor: new THREE.Color('#fef08a'),
-      hemiGroundColor: new THREE.Color('#334155'),
-    },
-    {
-      hour: 8.5,
-      sunColor: new THREE.Color('#fef08a'),
-      sunIntensity: 1.30,
-      ambientColor: new THREE.Color('#cbd5e1'),
-      ambientIntensity: 0.46,
-      hemiSkyColor: new THREE.Color('#fef9c3'),
-      hemiGroundColor: new THREE.Color('#334155'),
-    },
-    {
-      hour: 12.0,
-      sunColor: new THREE.Color('#fff3cd'),
-      sunIntensity: 1.35,
-      ambientColor: new THREE.Color('#e2e8f0'),
-      ambientIntensity: 0.48,
-      hemiSkyColor: new THREE.Color('#fef9c3'),
-      hemiGroundColor: new THREE.Color('#334155'),
-    },
-    {
-      hour: 16.5,
-      sunColor: new THREE.Color('#fed7aa'),
-      sunIntensity: 1.30,
-      ambientColor: new THREE.Color('#cbd5e1'),
-      ambientIntensity: 0.46,
-      hemiSkyColor: new THREE.Color('#fed7aa'),
-      hemiGroundColor: new THREE.Color('#334155'),
-    },
-    {
-      hour: 18.5,
-      sunColor: new THREE.Color('#f97316'),
-      sunIntensity: 1.15,
-      ambientColor: new THREE.Color('#64748b'),
-      ambientIntensity: 0.42,
-      hemiSkyColor: new THREE.Color('#fca5a5'),
-      hemiGroundColor: new THREE.Color('#334155'),
-    },
-    {
-      hour: 20.5,
-      sunColor: new THREE.Color('#818cf8'),
-      sunIntensity: 0.55,
-      ambientColor: new THREE.Color('#334155'),
-      ambientIntensity: 0.38,
-      hemiSkyColor: new THREE.Color('#475569'),
-      hemiGroundColor: new THREE.Color('#1e293b'),
-    },
-    {
-      hour: 24.0,
-      sunColor: new THREE.Color('#93c5fd'),
-      sunIntensity: 0.50,
-      ambientColor: new THREE.Color('#475569'),
-      ambientIntensity: 0.45,
-      hemiSkyColor: new THREE.Color('#64748b'),
-      hemiGroundColor: new THREE.Color('#334155'),
-    },
-  ], []);
+  const timeline = useMemo(createLightingTimeline, []);
 
-  const staticColors = useMemo(() => ({
-    winterSun: new THREE.Color('#dbeafe'),
-    winterAmb: new THREE.Color('#93c5fd'),
-    winterHemiGnd: new THREE.Color('#bfdbfe'),
-    autumnSun: new THREE.Color('#f59e0b'),
-    autumnAmb: new THREE.Color('#78350f'),
-    springSun: new THREE.Color('#fef08a'),
-    rainSun: new THREE.Color('#94a3b8'),
-    rainAmb: new THREE.Color('#475569'),
-    stormSun: new THREE.Color('#505c6e'),
-    stormAmb: new THREE.Color('#252e3d'),
-    lightningSun: new THREE.Color('#ffffff'),
-    lightningAmb: new THREE.Color('#e0f2fe'),
-    snowSun: new THREE.Color('#cbd5e1'),
-    snowAmb: new THREE.Color('#64748b'),
-    snowHemiGnd: new THREE.Color('#e2e8f0'),
-    scratchSun: new THREE.Color(),
-    scratchAmb: new THREE.Color(),
-    scratchHemiSky: new THREE.Color(),
-    scratchHemiGnd: new THREE.Color(),
-  }), []);
+  const staticColors = useMemo(createLightingColors, []);
 
   const lastTimeRef = useRef({
     hour: -1,
@@ -166,11 +54,11 @@ export function DayNightLighting() {
       lastRevision.selectedId = selectedEntityId;
       lastRevision.floor = houseFloorView;
     }
-    const currentHour = (time.hour + time.minute / 60) % 24;
+    const currentHour = (time.hour + time.minute / MINUTES_PER_HOUR) % HOURS_PER_DAY;
 
     const timeChanged =
       time.hour !== lastTimeRef.current.hour ||
-      Math.abs(time.minute - lastTimeRef.current.minute) >= 0.05 ||
+      Math.abs(time.minute - lastTimeRef.current.minute) >= LIGHTING.minuteUpdateThreshold ||
       time.season !== lastTimeRef.current.season ||
       time.rainIntensity !== lastTimeRef.current.rain ||
       time.stormIntensity !== lastTimeRef.current.storm ||
@@ -214,54 +102,54 @@ export function DayNightLighting() {
 
       const season = time.season;
       if (season === 'Winter') {
-        sunCol.lerp(staticColors.winterSun, 0.18);
-        ambCol.lerp(staticColors.winterAmb, 0.20);
-        hemiGnd.lerp(staticColors.winterHemiGnd, 0.35);
-        sunInt *= 0.92;
-        ambInt *= 1.12;
+        sunCol.lerp(staticColors.winterSun, LIGHTING.winter.sunColor);
+        ambCol.lerp(staticColors.winterAmb, LIGHTING.winter.ambientColor);
+        hemiGnd.lerp(staticColors.winterHemiGnd, LIGHTING.winter.groundColor);
+        sunInt *= LIGHTING.winter.sunIntensity;
+        ambInt *= LIGHTING.winter.ambientIntensity;
       } else if (season === 'Autumn') {
-        sunCol.lerp(staticColors.autumnSun, 0.15);
-        ambCol.lerp(staticColors.autumnAmb, 0.12);
+        sunCol.lerp(staticColors.autumnSun, LIGHTING.autumn.sunColor);
+        ambCol.lerp(staticColors.autumnAmb, LIGHTING.autumn.ambientColor);
       } else if (season === 'Spring') {
-        sunCol.lerp(staticColors.springSun, 0.08);
+        sunCol.lerp(staticColors.springSun, LIGHTING.spring.sunColor);
       }
 
       const { rainIntensity = 0, stormIntensity = 0, snowIntensity = 0, lightningFlash = 0 } = time;
 
-      if (rainIntensity > 0.005) {
-        const rainWeight = rainIntensity * 0.40;
+      if (rainIntensity > LIGHTING.minWeatherIntensity) {
+        const rainWeight = rainIntensity * LIGHTING.rain.weight;
         sunCol.lerp(staticColors.rainSun, rainWeight);
-        ambCol.lerp(staticColors.rainAmb, rainWeight * 0.85);
-        sunInt *= THREE.MathUtils.lerp(1.0, 0.65, rainIntensity);
-        ambInt *= THREE.MathUtils.lerp(1.0, 0.90, rainIntensity);
+        ambCol.lerp(staticColors.rainAmb, rainWeight * LIGHTING.rain.ambientWeight);
+        sunInt *= THREE.MathUtils.lerp(1.0, LIGHTING.rain.sunIntensity, rainIntensity);
+        ambInt *= THREE.MathUtils.lerp(1.0, LIGHTING.rain.ambientIntensity, rainIntensity);
       }
 
-      if (stormIntensity > 0.005) {
-        const stormWeight = stormIntensity * 0.50;
+      if (stormIntensity > LIGHTING.minWeatherIntensity) {
+        const stormWeight = stormIntensity * LIGHTING.storm.weight;
         sunCol.lerp(staticColors.stormSun, stormWeight);
-        ambCol.lerp(staticColors.stormAmb, stormWeight * 0.85);
-        sunInt *= THREE.MathUtils.lerp(1.0, 0.45, stormIntensity);
-        ambInt *= THREE.MathUtils.lerp(1.0, 0.80, stormIntensity);
+        ambCol.lerp(staticColors.stormAmb, stormWeight * LIGHTING.storm.ambientWeight);
+        sunInt *= THREE.MathUtils.lerp(1.0, LIGHTING.storm.sunIntensity, stormIntensity);
+        ambInt *= THREE.MathUtils.lerp(1.0, LIGHTING.storm.ambientIntensity, stormIntensity);
 
-        if (lightningFlash > 0.01) {
+        if (lightningFlash > LIGHTING.lightning.minIntensity) {
           sunCol.lerp(staticColors.lightningSun, lightningFlash);
           ambCol.lerp(staticColors.lightningAmb, lightningFlash);
-          sunInt += lightningFlash * 4.2;
-          ambInt += lightningFlash * 2.2;
+          sunInt += lightningFlash * LIGHTING.lightning.sunIntensity;
+          ambInt += lightningFlash * LIGHTING.lightning.ambientIntensity;
         }
       }
 
-      if (snowIntensity > 0.005) {
-        const snowWeight = snowIntensity * 0.35;
+      if (snowIntensity > LIGHTING.minWeatherIntensity) {
+        const snowWeight = snowIntensity * LIGHTING.snow.weight;
         sunCol.lerp(staticColors.snowSun, snowWeight);
-        ambCol.lerp(staticColors.snowAmb, snowWeight * 0.70);
-        hemiGnd.lerp(staticColors.snowHemiGnd, snowWeight * 0.80);
-        sunInt *= THREE.MathUtils.lerp(1.0, 0.75, snowIntensity);
-        ambInt *= THREE.MathUtils.lerp(1.0, 1.10, snowIntensity);
+        ambCol.lerp(staticColors.snowAmb, snowWeight * LIGHTING.snow.ambientWeight);
+        hemiGnd.lerp(staticColors.snowHemiGnd, snowWeight * LIGHTING.snow.groundWeight);
+        sunInt *= THREE.MathUtils.lerp(1.0, LIGHTING.snow.sunIntensity, snowIntensity);
+        ambInt *= THREE.MathUtils.lerp(1.0, LIGHTING.snow.ambientIntensity, snowIntensity);
       }
 
-      ambInt = Math.max(0.42, ambInt);
-      sunInt = Math.max(0.25, sunInt);
+      ambInt = Math.max(LIGHTING.minAmbientIntensity, ambInt);
+      sunInt = Math.max(LIGHTING.minSunIntensity, sunInt);
 
       if (sunLightRef.current) {
         sunLightRef.current.color.copy(sunCol);
@@ -284,10 +172,10 @@ export function DayNightLighting() {
       if (camTarget) {
         const dx = camTarget[0] - lastLightPosRef.current[0];
         const dz = camTarget[1] - lastLightPosRef.current[1];
-        if (dx * dx + dz * dz >= SHADOW_RECENTER_DISTANCE * SHADOW_RECENTER_DISTANCE) {
+        if (dx * dx + dz * dz >= LIGHTING.shadowRecenterDistance * LIGHTING.shadowRecenterDistance) {
           lastLightPosRef.current = [camTarget[0], camTarget[1]];
           lightTarget.position.set(camTarget[0], 0, camTarget[1]);
-          sunLightRef.current.position.set(camTarget[0] + 18, 36, camTarget[1] + 20);
+          sunLightRef.current.position.set(camTarget[0] + LIGHTING.sunOffset[0], LIGHTING.sunOffset[1], camTarget[1] + LIGHTING.sunOffset[2]);
           pendingShadowRef.current = true;
         }
       }
@@ -302,28 +190,28 @@ export function DayNightLighting() {
 
   return (
     <>
-      <ambientLight ref={ambientLightRef} intensity={0.48} />
+      <ambientLight ref={ambientLightRef} intensity={LIGHTING.ambientIntensity} />
       <hemisphereLight
         ref={hemiLightRef}
-        args={['#fef9c3', '#334155', 0.22]}
+        args={LIGHTING.hemisphere}
       />
       <primitive object={lightTarget} />
       <directionalLight
         ref={sunLightRef}
         target={lightTarget}
-        position={[24 + 18, 36, 24 + 20]}
-        intensity={1.35}
+        position={[LIGHTING.initialTarget[0] + LIGHTING.sunOffset[0], LIGHTING.sunOffset[1], LIGHTING.initialTarget[1] + LIGHTING.sunOffset[2]]}
+        intensity={LIGHTING.sunIntensity}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-near={0.5}
-        shadow-camera-far={130}
-        shadow-camera-left={-22}
-        shadow-camera-right={22}
-        shadow-camera-top={22}
-        shadow-camera-bottom={-22}
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.02}
+        shadow-mapSize-width={LIGHTING.shadow.mapSize}
+        shadow-mapSize-height={LIGHTING.shadow.mapSize}
+        shadow-camera-near={LIGHTING.shadow.near}
+        shadow-camera-far={LIGHTING.shadow.far}
+        shadow-camera-left={-LIGHTING.shadow.extent}
+        shadow-camera-right={LIGHTING.shadow.extent}
+        shadow-camera-top={LIGHTING.shadow.extent}
+        shadow-camera-bottom={-LIGHTING.shadow.extent}
+        shadow-bias={LIGHTING.shadow.bias}
+        shadow-normalBias={LIGHTING.shadow.normalBias}
       />
     </>
   );

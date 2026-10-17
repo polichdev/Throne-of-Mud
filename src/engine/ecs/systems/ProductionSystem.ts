@@ -1,3 +1,4 @@
+import { PRODUCTION } from '../../../constants/systems';
 import { buildingEntities, characterEntities, type GameEntity } from '../world';
 import { BUILDING_BLUEPRINTS } from '../../buildings/blueprints';
 import { useGameStore } from '../../../store/useGameStore';
@@ -18,7 +19,7 @@ export class ProductionSystem {
   public static update(): void {
     const { resources, addResource, consumeResource, addPendingJob, pendingJobs, playerRegionId, time } = useGameStore.getState();
 
-    if (time && time.hour === 8 && this.lastTaxDayPaid !== time.day) {
+    if (time && time.hour === PRODUCTION.taxCollectionHour && this.lastTaxDayPaid !== time.day) {
       this.lastTaxDayPaid = time.day;
       let totalTaxCollected = 0;
       for (const b of buildingEntities) {
@@ -35,7 +36,7 @@ export class ProductionSystem {
       }
     }
 
-    const isNight = time ? (time.hour >= 20 || time.hour < 6) : false;
+    const isNight = time ? (time.hour >= PRODUCTION.nightStartHour || time.hour < PRODUCTION.nightEndHour) : false;
     if (isNight) return;
 
     _lordMap.clear();
@@ -77,7 +78,7 @@ export class ProductionSystem {
       const blueprint = BUILDING_BLUEPRINTS[building.buildingType];
       if (!blueprint || !blueprint.produces) continue;
 
-      const maxStorage = blueprint.maxStorage || 30;
+      const maxStorage = blueprint.maxStorage || PRODUCTION.fallbackStorageCapacity;
       building.localInventory = building.localInventory || {};
       const currentStored = Object.values(building.localInventory).reduce((acc, val) => acc + (val || 0), 0);
 

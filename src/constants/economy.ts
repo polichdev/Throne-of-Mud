@@ -35,7 +35,9 @@ export const DEFAULT_WAGE = 2;
 
 export const DEFAULT_SPEECH_BUBBLE_TICKS = 35;
 export const EMPLOYED_THOUGHT_TICKS = 3000;
+export const EMPLOYED_THOUGHT_MODIFIER = 8;
 export const DISMISSED_THOUGHT_TICKS = 1000;
+export const DISMISSED_THOUGHT_MODIFIER = -6;
 
 export const BASE_STORAGE_CAPACITY = 5000;
 

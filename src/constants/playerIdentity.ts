@@ -1,22 +1,28 @@
 import type { PlayerIdentity } from '../types/game';
 
+export const DEFAULT_PLAYER_RULER_NAME = 'Boleslav';
+export const DEFAULT_PLAYER_KINGDOM_NAME = 'Koenigsveg';
+export const DEFAULT_PORTRAIT_ID = 0;
+export const DEFAULT_SHIELD_COLOR = '#723b31';
+export const DEFAULT_EMBLEM_ID = 'crown';
+
 export const DEFAULT_PLAYER_IDENTITY: PlayerIdentity = {
-  rulerName: 'Болеслав',
-  kingdomName: 'Кенігсвеґ',
-  portraitId: 0,
-  shieldColor: '#723b31',
-  emblemId: 'crown',
+  rulerName: DEFAULT_PLAYER_RULER_NAME,
+  kingdomName: DEFAULT_PLAYER_KINGDOM_NAME,
+  portraitId: DEFAULT_PORTRAIT_ID,
+  shieldColor: DEFAULT_SHIELD_COLOR,
+  emblemId: DEFAULT_EMBLEM_ID,
 };
 
 export const SHIELD_COLORS = ['#723b31', '#294453', '#526037', '#755d31', '#51416a', '#343d42'];
 
 export const HERALDRY_EMBLEMS = [
-  { id: 'crown', glyph: '♛', nameUk: 'Корона', nameEn: 'Crown' },
-  { id: 'cross', glyph: '✠', nameUk: 'Хрест', nameEn: 'Cross' },
-  { id: 'swords', glyph: '⚔', nameUk: 'Мечі', nameEn: 'Swords' },
-  { id: 'tree', glyph: '♣', nameUk: 'Дерево', nameEn: 'Tree' },
-  { id: 'sun', glyph: '☼', nameUk: 'Сонце', nameEn: 'Sun' },
-  { id: 'castle', glyph: '♜', nameUk: 'Фортеця', nameEn: 'Castle' },
+  { id: 'crown', glyph: '♛' },
+  { id: 'cross', glyph: '✠' },
+  { id: 'swords', glyph: '⚔' },
+  { id: 'tree', glyph: '♣' },
+  { id: 'sun', glyph: '☼' },
+  { id: 'castle', glyph: '♜' },
 ] as const;
 
 export function getHeraldryGlyph(emblemId: string): string {

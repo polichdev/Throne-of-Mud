@@ -7,7 +7,7 @@ import {
   woodenWallCrossbarGeometry,
   stoneWallMainGeometry,
   stoneWallBattlementsGeometry,
-} from './models/WallGateModels';
+} from './models/civic/WallGateModels';
 
 const _dummy = new THREE.Object3D();
 

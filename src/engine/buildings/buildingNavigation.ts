@@ -722,7 +722,9 @@ export function createPathToInterior(
   }
 
   const exitWps: [number, number][] = [];
-  let navStartGrid: [number, number] = [startGrid[0], startGrid[1]];
+  let navStartGrid: [number, number] = startPos
+    ? [Math.floor(startPos[0]), Math.floor(startPos[2])]
+    : [startGrid[0], startGrid[1]];
 
   if (startPos && targetBuilding) {
     const insideOther = findBuildingContainingPos(startPos[0], startPos[2], buildingEntities);
@@ -846,7 +848,7 @@ export function createPathSafely(
     }
   }
 
-  const startGrid = unitGrid || (currentPos ? [Math.floor(currentPos[0]), Math.floor(currentPos[2])] : targetGrid);
+  const startGrid: [number, number] = currentPos ? [Math.floor(currentPos[0]), Math.floor(currentPos[2])] : (unitGrid || targetGrid);
   return AStar.findPath(grid, startGrid, targetGrid, allowAdjacent, bounds);
 }
 
@@ -888,6 +890,6 @@ export function createPathToAreaSafely(
     }
   }
 
-  const startGrid = unitGrid || (currentPos ? [Math.floor(currentPos[0]), Math.floor(currentPos[2])] : [areaX, areaZ]);
+  const startGrid: [number, number] = currentPos ? [Math.floor(currentPos[0]), Math.floor(currentPos[2])] : (unitGrid || [areaX, areaZ]);
   return AStar.findPathToArea(grid, startGrid, areaX, areaZ, width, height, bounds);
 }

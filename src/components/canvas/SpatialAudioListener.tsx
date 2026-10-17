@@ -1,3 +1,4 @@
+import { DEFAULT_CAMERA_ZOOM } from '../../constants/camera';
 import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -30,7 +31,7 @@ export function SpatialAudioListener() {
     lastUpdateRef.current = now;
 
     const orthoCam = camera as THREE.OrthographicCamera;
-    const currentZoom = orthoCam.zoom ?? 38.0;
+    const currentZoom = orthoCam.zoom ?? DEFAULT_CAMERA_ZOOM;
 
     const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
     const camX = camTarget ? camTarget[0] : camera.position.x;

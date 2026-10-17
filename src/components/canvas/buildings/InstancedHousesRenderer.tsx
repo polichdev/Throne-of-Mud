@@ -1,3 +1,5 @@
+import { getBuildingVisibilityDistance } from '../../../constants/rendering';
+import { DEFAULT_CAMERA_ZOOM } from '../../../constants/camera';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
@@ -7,7 +9,7 @@ import type { HouseTier, BackyardExtensionType } from '../../../types/game';
 import { useGameStore } from '../../../store/useGameStore';
 import { BUILDING_BLUEPRINTS } from '../../../engine/buildings/blueprints';
 import type { StaticMeshPart } from './staticMeshParts';
-import { getPeasantHouseExteriorParts, getPeasantHouseExteriorMaterial, getPeasantBackyardParts, PeasantHouseEffects } from './models/PeasantHouseModel';
+import { getPeasantHouseExteriorParts, getPeasantHouseExteriorMaterial, getPeasantBackyardParts, PeasantHouseEffects } from './models/housing/PeasantHouseModel';
 import { getHouseWorldMatrix } from './houseTransforms';
 import { HouseMultiDrawBatches } from './HouseMultiDrawBatches';
 export { getHouseWorldMatrix } from './houseTransforms';
@@ -89,8 +91,8 @@ function HouseBatchMeshes({ batch, isNight, onSelect }: { batch: HouseBatch; isN
     if (!ref.current) return;
     const target = (window as any).__lastCameraTarget;
     if (!target) return;
-    const zoom = (window as any).__lastCameraZoom || 38;
-    const distance = Math.max(38, Math.min(50, 1200 / zoom + 12));
+    const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
+    const distance = getBuildingVisibilityDistance(zoom);
     ref.current.visible = matrices.some(matrix => (matrix.elements[12] - target[0]) ** 2 + (matrix.elements[14] - target[1]) ** 2 < distance ** 2);
   });
   return <group ref={ref}>
@@ -132,7 +134,7 @@ function HouseColliderChunk({ batch, onSelect }: { batch: HouseBatch; onSelect: 
     if (!ref.current) return;
     const target = (window as any).__lastCameraTarget;
     if (!target) return;
-    const distance = Math.max(38, Math.min(50, 1200 / ((window as any).__lastCameraZoom || 38) + 12));
+    const distance = getBuildingVisibilityDistance((window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM);
     ref.current.visible = matrices.some(matrix => (matrix.elements[12] - target[0]) ** 2 + (matrix.elements[14] - target[1]) ** 2 < distance ** 2);
   });
   return <group ref={ref}><HouseColliders buildings={batch.buildings} onSelect={onSelect} /></group>;
@@ -145,11 +147,11 @@ function HouseMultiDrawRenderer({ batches, isNight, onSelect }: { batches: House
     const root = ref.current;
     if (!root) return;
     meshes.sync(batches, isNight);
-    meshes.update((window as any).__lastCameraTarget, (window as any).__lastCameraZoom || 38);
+    meshes.update((window as any).__lastCameraTarget, (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM);
     root.add(meshes.group);
     return () => { root.remove(meshes.group); meshes.dispose(); };
   }, [meshes, batches, isNight]);
-  useFrame(() => meshes.update((window as any).__lastCameraTarget, (window as any).__lastCameraZoom || 38));
+  useFrame(() => meshes.update((window as any).__lastCameraTarget, (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM));
   return <group ref={ref} dispose={null}>
     {batches.filter(batch => batch.kind === 'house').map(batch => <HouseColliderChunk key={batch.key} batch={batch} onSelect={onSelect} />)}
   </group>;
@@ -162,8 +164,8 @@ function HouseEffects({ building }: { building: GameEntity }) {
     if (!ref.current) return;
     const target = (window as any).__lastCameraTarget;
     if (!target) return;
-    const zoom = (window as any).__lastCameraZoom || 38;
-    const distance = Math.max(38, Math.min(50, 1200 / zoom + 12));
+    const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
+    const distance = getBuildingVisibilityDistance(zoom);
     ref.current.visible = (matrix.elements[12] - target[0]) ** 2 + (matrix.elements[14] - target[1]) ** 2 < distance ** 2;
   });
   return <group ref={ref} matrix={matrix} matrixAutoUpdate={false}>

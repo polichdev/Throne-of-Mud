@@ -1,3 +1,4 @@
+import { DEFAULT_CAMERA_ZOOM } from '../../constants/camera';
 import { useMemo, useLayoutEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -1014,7 +1015,7 @@ function populateBucketFoliage(
   }, []);
 
   useFrame(() => {
-    const curZoom = (window as any).__lastCameraZoom ?? 38;
+    const curZoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
     const curShowGrass = curZoom >= 11;
 
     const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;

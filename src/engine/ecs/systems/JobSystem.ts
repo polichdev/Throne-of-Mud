@@ -1,3 +1,5 @@
+import { MINUTES_PER_HOUR } from '../../../constants/time';
+import { JOB_SCHEDULE } from '../../../constants/systems';
 import { characterEntities, buildingEntities, type GameEntity, type Job } from '../world';
 import { GridMap } from '../../grid/GridMap';
 import { useGameStore } from '../../../store/useGameStore';
@@ -21,6 +23,7 @@ import { RestJobHandler, getEntityRegionId } from './jobs/RestJobHandler';
 import { WoodcuttingJobHandler } from './jobs/WoodcuttingJobHandler';
 import { ConstructionJobHandler } from './jobs/ConstructionJobHandler';
 import { WorkstationJobHandler } from './jobs/WorkstationJobHandler';
+import { translations } from '../../../i18n';
 import { GatheringJobHandler } from './jobs/GatheringJobHandler';
 import { HaulingJobHandler } from './jobs/HaulingJobHandler';
 import { ManualJobHandler } from './jobs/ManualJobHandler';
@@ -64,7 +67,7 @@ export class JobSystem {
               const hasNoPath = !m.path || m.path.length === 0;
               if (!hasNoPath) return false;
               if (!m.targetPosition || !m.gridPosition) return true;
-              return Math.hypot(m.gridPosition[0] - m.targetPosition[0], m.gridPosition[1] - m.targetPosition[1]) <= 1.2;
+              return Math.hypot(m.gridPosition[0] - m.targetPosition[0], m.gridPosition[1] - m.targetPosition[1]) <= JOB_SCHEDULE.manualArrivalDistance;
             });
             if (allArrived) {
               squad.activeMarch = null;
@@ -177,10 +180,10 @@ export class JobSystem {
       }
 
       if (!isNoble && unit.workBuildingId && !isMidManualJob) {
-        const unitHash = (unit.id.charCodeAt(0) * 17 + unit.id.charCodeAt(unit.id.length - 1)) % 30;
-        const currentMinuteOfDay = time.hour * 60 + (time.minute || 0);
-        const unitWorkStartMinutes = WORK_START_HOUR * 60 + (unitHash % 15);
-        const unitWorkEndMinutes = (WORK_END_HOUR + 1) * 60 + unitHash;
+        const unitHash = (unit.id.charCodeAt(0) * JOB_SCHEDULE.unitScheduleHashMultiplier + unit.id.charCodeAt(unit.id.length - 1)) % JOB_SCHEDULE.maxShiftDelayMinutes;
+        const currentMinuteOfDay = time.hour * MINUTES_PER_HOUR + (time.minute || 0);
+        const unitWorkStartMinutes = WORK_START_HOUR * MINUTES_PER_HOUR + (unitHash % JOB_SCHEDULE.maxWorkStartDelayMinutes);
+        const unitWorkEndMinutes = (WORK_END_HOUR + 1) * MINUTES_PER_HOUR + unitHash;
         const isUnitWorkHours = currentMinuteOfDay >= unitWorkStartMinutes && currentMinuteOfDay < unitWorkEndMinutes;
 
         if (isUnitWorkHours) {
@@ -333,8 +336,8 @@ export class JobSystem {
             addResource('stone', MINE_ROCK_YIELD);
           }
           unit.speechBubble = {
-            text: `Камінь видобуто! (+${MINE_ROCK_YIELD} каменю)`,
-            expiresAtTick: currentTick + 25,
+            text: translations[useGameStore.getState().language].inspector.mineRockSpeech(MINE_ROCK_YIELD),
+            expiresAtTick: currentTick + JOB_SCHEDULE.workSpeechTicks,
             type: 'work',
           };
         }
@@ -362,17 +365,17 @@ export class JobSystem {
           addResource('wheat', HARVEST_WHEAT_YIELD);
         }
         unit.speechBubble = {
-          text: `Врожай зібрано! (+${HARVEST_WHEAT_YIELD} пшениці)`,
-          expiresAtTick: currentTick + 25,
+          text: translations[useGameStore.getState().language].inspector.harvestWheatSpeech(HARVEST_WHEAT_YIELD),
+          expiresAtTick: currentTick + JOB_SCHEDULE.workSpeechTicks,
           type: 'work',
         };
         break;
 
       case 'work_at_building':
-        if (Math.random() < 0.2) {
+        if (Math.random() < JOB_SCHEDULE.idleSpeechChance) {
           unit.speechBubble = {
-            text: 'Зміна триває...',
-            expiresAtTick: currentTick + 20,
+            text: translations[useGameStore.getState().language].inspector.shiftContinuesSpeech,
+            expiresAtTick: currentTick + JOB_SCHEDULE.idleSpeechTicks,
             type: 'work',
           };
         }

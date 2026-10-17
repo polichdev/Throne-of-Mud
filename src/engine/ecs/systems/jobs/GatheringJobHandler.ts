@@ -8,6 +8,31 @@ import {
   getBuildingFloorHeight,
   createPathToInterior,
 } from '../../../buildings/buildingNavigation';
+import {
+  GATHERING_FALLBACK_MAX_STORAGE,
+  FISHERMAN_WORK_DURATION,
+  FISHERMAN_YIELD,
+  FORAGER_BERRY_SEARCH_RADIUS,
+  FORAGER_BERRY_WORK,
+  FORAGER_BERRY_YIELD,
+  FORAGER_TABLE_WORK,
+  FORAGER_TABLE_YIELD,
+  HUNTER_GAME_SEARCH_RADIUS,
+  HUNTER_GAME_WORK,
+  HUNTER_MEAT_YIELD,
+  HUNTER_HIDES_YIELD,
+  HUNTER_HUT_WORK,
+  HUNTER_HUT_MEAT_YIELD,
+  FORESTER_PLANT_WORK,
+  FORESTER_BENCH_WORK,
+  FORESTER_PLANT_SEARCH_RADIUS,
+  FORESTER_PLANT_MIN_DISTANCE,
+} from '../../../../constants/jobs';
+import { translations } from '../../../../i18n';
+
+const GATHERING_SPEECH_DURATION_TICKS = 25;
+const GATHERING_STORAGE_FULL_INTERVAL_TICKS = 120;
+const GATHERING_STORAGE_FULL_SPEECH_CHANCE = 0.3;
 
 export class GatheringJobHandler {
   public static assignGatheringJob(
@@ -51,14 +76,15 @@ export class GatheringJobHandler {
     currentTick: number
   ): boolean {
     const inv = building.localInventory || {};
-    const maxStorage = building.maxStorage || 30;
+    const maxStorage = building.maxStorage || GATHERING_FALLBACK_MAX_STORAGE;
     const fishCount = inv.fish || 0;
 
     if (fishCount >= maxStorage) {
-      if (currentTick % 120 === 0 && Math.random() < 0.3) {
+      if (currentTick % GATHERING_STORAGE_FULL_INTERVAL_TICKS === 0 && Math.random() < GATHERING_STORAGE_FULL_SPEECH_CHANCE) {
+        const dict = translations[useGameStore.getState().language];
         unit.speechBubble = {
-          text: `Склад риби повний (${fishCount}/${maxStorage})! Відпочиваю`,
-          expiresAtTick: currentTick + 25,
+          text: dict.jobs.fishStorageFull(fishCount, maxStorage),
+          expiresAtTick: currentTick + GATHERING_SPEECH_DURATION_TICKS,
           type: 'work',
         };
       }
@@ -92,7 +118,7 @@ export class GatheringJobHandler {
           targetAngle: facingAngle,
           targetY: floorY,
           progress: 0,
-          totalWork: 60,
+          totalWork: FISHERMAN_WORK_DURATION,
         };
         unit.position = [station.workWorldPos[0], floorY, station.workWorldPos[1]];
         unit.gridPosition = [Math.floor(station.workWorldPos[0]), Math.floor(station.workWorldPos[1])];
@@ -104,12 +130,13 @@ export class GatheringJobHandler {
         if (unit.currentJob.progress >= unit.currentJob.totalWork) {
           unit.currentJob.progress = 0;
           building.localInventory = building.localInventory || { wood: 0, stone: 0, wheat: 0, bread: 0, ale: 0 };
-          building.localInventory.fish = (building.localInventory.fish || 0) + 1;
-          useGameStore.getState().addResource('fish', 1);
+          building.localInventory.fish = (building.localInventory.fish || 0) + FISHERMAN_YIELD;
+          useGameStore.getState().addResource('fish', FISHERMAN_YIELD);
 
+          const dict = translations[useGameStore.getState().language];
           unit.speechBubble = {
-            text: 'Спіймано свіжу рибу! (+1 риби)',
-            expiresAtTick: currentTick + 25,
+            text: dict.jobs.caughtFreshFish(FISHERMAN_YIELD),
+            expiresAtTick: currentTick + GATHERING_SPEECH_DURATION_TICKS,
             type: 'work',
           };
         }
@@ -142,7 +169,7 @@ export class GatheringJobHandler {
       targetAngle: facingAngle,
       targetY: floorY,
       progress: 0,
-      totalWork: 60,
+      totalWork: FISHERMAN_WORK_DURATION,
     };
 
     if (path && path.length > 0) {
@@ -166,14 +193,15 @@ export class GatheringJobHandler {
     cz: number
   ): boolean {
     const inv = building.localInventory || {};
-    const maxStorage = building.maxStorage || 30;
+    const maxStorage = building.maxStorage || GATHERING_FALLBACK_MAX_STORAGE;
     const berryCount = inv.berries || 0;
 
     if (berryCount >= maxStorage) {
-      if (currentTick % 120 === 0 && Math.random() < 0.3) {
+      if (currentTick % GATHERING_STORAGE_FULL_INTERVAL_TICKS === 0 && Math.random() < GATHERING_STORAGE_FULL_SPEECH_CHANCE) {
+        const dict = translations[useGameStore.getState().language];
         unit.speechBubble = {
-          text: `Кошики ягід повні (${berryCount}/${maxStorage})! Відпочиваю`,
-          expiresAtTick: currentTick + 25,
+          text: dict.jobs.berryBasketsFull(berryCount, maxStorage),
+          expiresAtTick: currentTick + GATHERING_SPEECH_DURATION_TICKS,
           type: 'work',
         };
       }
@@ -197,7 +225,7 @@ export class GatheringJobHandler {
     const uX = unit.position ? unit.position[0] : (unit.gridPosition ? unit.gridPosition[0] + 0.5 : 0);
     const uZ = unit.position ? unit.position[2] : (unit.gridPosition ? unit.gridPosition[1] + 0.5 : 0);
 
-    if (targetDeposit && minDist <= 35) {
+    if (targetDeposit && minDist <= FORAGER_BERRY_SEARCH_RADIUS) {
       const depX = targetDeposit.gridPosition[0] + 0.5;
       const depZ = targetDeposit.gridPosition[1] + 0.5;
       const distToDep = Math.hypot(uX - depX, uZ - depZ);
@@ -209,7 +237,7 @@ export class GatheringJobHandler {
             type: 'gather_berries' as any,
             targetPosition: [targetDeposit.gridPosition[0], targetDeposit.gridPosition[1]],
             progress: 0,
-            totalWork: 45,
+            totalWork: FORAGER_BERRY_WORK,
           };
           unit.path = [];
         } else {
@@ -217,12 +245,13 @@ export class GatheringJobHandler {
           if (unit.currentJob.progress >= unit.currentJob.totalWork) {
             unit.currentJob.progress = 0;
             building.localInventory = building.localInventory || { wood: 0, stone: 0, wheat: 0, bread: 0, ale: 0 };
-            building.localInventory.berries = (building.localInventory.berries || 0) + 2;
-            useGameStore.getState().addResource('berries', 2);
+            building.localInventory.berries = (building.localInventory.berries || 0) + FORAGER_BERRY_YIELD;
+            useGameStore.getState().addResource('berries', FORAGER_BERRY_YIELD);
 
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: 'Зібрано соковиті ягоди! (+2 ягід)',
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.gatheredBerries(FORAGER_BERRY_YIELD),
+              expiresAtTick: currentTick + GATHERING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
 
@@ -249,7 +278,7 @@ export class GatheringJobHandler {
           type: 'gather_berries' as any,
           targetPosition: [targetDeposit.gridPosition[0], targetDeposit.gridPosition[1]],
           progress: 0,
-          totalWork: 45,
+          totalWork: FORAGER_BERRY_WORK,
         };
         unit.path = path;
         return true;
@@ -268,15 +297,15 @@ export class GatheringJobHandler {
           type: 'work_at_building',
           targetBuildingId: building.id,
           progress: 0,
-          totalWork: 50,
+          totalWork: FORAGER_TABLE_WORK,
         };
       } else {
         unit.currentJob.progress += 1;
         if (unit.currentJob.progress >= unit.currentJob.totalWork) {
           unit.currentJob.progress = 0;
           building.localInventory = building.localInventory || { wood: 0, stone: 0, wheat: 0, bread: 0, ale: 0 };
-          building.localInventory.berries = (building.localInventory.berries || 0) + 1;
-          useGameStore.getState().addResource('berries', 1);
+          building.localInventory.berries = (building.localInventory.berries || 0) + FORAGER_TABLE_YIELD;
+          useGameStore.getState().addResource('berries', FORAGER_TABLE_YIELD);
         }
       }
       return true;
@@ -309,14 +338,15 @@ export class GatheringJobHandler {
     cz: number
   ): boolean {
     const inv = building.localInventory || {};
-    const maxStorage = building.maxStorage || 30;
+    const maxStorage = building.maxStorage || GATHERING_FALLBACK_MAX_STORAGE;
     const meatCount = inv.meat || 0;
 
     if (meatCount >= maxStorage) {
-      if (currentTick % 120 === 0 && Math.random() < 0.3) {
+      if (currentTick % GATHERING_STORAGE_FULL_INTERVAL_TICKS === 0 && Math.random() < GATHERING_STORAGE_FULL_SPEECH_CHANCE) {
+        const dict = translations[useGameStore.getState().language];
         unit.speechBubble = {
-          text: `Сховище дичини повне (${meatCount}/${maxStorage})! Відпочиваю`,
-          expiresAtTick: currentTick + 25,
+          text: dict.jobs.gameStorageFull(meatCount, maxStorage),
+          expiresAtTick: currentTick + GATHERING_SPEECH_DURATION_TICKS,
           type: 'work',
         };
       }
@@ -340,7 +370,7 @@ export class GatheringJobHandler {
     const uX = unit.position ? unit.position[0] : (unit.gridPosition ? unit.gridPosition[0] + 0.5 : 0);
     const uZ = unit.position ? unit.position[2] : (unit.gridPosition ? unit.gridPosition[1] + 0.5 : 0);
 
-    if (targetDeposit && minDist <= 40) {
+    if (targetDeposit && minDist <= HUNTER_GAME_SEARCH_RADIUS) {
       const depX = targetDeposit.gridPosition[0] + 0.5;
       const depZ = targetDeposit.gridPosition[1] + 0.5;
       const distToDep = Math.hypot(uX - depX, uZ - depZ);
@@ -352,7 +382,7 @@ export class GatheringJobHandler {
             type: 'hunt_game' as any,
             targetPosition: [targetDeposit.gridPosition[0], targetDeposit.gridPosition[1]],
             progress: 0,
-            totalWork: 55,
+            totalWork: HUNTER_GAME_WORK,
           };
           unit.path = [];
         } else {
@@ -360,14 +390,15 @@ export class GatheringJobHandler {
           if (unit.currentJob.progress >= unit.currentJob.totalWork) {
             unit.currentJob.progress = 0;
             building.localInventory = building.localInventory || { wood: 0, stone: 0, wheat: 0, bread: 0, ale: 0 };
-            building.localInventory.meat = (building.localInventory.meat || 0) + 2;
-            building.localInventory.hides = (building.localInventory.hides || 0) + 1;
-            useGameStore.getState().addResource('meat', 2);
-            useGameStore.getState().addResource('hides', 1);
+            building.localInventory.meat = (building.localInventory.meat || 0) + HUNTER_MEAT_YIELD;
+            building.localInventory.hides = (building.localInventory.hides || 0) + HUNTER_HIDES_YIELD;
+            useGameStore.getState().addResource('meat', HUNTER_MEAT_YIELD);
+            useGameStore.getState().addResource('hides', HUNTER_HIDES_YIELD);
 
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: 'Здобич упольовано! (+2 мʼяса, +1 шкура)',
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.gameHunted(HUNTER_MEAT_YIELD, HUNTER_HIDES_YIELD),
+              expiresAtTick: currentTick + GATHERING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
 
@@ -394,7 +425,7 @@ export class GatheringJobHandler {
           type: 'hunt_game' as any,
           targetPosition: [targetDeposit.gridPosition[0], targetDeposit.gridPosition[1]],
           progress: 0,
-          totalWork: 55,
+          totalWork: HUNTER_GAME_WORK,
         };
         unit.path = path;
         return true;
@@ -413,15 +444,15 @@ export class GatheringJobHandler {
           type: 'work_at_building',
           targetBuildingId: building.id,
           progress: 0,
-          totalWork: 60,
+          totalWork: HUNTER_HUT_WORK,
         };
       } else {
         unit.currentJob.progress += 1;
         if (unit.currentJob.progress >= unit.currentJob.totalWork) {
           unit.currentJob.progress = 0;
           building.localInventory = building.localInventory || { wood: 0, stone: 0, wheat: 0, bread: 0, ale: 0 };
-          building.localInventory.meat = (building.localInventory.meat || 0) + 1;
-          useGameStore.getState().addResource('meat', 1);
+          building.localInventory.meat = (building.localInventory.meat || 0) + HUNTER_HUT_MEAT_YIELD;
+          useGameStore.getState().addResource('meat', HUNTER_HUT_MEAT_YIELD);
         }
       }
       return true;
@@ -466,9 +497,10 @@ export class GatheringJobHandler {
             grid.setFoliage(tgt[0], tgt[1], 'tree', Math.random() * Math.PI * 2, 'oak');
             useGameStore.getState().incrementFoliageVersion();
 
+            const dict = translations[useGameStore.getState().language];
             unit.speechBubble = {
-              text: 'Висаджено молодий дубок!',
-              expiresAtTick: currentTick + 25,
+              text: dict.jobs.plantedYoungOak,
+              expiresAtTick: currentTick + GATHERING_SPEECH_DURATION_TICKS,
               type: 'work',
             };
 
@@ -487,14 +519,14 @@ export class GatheringJobHandler {
     let bestDist = Infinity;
     const bPos = building.gridPosition || [cx, cz];
 
-    for (let dx = -10; dx <= 10; dx++) {
-      for (let dz = -10; dz <= 10; dz++) {
+    for (let dx = -FORESTER_PLANT_SEARCH_RADIUS; dx <= FORESTER_PLANT_SEARCH_RADIUS; dx++) {
+      for (let dz = -FORESTER_PLANT_SEARCH_RADIUS; dz <= FORESTER_PLANT_SEARCH_RADIUS; dz++) {
         const tx = bPos[0] + dx;
         const tz = bPos[1] + dz;
         const tile = grid.getTile(tx, tz);
         if (tile && tile.terrain === 'grass' && !tile.buildingId && !tile.foliageType && tile.isPassable) {
           const d = Math.hypot(dx, dz);
-          if (d > 2.5 && d < bestDist) {
+          if (d > FORESTER_PLANT_MIN_DISTANCE && d < bestDist) {
             bestDist = d;
             bestPlantTile = [tx, tz];
           }
@@ -510,7 +542,7 @@ export class GatheringJobHandler {
           type: 'plant_tree' as any,
           targetPosition: bestPlantTile,
           progress: 0,
-          totalWork: 40,
+          totalWork: FORESTER_PLANT_WORK,
         };
         unit.path = path;
         return true;
@@ -529,7 +561,7 @@ export class GatheringJobHandler {
           type: 'work_at_building',
           targetBuildingId: building.id,
           progress: 0,
-          totalWork: 40,
+          totalWork: FORESTER_BENCH_WORK,
         };
       }
       return true;

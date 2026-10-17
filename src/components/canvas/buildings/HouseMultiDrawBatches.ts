@@ -1,7 +1,8 @@
+import { getBuildingVisibilityDistance } from '../../../constants/rendering';
 import * as THREE from 'three';
 import type { HouseBatch } from './InstancedHousesRenderer';
 import { getHouseWorldMatrix } from './houseTransforms';
-import { getPeasantHouseExteriorMaterial } from './models/PeasantHouseModel';
+import { getPeasantHouseExteriorMaterial } from './models/housing/PeasantHouseModel';
 import { cacheBatchedDrawList } from '../performance/batchedDrawCache';
 
 interface Chunk {
@@ -64,7 +65,7 @@ export class HouseMultiDrawBatches {
   }
 
   update(target: readonly [number, number] | undefined, zoom: number) {
-    const distance = Math.max(38, Math.min(50, 1200 / zoom + 12));
+    const distance = getBuildingVisibilityDistance(zoom);
     for (const chunk of this.chunks) {
       const visible = !target || chunk.matrices.some(matrix =>
         (matrix.elements[12] - target[0]) ** 2 + (matrix.elements[14] - target[1]) ** 2 < distance ** 2);

@@ -1,9 +1,11 @@
+import { BANDITS } from '../../../constants/bandits';
 import { world, characterEntities, type GameEntity } from '../world';
 import { GridMap } from '../../grid/GridMap';
 import { AStar } from '../../pathfinding/AStar';
 import { useGameStore } from '../../../store/useGameStore';
 import { distance2D } from '../../../utils/mathUtils';
 import type { RegionData } from '../../../types/game';
+import { translations } from '../../../i18n';
 
 interface BanditSquadState {
   leaderId: string;
@@ -14,35 +16,6 @@ interface BanditSquadState {
   lastTargetRegionIndex: number;
   lastBubbleTick: number;
 }
-
-const BANDIT_NAMES = [
-  'Розбійник-рубака',
-  'Лісовий шибайголова',
-  'Бандит-стрілець',
-  'Розбійник-списник',
-  'Степовий грабіжник',
-  'Розбійник-сокирник',
-  'Бандит-розвідник',
-  'Розбійник-нальотчик',
-];
-
-const MARCH_PHRASES = [
-  'Тримайте стрій, хлопці!',
-  'Вирушаємо крізь лісові хащі...',
-  'Слідуйте за мною, не відставати!',
-  'Обходимо пагорби та дороги...',
-  'Тихо крізь хащі, нікому не попадатись на очі.',
-  'Уперед, загін!',
-];
-
-const CAMP_PHRASES = [
-  'Стаємо на привал!',
-  'Оглянути периметр та дикі стежки.',
-  'У цих нетрях безпечно, перепочинемо.',
-  'Чистіть клинки та перевірте зброю.',
-  'Ні душі навколо, все чисто.',
-  'Скоро вирушаємо далі...',
-];
 
 const FORMATION_OFFSETS: [number, number][] = [
   [-1.0, -1.3],
@@ -79,12 +52,12 @@ export class BanditAISystem {
       const distToTarget = distance2D(lx, lz, this.squad.targetPos[0], this.squad.targetPos[1]);
       const hasPath = Boolean(leader.path && leader.path.length > 0);
 
-      if (distToTarget <= 3.5 || (!hasPath && currentTick % 30 === 0)) {
-        if (distToTarget <= 4.5) {
+      if (distToTarget <= BANDITS.arrivalDistance || (!hasPath && currentTick % BANDITS.repathIntervalTicks === 0)) {
+        if (distToTarget <= BANDITS.campArrivalDistance) {
           this.squad.state = 'camping';
-          this.squad.campTicksRemaining = Math.floor(70 + Math.random() * 50);
+          this.squad.campTicksRemaining = Math.floor(BANDITS.campMinTicks + Math.random() * BANDITS.campTickVariation);
           leader.path = [];
-          this.broadcastSpeech(this.squad, CAMP_PHRASES, currentTick, 35);
+          this.broadcastSpeech(this.squad, this.getCampPhrases(), currentTick, BANDITS.arrivalSpeechTicks);
         } else {
           this.selectNewDestination(grid, regions, leader);
         }
@@ -92,22 +65,22 @@ export class BanditAISystem {
 
       this.updateMarchingFormation(grid, leader, lx, lz, currentTick);
 
-      if (currentTick - this.squad.lastBubbleTick > 250 && Math.random() < 0.35) {
-        this.broadcastSpeech(this.squad, MARCH_PHRASES, currentTick, 28);
+      if (currentTick - this.squad.lastBubbleTick > BANDITS.marchSpeechCooldownTicks && Math.random() < BANDITS.marchSpeechChance) {
+        this.broadcastSpeech(this.squad, this.getMarchPhrases(), currentTick, BANDITS.ambientSpeechTicks);
       }
     } else if (this.squad.state === 'camping') {
       this.squad.campTicksRemaining--;
 
       this.updateCampingPerimeter(lx, lz);
 
-      if (currentTick - this.squad.lastBubbleTick > 280 && Math.random() < 0.3) {
-        this.broadcastSpeech(this.squad, CAMP_PHRASES, currentTick, 28);
+      if (currentTick - this.squad.lastBubbleTick > BANDITS.campSpeechCooldownTicks && Math.random() < BANDITS.campSpeechChance) {
+        this.broadcastSpeech(this.squad, this.getCampPhrases(), currentTick, BANDITS.ambientSpeechTicks);
       }
 
       if (this.squad.campTicksRemaining <= 0) {
         this.squad.state = 'marching';
         this.selectNewDestination(grid, regions, leader);
-        this.broadcastSpeech(this.squad, MARCH_PHRASES, currentTick, 30);
+        this.broadcastSpeech(this.squad, this.getMarchPhrases(), currentTick, BANDITS.departureSpeechTicks);
       }
     }
   }
@@ -126,15 +99,15 @@ export class BanditAISystem {
       }
     }
 
-    if (existingBandits.length >= 6) {
+    if (existingBandits.length >= BANDITS.minRestoredSquadSize) {
       const leader = existingBandits.find((b) => b.id.includes('leader')) || existingBandits[0];
       const members = existingBandits.filter((b) => b.id !== leader.id).map((b) => b.id);
       this.squad = {
         leaderId: leader.id,
         memberIds: members,
         state: 'marching',
-        targetPos: [leader.gridPosition?.[0] || 20, leader.gridPosition?.[1] || 20],
-        campTicksRemaining: 25,
+        targetPos: [leader.gridPosition?.[0] || BANDITS.fallbackTargetCoord, leader.gridPosition?.[1] || BANDITS.fallbackTargetCoord],
+        campTicksRemaining: BANDITS.initialCampTicks,
         lastTargetRegionIndex: 0,
         lastBubbleTick: 0,
       };
@@ -145,26 +118,29 @@ export class BanditAISystem {
     const sx = remoteSpawn[0];
     const sz = remoteSpawn[1];
 
+    const lang = useGameStore.getState().language;
+    const dict = translations[lang].military;
     const leaderId = `bandit-leader-${Date.now()}`;
     world.add({
       id: leaderId,
-      name: 'Ватажок Олекса',
-      title: 'Ватажок розбійників',
+      name: dict.banditLeaderName,
+      title: dict.banditLeaderTitle,
       characterClass: 'bandit',
       avatarColor: '#b91c1c',
       isCharacter: true,
       factionId: 'bandit',
       gridPosition: [sx, sz],
       position: [sx + 0.5, 0.3, sz + 0.5],
-      moveSpeed: 1.30,
-      gold: 50,
-      skills: { farming: 1, woodcutting: 4, mining: 2, building: 2, cooking: 2, brewing: 4, combat: 9, intellect: 7, charisma: 8 },
-      needs: { hunger: 90, energy: 95, mood: 80, ale: 70, hygiene: 60 },
+      moveSpeed: BANDITS.formationNormalSpeed,
+      gold: BANDITS.leaderGold,
+      skills: { ...BANDITS.leaderSkills },
+      needs: { ...BANDITS.leaderNeeds },
       currentJob: { id: `wander-${leaderId}`, type: 'wander', progress: 0, totalWork: 0 },
     });
 
     const memberIds: string[] = [];
-    const count = 7;
+    const count = BANDITS.memberCount;
+    const names = this.getBanditNames();
     for (let i = 0; i < count; i++) {
       const memId = `bandit-member-${i + 1}-${Date.now()}`;
       const off = FORMATION_OFFSETS[i] || [0, 0];
@@ -173,18 +149,18 @@ export class BanditAISystem {
 
       world.add({
         id: memId,
-        name: BANDIT_NAMES[i % BANDIT_NAMES.length],
-        title: 'Розбійник',
+        name: names[i % names.length],
+        title: dict.banditTitle,
         characterClass: 'bandit',
         avatarColor: '#334155',
         isCharacter: true,
         factionId: 'bandit',
         gridPosition: [mx, mz],
         position: [mx + 0.5, 0.3, mz + 0.5],
-        moveSpeed: 1.35,
-        gold: 5 + (i * 2),
-        skills: { farming: 1, woodcutting: 3, mining: 1, building: 1, cooking: 2, brewing: 2, combat: 7, intellect: 4, charisma: 3 },
-        needs: { hunger: 85, energy: 90, mood: 75, ale: 60, hygiene: 55 },
+        moveSpeed: BANDITS.memberMoveSpeed,
+        gold: BANDITS.memberStartGold + (i * BANDITS.memberGoldPerIndex),
+        skills: { ...BANDITS.memberSkills },
+        needs: { ...BANDITS.memberNeeds },
         currentJob: { id: `wander-${memId}`, type: 'wander', progress: 0, totalWork: 0 },
       });
       memberIds.push(memId);
@@ -195,7 +171,7 @@ export class BanditAISystem {
       memberIds,
       state: 'marching',
       targetPos: [sx, sz],
-      campTicksRemaining: 25,
+      campTicksRemaining: BANDITS.initialCampTicks,
       lastTargetRegionIndex: 0,
       lastBubbleTick: 0,
     };
@@ -203,14 +179,14 @@ export class BanditAISystem {
 
   private static findRemoteWildernessSpot(grid: GridMap, regions: RegionData[], playerRegionId: number): [number, number] {
     const candidates: [number, number][] = [
-      [16, 16],
-      [16, grid.height - 18],
-      [grid.width - 18, 16],
-      [grid.width - 18, grid.height - 18],
-      [Math.floor(grid.width / 2), 16],
-      [Math.floor(grid.width / 2), grid.height - 18],
-      [16, Math.floor(grid.height / 2)],
-      [grid.width - 18, Math.floor(grid.height / 2)],
+      [BANDITS.wildernessMinMargin, BANDITS.wildernessMinMargin],
+      [BANDITS.wildernessMinMargin, grid.height - BANDITS.wildernessMaxMargin],
+      [grid.width - BANDITS.wildernessMaxMargin, BANDITS.wildernessMinMargin],
+      [grid.width - BANDITS.wildernessMaxMargin, grid.height - BANDITS.wildernessMaxMargin],
+      [Math.floor(grid.width / 2), BANDITS.wildernessMinMargin],
+      [Math.floor(grid.width / 2), grid.height - BANDITS.wildernessMaxMargin],
+      [BANDITS.wildernessMinMargin, Math.floor(grid.height / 2)],
+      [grid.width - BANDITS.wildernessMaxMargin, Math.floor(grid.height / 2)],
     ];
 
     const pRegion = regions.find((r) => r.id === playerRegionId) || regions[0];
@@ -249,17 +225,17 @@ export class BanditAISystem {
 
     const targetRegion = regions.find((r) => r.id === targetRegionId) || regions[targetRegionId % regions.length];
 
-    const minX = Math.max(8, targetRegion.bounds.minX + 8);
-    const maxX = Math.min(grid.width - 9, targetRegion.bounds.maxX - 8);
-    const minZ = Math.max(8, targetRegion.bounds.minZ + 8);
-    const maxZ = Math.min(grid.height - 9, targetRegion.bounds.maxZ - 8);
+    const minX = Math.max(BANDITS.destinationMargin, targetRegion.bounds.minX + BANDITS.destinationMargin);
+    const maxX = Math.min(grid.width - BANDITS.destinationMaxMargin, targetRegion.bounds.maxX - BANDITS.destinationMargin);
+    const minZ = Math.max(BANDITS.destinationMargin, targetRegion.bounds.minZ + BANDITS.destinationMargin);
+    const maxZ = Math.min(grid.height - BANDITS.destinationMaxMargin, targetRegion.bounds.maxZ - BANDITS.destinationMargin);
 
     const candidates: [number, number][] = [
       [targetRegion.center[0], targetRegion.center[1]],
-      [minX + 4, minZ + 4],
-      [maxX - 4, minZ + 4],
-      [minX + 4, maxZ - 4],
-      [maxX - 4, maxZ - 4],
+      [minX + BANDITS.destinationCornerInset, minZ + BANDITS.destinationCornerInset],
+      [maxX - BANDITS.destinationCornerInset, minZ + BANDITS.destinationCornerInset],
+      [minX + BANDITS.destinationCornerInset, maxZ - BANDITS.destinationCornerInset],
+      [maxX - BANDITS.destinationCornerInset, maxZ - BANDITS.destinationCornerInset],
       [Math.floor((minX + maxX) / 2), Math.floor((minZ + maxZ) / 2)],
     ];
 
@@ -269,15 +245,15 @@ export class BanditAISystem {
     const totalDist = Math.hypot(chosenTarget[0] - lx, chosenTarget[1] - lz);
 
     let finalTarget: [number, number] = chosenTarget;
-    if (totalDist > 75) {
-      const stepDist = 55 + Math.random() * 15;
+    if (totalDist > BANDITS.longMarchDistance) {
+      const stepDist = BANDITS.marchStepDistance + Math.random() * BANDITS.marchStepVariation;
       const dirX = (chosenTarget[0] - lx) / totalDist;
       const dirZ = (chosenTarget[1] - lz) / totalDist;
-      let stepX = Math.max(5, Math.min(grid.width - 6, Math.round(lx + dirX * stepDist)));
-      let stepZ = Math.max(5, Math.min(grid.height - 6, Math.round(lz + dirZ * stepDist)));
+      let stepX = Math.max(BANDITS.marchMinMargin, Math.min(grid.width - BANDITS.marchMaxMargin, Math.round(lx + dirX * stepDist)));
+      let stepZ = Math.max(BANDITS.marchMinMargin, Math.min(grid.height - BANDITS.marchMaxMargin, Math.round(lz + dirZ * stepDist)));
 
       if (!grid.isWalkable(stepX, stepZ)) {
-        for (let r = 1; r <= 4; r++) {
+        for (let r = 1; r <= BANDITS.blockedTargetSearchRadius; r++) {
           let found = false;
           for (let dx = -r; dx <= r; dx++) {
             for (let dz = -r; dz <= r; dz++) {
@@ -301,7 +277,7 @@ export class BanditAISystem {
     this.squad.targetPos = finalTarget;
 
     const startPos: [number, number] = [Math.floor(lx), Math.floor(lz)];
-    let path = AStar.findPath(grid, startPos, finalTarget, true, undefined, 5000);
+    let path = AStar.findPath(grid, startPos, finalTarget, true, undefined, BANDITS.pathIterationBudget);
 
     if (!path || path.length === 0) {
       const neighbors = grid.getNeighbors(startPos[0], startPos[1]).filter((n) => grid.isWalkable(n.x, n.z));
@@ -332,7 +308,7 @@ export class BanditAISystem {
       const nextWp = leader.path[0];
       const dx = nextWp[0] + 0.5 - lx;
       const dz = nextWp[1] + 0.5 - lz;
-      if (Math.hypot(dx, dz) > 0.05) {
+      if (Math.hypot(dx, dz) > BANDITS.facingEpsilon) {
         dirAngle = Math.atan2(dx, dz);
       }
     }
@@ -356,13 +332,13 @@ export class BanditAISystem {
       const mz = member.position[2];
       const distToSpot = distance2D(mx, mz, targetX, targetZ);
 
-      if (distToSpot > 10.0) {
+      if (distToSpot > BANDITS.formationRepathDistance) {
         if ((!member.path || member.path.length === 0) && i === currentTick % Math.max(1, this.squad.memberIds.length)) {
           const searchBounds = {
-            minX: Math.max(0, Math.min(Math.floor(mx), Math.floor(targetX)) - 10),
-            maxX: Math.min(grid.width - 1, Math.max(Math.floor(mx), Math.floor(targetX)) + 10),
-            minZ: Math.max(0, Math.min(Math.floor(mz), Math.floor(targetZ)) - 10),
-            maxZ: Math.min(grid.height - 1, Math.max(Math.floor(mz), Math.floor(targetZ)) + 10),
+            minX: Math.max(0, Math.min(Math.floor(mx), Math.floor(targetX)) - BANDITS.formationSearchMargin),
+            maxX: Math.min(grid.width - 1, Math.max(Math.floor(mx), Math.floor(targetX)) + BANDITS.formationSearchMargin),
+            minZ: Math.max(0, Math.min(Math.floor(mz), Math.floor(targetZ)) - BANDITS.formationSearchMargin),
+            maxZ: Math.min(grid.height - 1, Math.max(Math.floor(mz), Math.floor(targetZ)) + BANDITS.formationSearchMargin),
           };
           const p = AStar.findPath(
             grid,
@@ -370,7 +346,7 @@ export class BanditAISystem {
             [Math.floor(targetX), Math.floor(targetZ)],
             true,
             searchBounds,
-            2000
+            BANDITS.formationPathBudget
           );
           if (p && p.length > 0) {
             member.path = p;
@@ -378,13 +354,13 @@ export class BanditAISystem {
             member.path = [[Math.floor(targetX), Math.floor(targetZ)]];
           }
         }
-        member.moveSpeed = 1.45;
+        member.moveSpeed = BANDITS.catchupSpeed;
       } else if (distToSpot > 1.0) {
         member.path = [[Math.floor(targetX), Math.floor(targetZ)]];
-        member.moveSpeed = distToSpot > 3.5 ? 1.40 : 1.30;
+        member.moveSpeed = distToSpot > BANDITS.formationFastDistance ? BANDITS.formationFastSpeed : BANDITS.formationNormalSpeed;
       } else {
         member.path = [];
-        member.moveSpeed = 1.25;
+        member.moveSpeed = BANDITS.formationIdleSpeed;
       }
     }
   }
@@ -399,14 +375,14 @@ export class BanditAISystem {
       if (!member || !member.position) continue;
 
       const a = i * angleStep;
-      const campX = lx + Math.sin(a) * 2.5;
-      const campZ = lz + Math.cos(a) * 2.5;
+      const campX = lx + Math.sin(a) * BANDITS.campRadius;
+      const campZ = lz + Math.cos(a) * BANDITS.campRadius;
 
       const mx = member.position[0];
       const mz = member.position[2];
       const dist = distance2D(mx, mz, campX, campZ);
 
-      if (dist > 1.2) {
+      if (dist > BANDITS.campSpotTolerance) {
         member.path = [[Math.floor(campX), Math.floor(campZ)]];
       } else {
         member.path = [];
@@ -426,7 +402,7 @@ export class BanditAISystem {
     squad.lastBubbleTick = currentTick;
     const phrase = phrases[Math.floor(Math.random() * phrases.length)];
 
-    const speakerId = Math.random() < 0.6 ? squad.leaderId : squad.memberIds[Math.floor(Math.random() * squad.memberIds.length)];
+    const speakerId = Math.random() < BANDITS.leaderSpeechChance ? squad.leaderId : squad.memberIds[Math.floor(Math.random() * squad.memberIds.length)];
     const speaker = this.getEntityById(speakerId);
     if (speaker) {
       speaker.speechBubble = {
@@ -442,5 +418,20 @@ export class BanditAISystem {
       if (c.id === id) return c;
     }
     return undefined;
+  }
+
+  private static getBanditNames(): string[] {
+    const lang = useGameStore.getState().language;
+    return translations[lang].military.banditNames;
+  }
+
+  private static getMarchPhrases(): string[] {
+    const lang = useGameStore.getState().language;
+    return translations[lang].military.banditMarchPhrases;
+  }
+
+  private static getCampPhrases(): string[] {
+    const lang = useGameStore.getState().language;
+    return translations[lang].military.banditCampPhrases;
   }
 }

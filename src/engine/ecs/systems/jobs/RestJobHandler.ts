@@ -20,6 +20,23 @@ import {
 } from '../../../../constants/needs';
 import { distance2D } from '../../../../utils/mathUtils';
 import { HOUSE_TIERS_CONFIG } from '../../../../constants/housing';
+import {
+  CAMPFIRE_MAX_REST_ENERGY,
+  CAMPFIRE_REST_ENERGY_RECOVERY_RATE,
+  CAMPFIRE_SEAT_CAPACITY,
+  MANOR_BED_CAPACITY,
+  BARRACKS_BED_CAPACITY,
+  REST_FAILED_COOLDOWN_TICKS,
+  MORNING_IDLE_COOLDOWN_BASE,
+  MORNING_IDLE_COOLDOWN_VARIATION,
+  MORNING_SPEECH_CHANCE,
+  SLEEP_SPEECH_CHANCE,
+  SIT_FIRE_SPEECH_CHANCE,
+} from '../../../../constants/jobs';
+import { useGameStore } from '../../../../store/useGameStore';
+import { translations } from '../../../../i18n';
+
+const MIN_CAMPFIRE_REST_MOOD = 20;
 
 export function getEntityRegionId(entity: GameEntity, regions: RegionData[], defaultRegionId: number = 0): number {
   if (entity.regionId !== undefined) return entity.regionId;
@@ -88,7 +105,8 @@ export class RestJobHandler {
       progress: 0,
       totalWork: 0,
     };
-    (unit as any).idleCooldownTicks = currentTick + Math.floor(Math.random() * 25 + 15);
+    unit.path = [];
+    (unit as any).idleCooldownTicks = currentTick + Math.floor(Math.random() * MORNING_IDLE_COOLDOWN_VARIATION + MORNING_IDLE_COOLDOWN_BASE);
 
     if (unit.hasMule || unit.muleTransition || unit.isHaulingLog) {
       unit.hasMule = false;
@@ -104,18 +122,19 @@ export class RestJobHandler {
         unit.needs.mood = Math.min(MAX_MOOD, (unit.needs.mood || DEFAULT_MOOD) + BED_SLEEP_MOOD_BOOST);
       } else {
         unit.needs.energy = Math.max(CAMPFIRE_REST_RESTORE_ENERGY, unit.needs.energy);
-        unit.needs.mood = Math.max(20, (unit.needs.mood || DEFAULT_MOOD) - CAMPFIRE_REST_MOOD_PENALTY);
+        unit.needs.mood = Math.max(MIN_CAMPFIRE_REST_MOOD, (unit.needs.mood || DEFAULT_MOOD) - CAMPFIRE_REST_MOOD_PENALTY);
       }
     }
 
-    if (Math.random() < 0.05) {
+    if (Math.random() < MORNING_SPEECH_CHANCE) {
+      const dict = translations[useGameStore.getState().language];
       setEntitySpeech(
         unit,
         isNoble
-          ? 'Новий день у королівстві!'
+          ? dict.jobs.morningNobleSpeech
           : wasSleeping
-          ? 'Доброго ранку! До праці!'
-          : 'Нарешті ранок... Всю ніч мерз біля вогню.',
+          ? dict.jobs.morningPeasantSpeech
+          : dict.jobs.morningColdFireSpeech,
         'mood',
         currentTick,
         DEFAULT_SPEECH_DURATION_TICKS
@@ -243,7 +262,7 @@ export class RestJobHandler {
                   if (sleepPath && sleepPath.length > 0) {
                     unit.path = sleepPath;
                   } else {
-                    _failedRestCooldowns.set(unit.id, currentTick + 40);
+                    _failedRestCooldowns.set(unit.id, currentTick + REST_FAILED_COOLDOWN_TICKS);
                     unit.position = [bedX, targetY, bedZ];
                     unit.gridPosition = [Math.floor(bedX), Math.floor(bedZ)];
                   }
@@ -261,7 +280,7 @@ export class RestJobHandler {
                 if (sleepPath && sleepPath.length > 0) {
                   unit.path = sleepPath;
                 } else {
-                  _failedRestCooldowns.set(unit.id, currentTick + 40);
+                  _failedRestCooldowns.set(unit.id, currentTick + REST_FAILED_COOLDOWN_TICKS);
                   unit.position = [bedX, targetY, bedZ];
                   unit.gridPosition = [Math.floor(bedX), Math.floor(bedZ)];
                 }
@@ -296,7 +315,7 @@ export class RestJobHandler {
               }
             }
             if (unit.needs) {
-              unit.needs.energy = Math.min(45, unit.needs.energy + 0.05);
+              unit.needs.energy = Math.min(CAMPFIRE_MAX_REST_ENERGY, unit.needs.energy + CAMPFIRE_REST_ENERGY_RECOVERY_RATE);
             }
           } else {
             const nextAllowedPath = _failedRestCooldowns.get(unit.id) || 0;
@@ -324,7 +343,7 @@ export class RestJobHandler {
                 sitPath.push([sitX - 0.5, sitZ - 0.5]);
                 unit.path = sitPath;
               } else {
-                _failedRestCooldowns.set(unit.id, currentTick + 40);
+                _failedRestCooldowns.set(unit.id, currentTick + REST_FAILED_COOLDOWN_TICKS);
                 unit.position = [sitX, targetY, sitZ];
                 unit.gridPosition = [Math.floor(sitX), Math.floor(sitZ)];
               }
@@ -382,7 +401,7 @@ export class RestJobHandler {
       for (const b of _completedBuildings) {
         if (b.buildingType === 'manor') {
           const occupied = _buildingOccupiedBeds.get(b.id);
-          for (let i = 0; i < 4; i++) {
+          for (let i = 0; i < MANOR_BED_CAPACITY; i++) {
             if (!occupied || !occupied.has(i)) {
               chosenBuilding = b;
               chosenBedIndex = i;
@@ -427,7 +446,7 @@ export class RestJobHandler {
       for (const b of _completedBuildings) {
         if (b.buildingType === 'barracks') {
           const occupied = _buildingOccupiedBeds.get(b.id);
-          for (let i = 0; i < 2; i++) {
+          for (let i = 0; i < BARRACKS_BED_CAPACITY; i++) {
             if (!occupied || !occupied.has(i)) {
               chosenBuilding = b;
               chosenBedIndex = i;
@@ -498,10 +517,11 @@ export class RestJobHandler {
         unit.path = sleepPath;
       }
 
-      if (Math.random() < 0.06) {
+      if (Math.random() < SLEEP_SPEECH_CHANCE) {
+        const dict = translations[useGameStore.getState().language];
         setEntitySpeech(
           unit,
-          isNoble ? 'Час відпочити у покоях...' : 'Йду спати у теплий дім...',
+          isNoble ? dict.jobs.restInChambersSpeech : dict.jobs.goToWarmHomeSpeech,
           'mood',
           currentTick,
           DEFAULT_SPEECH_DURATION_TICKS
@@ -518,7 +538,7 @@ export class RestJobHandler {
       if (b.buildingType === 'campfire') {
         if (!chosenCampfire) chosenCampfire = b;
         const occupied = _campfireOccupiedSeats.get(b.id);
-        for (let seat = 0; seat < 32; seat++) {
+        for (let seat = 0; seat < CAMPFIRE_SEAT_CAPACITY; seat++) {
           if (!occupied || !occupied.has(seat)) {
             chosenCampfire = b;
             chosenSeatIndex = seat;
@@ -573,12 +593,13 @@ export class RestJobHandler {
         unit.path = sitPath;
       }
 
-      if (Math.random() < 0.06) {
+      if (Math.random() < SIT_FIRE_SPEECH_CHANCE) {
+        const dict = translations[useGameStore.getState().language];
         setEntitySpeech(
           unit,
           isNoble
-            ? 'Ніч біля вогнища... Королівству потрібні хороми.'
-            : 'Немає ліжка, грітимуся біля вогнища...',
+            ? dict.jobs.nobleNightFireSpeech
+            : dict.jobs.peasantNoBedFireSpeech,
           'alert',
           currentTick,
           DEFAULT_SPEECH_DURATION_TICKS

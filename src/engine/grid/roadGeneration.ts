@@ -1,3 +1,4 @@
+import { PATHFINDING } from '../../constants/pathfinding';
 import { GridMap } from './GridMap';
 import type { RegionBounds } from '../pathfinding/AStar';
 import type { ResourceDeposit } from '../../types/game';
@@ -97,18 +98,18 @@ export function isRoadPathValid(
   return true;
 }
 
-const MAX_GRID_CELLS = 512 * 512;
-const _roadGScore = new Float32Array(MAX_GRID_CELLS);
-const _roadFScore = new Float32Array(MAX_GRID_CELLS);
-const _roadVisitedRun = new Int32Array(MAX_GRID_CELLS);
-const _roadClosedRun = new Int32Array(MAX_GRID_CELLS);
-const _roadParent = new Int32Array(MAX_GRID_CELLS);
+
+let _roadGScore = new Float32Array(0);
+let _roadFScore = new Float32Array(0);
+let _roadVisitedRun = new Int32Array(0);
+let _roadClosedRun = new Int32Array(0);
+let _roadParent = new Int32Array(0);
 let _roadRunId = 0;
 
 class RoadMinHeap {
   private data: Int32Array;
   public size = 0;
-  constructor(cap = 2048) {
+  constructor(cap: number = PATHFINDING.initialHeapCapacity) {
     this.data = new Int32Array(cap);
   }
   public clear() {
@@ -159,7 +160,7 @@ class RoadMinHeap {
   }
 }
 
-const _roadHeap = new RoadMinHeap(4096);
+const _roadHeap = new RoadMinHeap(PATHFINDING.roadHeapCapacity);
 
 export function getSmartRoadPath(
   grid: GridMap,
@@ -175,7 +176,15 @@ export function getSmartRoadPath(
   let tx = Math.round(x1);
   let tz = Math.round(z1);
 
-  const gridW = grid.width || 256;
+  const gridW = grid.width;
+  const cells = grid.width * grid.height;
+  if (_roadGScore.length < cells) {
+    _roadGScore = new Float32Array(cells);
+    _roadFScore = new Float32Array(cells);
+    _roadVisitedRun = new Int32Array(cells);
+    _roadClosedRun = new Int32Array(cells);
+    _roadParent = new Int32Array(cells);
+  }
 
   const isBlocked = (x: number, z: number) => {
     const t = grid.getTile(x, z);
@@ -233,7 +242,7 @@ export function getSmartRoadPath(
   }
 
   _roadRunId++;
-  if (_roadRunId >= 2147483640) {
+  if (_roadRunId >= PATHFINDING.runIdResetThreshold) {
     _roadRunId = 1;
     _roadVisitedRun.fill(0);
     _roadClosedRun.fill(0);
@@ -258,7 +267,7 @@ export function getSmartRoadPath(
   ];
 
   let iterations = 0;
-  const maxIterations = 15000;
+  const maxIterations = PATHFINDING.roadMaxIterations;
 
   while (_roadHeap.size > 0 && iterations++ < maxIterations) {
     const currentIdx = _roadHeap.pop();

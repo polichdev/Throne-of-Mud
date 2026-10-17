@@ -22,13 +22,23 @@ import { initializeWorldEntities } from '../../engine/world/worldInitializer';
 import { BotAISystem } from '../../engine/ecs/systems/BotAISystem';
 import { BanditAISystem } from '../../engine/ecs/systems/BanditAISystem';
 import { DEFAULT_TRADE_RULES } from '../../engine/trade/tradeConfig';
+import { TRADE_SYSTEM } from '../../constants/trade';
 import { clearBuildingFrameStates } from '../../components/canvas/BuildingsRenderer';
 import { AStar } from '../../engine/pathfinding/AStar';
 import { getFormationOffsets, isMilitiaDestinationAllowed } from '../../engine/combat/formationUtils';
 import { audioManager } from '../../engine/audio/AudioManager';
 import { HOUSE_TIERS_CONFIG, BACKYARD_EXTENSIONS_CONFIG, FOOD_RESOURCE_KEYS } from '../../constants/housing';
+import { MILITIA_CONFIG } from '../../constants/militia';
+import {
+  HOUSE_UPGRADE_WORK_BASE,
+  HOUSE_UPGRADE_WORK_PER_TIER,
+  BACKYARD_UPGRADE_WORK_BASE,
+  BACKYARD_UPGRADE_WORK_PER_TIER,
+} from '../../constants/jobs';
+import { SETTLEMENT_CONFIG } from '../../constants/systems';
 import type { MilitiaSquad, MilitiaUnitType, HouseTier, BackyardExtensionType, ResourceInventory } from '../../types/game';
 import type { GameState, SettlementSlice } from '../types';
+import { translations, type SupportedLanguage } from '../../i18n/translations';
 
 export type { SettlementSlice };
 
@@ -211,8 +221,10 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
             totalWork: 100,
           };
         }
+        const lang = get().language || 'uk';
+        const dict = translations[lang];
         lord.speechBubble = {
-          text: `Наглядаю за виробництвом: ${building.name}`,
+          text: `${dict.lordsBar.managingBuilding}: ${building.name || ''}`,
           expiresAtTick: (get().time.tick || 0) + 35,
           type: 'work',
         };
@@ -239,36 +251,38 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     );
 
     const tick = get().time.tick || 0;
+    const lang = get().language || 'uk';
+    const dict = translations[lang];
 
     if (existingMilitia.length > 0) {
       for (const levy of existingMilitia) {
         levy.isLevy = false;
         levy.commandingLordId = undefined;
         levy.speechBubble = {
-          text: 'Ополчення розпущено, повертаюсь до мирного життя',
-          expiresAtTick: tick + 30,
+          text: dict.military.militiaDismissedSpeech,
+          expiresAtTick: tick + MILITIA_CONFIG.disbandSpeechDurationTicks,
           type: 'work',
         };
       }
       lord.speechBubble = {
-        text: 'Ополчення розпущено.',
-        expiresAtTick: tick + 25,
+        text: dict.military.militiaDismissedSpeech,
+        expiresAtTick: tick + MILITIA_CONFIG.speechDurationTicks,
         type: 'alert',
       };
       get().addChronicleEvent({
-        title: 'Ополчення розпущено',
-        description: `${lord.name} розпустив селянське ополчення.`,
+        title: dict.chronicle.militiaDisbandedTitle,
+        description: dict.chronicle.militiaDisbandedDesc(lord.name || dict.lordsBar.defaultTitle),
         type: 'info',
       });
     } else {
       const freePeasants = Array.from(characterEntities)
         .filter((c) => c.characterClass === 'peasant' && !c.isLevy)
-        .slice(0, 3);
+        .slice(0, MILITIA_CONFIG.levyMaxPeasants);
 
       if (freePeasants.length === 0) {
         lord.speechBubble = {
-          text: 'Немає вільних селян для ополчення!',
-          expiresAtTick: tick + 25,
+          text: dict.chronicle.militiaNoPeasants,
+          expiresAtTick: tick + MILITIA_CONFIG.speechDurationTicks,
           type: 'alert',
         };
         return;
@@ -278,29 +292,29 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
         peasant.isLevy = true;
         peasant.commandingLordId = lordId;
         peasant.speechBubble = {
-          text: 'Стаю під стяги мого Лорда!',
-          expiresAtTick: tick + 35,
+          text: dict.military.rallySpearmanSpeech,
+          expiresAtTick: tick + MILITIA_CONFIG.rallySpeechDurationTicks,
           type: 'alert',
         };
         if (!peasant.thoughts) peasant.thoughts = [];
         peasant.thoughts = peasant.thoughts.filter((t) => t.id !== 'levy');
         peasant.thoughts.push({
           id: 'levy',
-          text: 'Скликаний до ополчення (-5)',
-          modifier: -5,
-          durationTicks: 1500,
+          text: `${dict.inspector.status} (${MILITIA_CONFIG.levyThoughtModifier})`,
+          modifier: MILITIA_CONFIG.levyThoughtModifier,
+          durationTicks: MILITIA_CONFIG.levyThoughtDurationTicks,
         });
       }
 
       lord.speechBubble = {
-        text: 'До зброї, селяни! Захистимо наш трон!',
-        expiresAtTick: tick + 40,
+        text: dict.military.rallyPeasantMilitia,
+        expiresAtTick: tick + MILITIA_CONFIG.rallySpeechDurationTicks,
         type: 'alert',
       };
 
       get().addChronicleEvent({
-        title: 'Скликано ополчення!',
-        description: `${lord.name} зібрав загін із ${freePeasants.length} селян-ополченців.`,
+        title: dict.chronicle.militiaMusteredTitle,
+        description: dict.chronicle.militiaMusteredDesc(lord.name || dict.lordsBar.defaultTitle, freePeasants.length),
         type: 'warning',
       });
     }
@@ -313,9 +327,12 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     if (!lord) return;
 
     const tick = get().time.tick || 0;
+    const lang = get().language || 'uk';
+    const dict = translations[lang];
+
     lord.speechBubble = {
-      text: 'Покора Лорду — благословення Небес!',
-      expiresAtTick: tick + 35,
+      text: dict.inspector.preachToPeasants,
+      expiresAtTick: tick + MILITIA_CONFIG.preachSpeechDurationTicks,
       type: 'mood',
     };
 
@@ -323,18 +340,18 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     for (const peasant of characterEntities) {
       if (peasant.characterClass === 'peasant' && peasant.needs) {
         blessedCount++;
-        peasant.needs.mood = Math.min(100, peasant.needs.mood + 15);
+        peasant.needs.mood = Math.min(100, peasant.needs.mood + MILITIA_CONFIG.lordPreachMoodBoost);
         if (!peasant.thoughts) peasant.thoughts = [];
         peasant.thoughts = peasant.thoughts.filter((t) => t.id !== 'preach');
         peasant.thoughts.push({
           id: 'preach',
-          text: 'Натхненний проповіддю Лорда (+15)',
-          modifier: 15,
-          durationTicks: 1200,
+          text: `+${MILITIA_CONFIG.lordPreachMoodBoost}`,
+          modifier: MILITIA_CONFIG.lordPreachMoodBoost,
+          durationTicks: MILITIA_CONFIG.lordPreachThoughtDurationTicks,
         });
         peasant.speechBubble = {
-          text: 'Слава Господу і нашому королю!',
-          expiresAtTick: tick + 30,
+          text: dict.inspector.preachToPeasants,
+          expiresAtTick: tick + MILITIA_CONFIG.preachPeasantSpeechDurationTicks,
           type: 'mood',
         };
       }
@@ -403,16 +420,20 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       targetPosition: building.gridPosition || [0, 0],
       targetBuildingId: buildingId,
       progress: 0,
-      totalWork: 80 + nextTier * 35,
+      totalWork: HOUSE_UPGRADE_WORK_BASE + nextTier * HOUSE_UPGRADE_WORK_PER_TIER,
     });
 
     state.incrementBuildingVersion();
     audioManager.playUISuccess();
 
+    const lang = state.language || 'uk';
+    const dict = translations[lang];
+    const tierName = dict.housing.tiers[nextTier]?.name || String(nextTier);
+
     state.addChronicleEvent({
       type: 'success',
-      title: `${tierConfig.nameUk}`,
-      description: `Розпочато покращення садиби до ${tierConfig.nameUk}. Доставте матеріали та завершіть роботу будівельників.`,
+      title: tierName,
+      description: dict.chronicle.manorUpgradeStartedDesc(tierName),
     });
 
     set((s) => ({ ...s }));
@@ -459,17 +480,20 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       targetPosition: building.gridPosition || [0, 0],
       targetBuildingId: buildingId,
       progress: 0,
-      totalWork: 55 + (extConfig.requiredTier - 1) * 25,
+      totalWork: BACKYARD_UPGRADE_WORK_BASE + (extConfig.requiredTier - 1) * BACKYARD_UPGRADE_WORK_PER_TIER,
     });
 
     state.incrementBuildingVersion();
     audioManager.playUIClick();
 
     if (extension !== 'none') {
+      const lang = state.language || 'uk';
+      const dict = translations[lang];
+      const extName = dict.housing.extensions[extension]?.name || extension;
       state.addChronicleEvent({
         type: 'info',
-        title: `Присадибне господарство: ${extConfig.nameUk}`,
-        description: `Розпочато облаштування: ${extConfig.nameUk}. Доставте матеріали та завершіть роботу будівельників.`,
+        title: `${dict.inspector.backyardExtensionLabel}: ${extName}`,
+        description: dict.chronicle.manorUpgradeStartedDesc(extName),
       });
     }
 
@@ -506,7 +530,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       return aIdle - bIdle;
     });
 
-    let draftCount = Math.min(5, eligiblePeasants.length);
+    let draftCount = Math.min(MILITIA_CONFIG.maxSquadMembers, eligiblePeasants.length);
 
     if (type !== 'spearmen') {
       const availableWeapons = state.resources.weapons || 0;
@@ -526,9 +550,9 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     const region = state.regions.find((r) => r.id === playerRegionId) || state.regions[0];
     const campPos = region?.campPosition || state.playerSpawnPoint || [64, 60];
 
-    const squadIndexOffset = state.militiaSquads.length * 4.5;
-    let rallyBaseX = Math.round(campPos[0] + 5 + squadIndexOffset);
-    let rallyBaseZ = Math.round(campPos[1] + 3);
+    const squadIndexOffset = state.militiaSquads.length * MILITIA_CONFIG.squadSpacingOffset;
+    let rallyBaseX = Math.round(campPos[0] + MILITIA_CONFIG.rallyOffsetX + squadIndexOffset);
+    let rallyBaseZ = Math.round(campPos[1] + MILITIA_CONFIG.rallyOffsetZ);
 
     if (!grid.isWalkable(rallyBaseX, rallyBaseZ)) {
       const neighbors = grid.getNeighbors(rallyBaseX, rallyBaseZ).filter((n) => grid.isWalkable(n.x, n.z));
@@ -566,17 +590,23 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
         totalWork: 0,
       };
 
+      const currentLang = ((get() as any).language || 'uk') as SupportedLanguage;
+      const militaryDict = (translations[currentLang] || translations.uk).military;
       peasant.speechBubble = {
-        text: type === 'swordsmen' ? 'Беру меч та щит за наш трон!' : type === 'archers' ? 'Беру лук і стаю до строю!' : type === 'pikemen' ? 'Піки напоготові!' : 'Беру спис, стаю до строю!',
-        expiresAtTick: currentTick + 45,
+        text: type === 'swordsmen' ? militaryDict.rallySwordsmanSpeech : type === 'archers' ? militaryDict.rallyArcherSpeech : type === 'pikemen' ? militaryDict.rallyPikemanSpeech : militaryDict.rallySpearmanSpeech,
+        expiresAtTick: currentTick + MILITIA_CONFIG.rallySpeechDurationTicks,
         type: 'alert',
       };
     });
 
-    const isUkr = (get() as any).language === 'uk';
-    const squadNames: Record<MilitiaUnitType, string> = isUkr
-      ? { spearmen: 'Селянські списники', swordsmen: 'Ополченці-мечники', archers: 'Лучники', pikemen: 'Пікінери' }
-      : { spearmen: 'Peasant Spearmen', swordsmen: 'Swordsmen Militia', archers: 'Archers', pikemen: 'Pikemen' };
+    const currentLang = ((get() as any).language || 'uk') as SupportedLanguage;
+    const militaryDict = (translations[currentLang] || translations.uk).military;
+    const squadNames: Record<MilitiaUnitType, string> = {
+      spearmen: militaryDict.squadSpearmen,
+      swordsmen: militaryDict.squadSwordsmen,
+      archers: militaryDict.squadArchers,
+      pikemen: militaryDict.squadPikemen,
+    };
     const squadName = `${squadNames[type]} ${squadNum}`;
 
     const newSquad: MilitiaSquad = {
@@ -584,7 +614,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       name: squadName,
       type,
       memberIds: drafted.map((p) => p.id),
-      maxMembers: 5,
+      maxMembers: MILITIA_CONFIG.maxSquadMembers,
       rallyPoint,
       facingAngle: 0,
       createdAt: Date.now(),
@@ -595,11 +625,12 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       selectedMilitiaSquadId: squadId,
     }));
 
+    const lang = get().language || 'uk';
+    const dict = translations[lang];
+
     get().addChronicleEvent({
-      title: isUkr ? 'Скликано ополчення!' : 'Militia Formed!',
-      description: isUkr
-        ? `Сформовано загін "${squadName}" (${drafted.length} бійців). Вони стають у 2 шеренги неподалік від табору.`
-        : `Formed squad "${squadName}" (${drafted.length} soldiers) assembled in 2 ranks near camp.`,
+      title: dict.chronicle.militiaMusteredTitle,
+      description: dict.chronicle.militiaMusteredDesc(squadName, drafted.length),
       type: 'warning',
     });
 
@@ -638,7 +669,6 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       groups.set(sqId, list);
     }
 
-    const isUkr = (get() as any).language === 'uk';
     let idx = 1;
 
     for (const [sqId, members] of groups.entries()) {
@@ -655,9 +685,14 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
         const rallyPoint: [number, number] = [Math.round(sumX / members.length), Math.round(sumZ / members.length)];
         const weapon = members[0]?.militiaWeapon;
         const squadType: MilitiaUnitType = weapon === 'sword' ? 'swordsmen' : weapon === 'bow' ? 'archers' : weapon === 'pike' ? 'pikemen' : 'spearmen';
-        const names: Record<MilitiaUnitType, string> = isUkr
-          ? { spearmen: 'Селянські списники', swordsmen: 'Ополченці-мечники', archers: 'Лучники', pikemen: 'Пікінери' }
-          : { spearmen: 'Peasant Spearmen', swordsmen: 'Swordsmen Militia', archers: 'Archers', pikemen: 'Pikemen' };
+        const lang = (get() as any).language || 'uk';
+        const dict = translations[lang as 'uk' | 'en'];
+        const names: Record<MilitiaUnitType, string> = {
+          spearmen: dict.military.squadSpearmen,
+          swordsmen: dict.military.squadSwordsmen,
+          archers: dict.military.squadArchers,
+          pikemen: dict.military.squadPikemen,
+        };
         const name = `${names[squadType]} ${idx}`;
 
         existing = {
@@ -712,9 +747,11 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
           progress: 0,
           totalWork: 0,
         };
+        const currentLang = ((get() as any).language || 'uk') as SupportedLanguage;
+        const militaryDict = (translations[currentLang] || translations.uk).military;
         peasant.speechBubble = {
-          text: (get() as any).language === 'uk' ? 'Ополчення розпущено, повертаюсь до роботи' : 'Militia dismissed, returning to work',
-          expiresAtTick: currentTick + 35,
+          text: militaryDict.militiaDismissedSpeech,
+          expiresAtTick: currentTick + MILITIA_CONFIG.disbandSpeechDurationTicks,
           type: 'work',
         };
       }
@@ -732,13 +769,12 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       };
     });
 
-    const isUkr = (get() as any).language === 'uk';
-    const squadName = squad ? squad.name : (isUkr ? 'Ополчення' : 'Militia');
+    const currentLang = ((get() as any).language || 'uk') as SupportedLanguage;
+    const militaryDict = (translations[currentLang] || translations.uk).military;
+    const squadName = squad ? squad.name : militaryDict.defaultSquadName;
     get().addChronicleEvent({
-      title: isUkr ? 'Ополчення розпущено' : 'Militia Disbanded',
-      description: isUkr
-        ? `Загін "${squadName}" розпущено (${livingCount} бійців). Селяни повертаються до мирної праці у селі.`
-        : `Squad "${squadName}" disbanded (${livingCount} soldiers). Peasants return to civilian life.`,
+      title: militaryDict.militiaDisbandedTitle,
+      description: militaryDict.militiaDisbandedDesc(squadName, livingCount),
       type: 'info',
     });
 
@@ -902,14 +938,13 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       };
 
       if (idx === 0) {
-        const isUkr = (get() as any).language === 'uk';
-        const phrases = isUkr
-          ? ['Шикуйсь! Кроком руш!', 'Рушаймо у похід!', 'Так, пане!', 'Тримати стрій!']
-          : ['Advance in formation!', 'Marching forth!', 'Hold the line!', 'Yes, my Lord!'];
+        const currentLang = ((get() as any).language || 'uk') as SupportedLanguage;
+        const militaryDict = (translations[currentLang] || translations.uk).military;
+        const phrases = militaryDict.marchPhrases;
         const text = phrases[Math.floor(Math.random() * phrases.length)];
         peasant.speechBubble = {
           text,
-          expiresAtTick: currentTick + 35,
+          expiresAtTick: currentTick + MILITIA_CONFIG.marchPhrasesSpeechDurationTicks,
           type: 'alert',
         };
       }
@@ -951,35 +986,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     }));
   },
 
-  chronicle: [
-    {
-      id: 'init-1',
-      timestamp: new Date().toLocaleTimeString(),
-      gameDay: 1,
-      gameHour: 7,
-      title: 'Заснування Трону з Грязі',
-      description: 'Король Болеслав прибув на болотисті землі разом зі шляхтою та першими поселенцями.',
-      type: 'info',
-    },
-    {
-      id: 'init-letter-hildegard',
-      timestamp: new Date().toLocaleTimeString(),
-      gameDay: 1,
-      gameHour: 8,
-      title: 'Лист від: Леді Хільдеґард',
-      description: 'Отримано дипломатичне послання: Грамота про добросусідство та визнання кордонів.',
-      type: 'social',
-    },
-    {
-      id: 'init-letter-wilhelm',
-      timestamp: new Date().toLocaleTimeString(),
-      gameDay: 1,
-      gameHour: 9,
-      title: 'Лист від: Герцог Вільгельм',
-      description: 'Отримано дипломатичне послання: Про гірські перевали та безпеку купецьких валок.',
-      type: 'social',
-    },
-  ],
+  chronicle: [],
 
   addChronicleEvent: (event) => {
     const { time } = get();
@@ -1000,7 +1007,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
         for (let i = 0; i < filtered.length; i++) {
           const item = filtered[i];
           if (item.gameDay < currentDay) {
-            const score = item.gameDay * 100 + (item.gameHour ?? 0);
+            const score = item.gameDay * SETTLEMENT_CONFIG.chronicleScoreDayMultiplier + (item.gameHour ?? 0);
             if (score < oldestScore) {
               oldestScore = score;
               oldestYesterdayIdx = i;
@@ -1012,7 +1019,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
         }
       }
       return {
-        chronicle: [newEvent, ...filtered].slice(0, 50),
+        chronicle: [newEvent, ...filtered].slice(0, SETTLEMENT_CONFIG.maxChronicleEvents),
       };
     });
   },
@@ -1044,7 +1051,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
     foliageDebounceTimer = setTimeout(() => {
       foliageDebounceTimer = null;
       set((state) => ({ foliageVersion: state.foliageVersion + 1 }));
-    }, 150);
+    }, SETTLEMENT_CONFIG.foliageDebounceMs);
   },
 
   terrainVersion: 0,
@@ -1075,7 +1082,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
   },
 
   immigrationProgress: 0,
-  setImmigrationProgress: (val) => set({ immigrationProgress: Math.max(0, Math.min(100, val)) }),
+  setImmigrationProgress: (val) => set({ immigrationProgress: Math.max(0, Math.min(SETTLEMENT_CONFIG.maxImmigrationProgress, val)) }),
 
   tradeRules: { ...DEFAULT_TRADE_RULES },
   setTradeRule: (resource, partial) => {
@@ -1083,7 +1090,7 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
       tradeRules: {
         ...state.tradeRules,
         [resource]: {
-          ...(state.tradeRules[resource] || { resource, mode: 'none', targetStock: 30 }),
+          ...(state.tradeRules[resource] || { resource, mode: 'none', targetStock: TRADE_SYSTEM.defaultTradeRuleTargetStock }),
           ...partial,
         },
       },
@@ -1092,9 +1099,9 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
 
   caravanStatus: {
     state: 'waiting',
-    merchantName: 'Альбрехт з Аугсбурга',
-    nextArrivalHour: 11,
-    nextArrivalMinute: 30,
+    merchantName: 'Albrecht von Augsburg',
+    nextArrivalHour: TRADE_SYSTEM.initialCaravanArrivalHour,
+    nextArrivalMinute: TRADE_SYSTEM.initialCaravanArrivalMinute,
   },
   setCaravanStatus: (status) => {
     set((state) => ({
@@ -1202,8 +1209,8 @@ export const createSettlementSlice: StateCreator<GameState, [], [], SettlementSl
           timestamp: new Date().toLocaleTimeString(),
           gameDay: 1,
           gameHour: 7,
-          title: 'Заснування Трону з Грязі',
-          description: `${config?.identity?.rulerName || DEFAULT_PLAYER_IDENTITY.rulerName} прибув на нові землі разом із першими поселенцями.`,
+          title: (translations[((get() as any).language as SupportedLanguage)] || translations.uk).menu.title,
+          description: (translations[((get() as any).language as SupportedLanguage)] || translations.uk).chronicle.foundationLaidDesc(config?.identity?.rulerName || DEFAULT_PLAYER_IDENTITY.rulerName),
           type: 'info',
         },
       ],

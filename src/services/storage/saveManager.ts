@@ -1,3 +1,5 @@
+import { SAVE_STORAGE } from '../../constants/storage';
+import { DEFAULT_CAMERA_ZOOM } from '../../constants/camera';
 import { GridMap } from '../../engine/grid/GridMap';
 import { ensureEichenauSettlementAccess } from '../../engine/grid/settlementAccess';
 import { world, type GameEntity } from '../../engine/ecs/world';
@@ -48,10 +50,10 @@ export interface SaveData {
   entities: GameEntity[];
 }
 
-const DB_NAME = 'ThroneOfMudDB';
-const DB_VERSION = 1;
-const STORE_NAME = 'saves';
-const ACTIVE_SAVE_KEY = 'active_save';
+const DB_NAME = SAVE_STORAGE.database;
+const DB_VERSION = SAVE_STORAGE.databaseVersion;
+const STORE_NAME = SAVE_STORAGE.store;
+const ACTIVE_SAVE_KEY = SAVE_STORAGE.activeSave;
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -91,7 +93,7 @@ export async function saveGameToIndexedDB(grid: GridMap): Promise<boolean> {
       season: state.time.season,
       population: charactersCount || 3,
       gold: state.resources.gold,
-      version: '0.8.2',
+      version: SAVE_STORAGE.formatVersion,
     };
 
     const gridData = {
@@ -101,7 +103,7 @@ export async function saveGameToIndexedDB(grid: GridMap): Promise<boolean> {
     };
 
     const cameraTarget = (window as any).__lastCameraTarget || state.cameraFocusTarget || state.playerSpawnPoint;
-    const cameraZoom = (window as any).__lastCameraZoom ?? state.cameraZoomTarget ?? 38;
+    const cameraZoom = (window as any).__lastCameraZoom ?? state.cameraZoomTarget ?? DEFAULT_CAMERA_ZOOM;
     const cameraAngle = (window as any).__lastCameraAngle ?? state.cameraAngleTarget ?? (Math.PI / 4);
 
     const saveData: SaveData = {
@@ -120,7 +122,7 @@ export async function saveGameToIndexedDB(grid: GridMap): Promise<boolean> {
         resourceDeposits: state.resourceDeposits || [],
         pendingJobs: state.pendingJobs ? [...state.pendingJobs] : [],
         cameraPosition: cameraTarget ? [cameraTarget[0], cameraTarget[1]] : undefined,
-        cameraZoom: typeof cameraZoom === 'number' ? cameraZoom : 38,
+        cameraZoom: typeof cameraZoom === 'number' ? cameraZoom : DEFAULT_CAMERA_ZOOM,
         cameraAngle: typeof cameraAngle === 'number' ? cameraAngle : Math.PI / 4,
         militiaSquads: state.militiaSquads ? [...state.militiaSquads] : [],
         selectedMilitiaSquadId: state.selectedMilitiaSquadId || null,
@@ -136,8 +138,8 @@ export async function saveGameToIndexedDB(grid: GridMap): Promise<boolean> {
 
       putRequest.onsuccess = () => {
         try {
-          localStorage.setItem('throne_of_mud_has_save', 'true');
-          localStorage.setItem('throne_of_mud_meta', JSON.stringify(meta));
+          localStorage.setItem(SAVE_STORAGE.hasSave, 'true');
+          localStorage.setItem(SAVE_STORAGE.metadata, JSON.stringify(meta));
         } catch {}
         resolve(true);
       };
@@ -310,10 +312,11 @@ export async function loadGameFromIndexedDB(grid: GridMap): Promise<boolean> {
 
     const playerRegionId = saveData.gameState.playerRegionId ?? 0;
     const playerRegion = (saveData.gameState.regions || [])[playerRegionId];
-    if (playerRegionId === 2) {
-      const camp = playerRegion?.campPosition || playerRegion?.center || [80, 285];
+    const eichenauReg = (saveData.gameState.regions || []).find((r) => r.id === 2);
+    if (eichenauReg) {
+      const camp = eichenauReg.campPosition || eichenauReg.center || [80, 285];
       ensureEichenauSettlementAccess(grid, [Math.round(camp[0]), Math.round(camp[1])],
-        [...world.entities].filter((entity) => entity.isBuilding && entity.regionId === playerRegionId));
+        [...world.entities].filter((entity) => entity.isBuilding && entity.regionId === 2));
     }
     let campX = playerRegion?.campPosition?.[0] ?? playerRegion?.center?.[0] ?? 52;
     let campZ = playerRegion?.campPosition?.[1] ?? playerRegion?.center?.[1] ?? 52;
@@ -333,7 +336,7 @@ export async function loadGameFromIndexedDB(grid: GridMap): Promise<boolean> {
 
     const targetCamX = saveData.gameState.cameraPosition?.[0] ?? campX;
     const targetCamZ = saveData.gameState.cameraPosition?.[1] ?? campZ;
-    const targetZoom = saveData.gameState.cameraZoom ?? 38;
+    const targetZoom = saveData.gameState.cameraZoom ?? DEFAULT_CAMERA_ZOOM;
     const targetAngle = saveData.gameState.cameraAngle ?? (Math.PI / 4);
 
     (window as any).__lastCameraTarget = [targetCamX, targetCamZ];
@@ -342,8 +345,8 @@ export async function loadGameFromIndexedDB(grid: GridMap): Promise<boolean> {
     (window as any).__snapCameraNextFrame = true;
 
     try {
-      localStorage.setItem('throne_of_mud_active_session', 'playing');
-      localStorage.setItem('throne_of_mud_has_save', 'true');
+      localStorage.setItem(SAVE_STORAGE.activeSession, 'playing');
+      localStorage.setItem(SAVE_STORAGE.hasSave, 'true');
     } catch {}
 
     useGameStore.setState({
@@ -456,7 +459,7 @@ export async function getSavedGameMeta(): Promise<SaveMetadata | null> {
 export async function deleteSavedGame(): Promise<boolean> {
   try {
     try {
-      localStorage.removeItem('throne_of_mud_active_session');
+      localStorage.removeItem(SAVE_STORAGE.activeSession);
     } catch {}
     const db = await openDatabase();
 

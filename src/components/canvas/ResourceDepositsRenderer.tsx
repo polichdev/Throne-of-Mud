@@ -4,6 +4,7 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { useGameStore } from '../../store/useGameStore';
+import { translations } from '../../i18n';
 import type { ResourceDeposit } from '../../types/game';
 import { GridMap } from '../../engine/grid/GridMap';
 import { BUILDING_TEXTURES } from './buildings/buildingTextures';
@@ -823,6 +824,8 @@ function DepositBadge({ deposit, isSelected, onSelect, badgeY, fillPercent }: {
   fillPercent: number;
 }) {
   const isStrategicView = useGameStore((state) => state.isStrategicView);
+  const language = useGameStore((state) => state.language);
+  const richDepositTitle = translations[language].inspector.richDeposit;
   if (isStrategicView) return null;
   return (
     <Html
@@ -851,7 +854,7 @@ function DepositBadge({ deposit, isSelected, onSelect, badgeY, fillPercent }: {
           }`}
         >
           {deposit.isRich && (
-            <span className="text-amber-400 text-xs font-bold -ml-0.5" title="Багате родовище">
+            <span className="text-amber-400 text-xs font-bold -ml-0.5" title={richDepositTitle}>
               👑
             </span>
           )}
@@ -878,7 +881,7 @@ function DepositBadge({ deposit, isSelected, onSelect, badgeY, fillPercent }: {
 
         {isSelected && (
           <div className="mt-1 px-2 py-0.5 bg-stone-950 border border-amber-500/70 rounded text-[10px] font-medium text-amber-200 shadow-xl whitespace-nowrap">
-            {deposit.name}
+            {translations[language]?.deposits?.[deposit.id]?.name || deposit.name}
           </div>
         )}
       </div>

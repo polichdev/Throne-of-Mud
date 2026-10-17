@@ -1,3 +1,4 @@
+import { CAMERA_CLIPPING, CAMERA_CONTROLS, DEFAULT_CAMERA_ANGLE, STRATEGIC_ZOOM_THRESHOLD, STRATEGIC_ZOOM_EXIT_THRESHOLD } from '../../constants/camera';
 import { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -34,7 +35,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
   const initFocus = stateAtMount.cameraFocusTarget;
 
   const initZoom = isMenuMode ? DEFAULT_CAMERA_ZOOM : (stateAtMount.cameraZoomTarget ?? DEFAULT_CAMERA_ZOOM);
-  const initAngle = stateAtMount.cameraAngleTarget ?? (Math.PI / 4);
+  const initAngle = stateAtMount.cameraAngleTarget ?? (DEFAULT_CAMERA_ANGLE);
   const startX = isMenuMode ? (mapWidth / 2) : (initFocus ? initFocus[0] : initialCenter[0]);
   const startZ = isMenuMode ? (mapHeight / 2) : (initFocus ? initFocus[1] : initialCenter[1]);
 
@@ -49,7 +50,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
   const lastMouse = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const last3DPos = useRef<[number, number]>([startX, startZ]);
-  const isStrategicRef = useRef(initZoom <= 16);
+  const isStrategicRef = useRef(initZoom <= STRATEGIC_ZOOM_THRESHOLD);
   const prevGameModeRef = useRef(stateAtMount.gameMode);
 
   const clampTarget = () => {
@@ -69,8 +70,8 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
 
     const orthoCam = camera as THREE.OrthographicCamera;
     if (orthoCam.isOrthographicCamera) {
-      orthoCam.near = -500;
-      orthoCam.far = 3000;
+      orthoCam.near = CAMERA_CLIPPING.near;
+      orthoCam.far = CAMERA_CLIPPING.far;
       orthoCam.zoom = targetZoom.current;
       orthoCam.updateProjectionMatrix();
     }
@@ -97,12 +98,12 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
         const dy = e.clientY - lastMouse.current.y;
         lastMouse.current = { x: e.clientX, y: e.clientY };
 
-        if (Math.abs(dx) > 90 || Math.abs(dy) > 90) return;
+        if (Math.abs(dx) > CAMERA_CONTROLS.maxPointerDeltaPixels || Math.abs(dy) > CAMERA_CONTROLS.maxPointerDeltaPixels) return;
         const currentZoom = targetZoom.current;
 
         const scale = 1.0 / currentZoom;
         const panRight = -dx * scale;
-        const panFwd = dy * scale / 0.707;
+        const panFwd = dy * scale / CAMERA_CONTROLS.dragProjectionFactor;
 
         const curA = currentAngle.current;
         const fwdX = -Math.sin(curA);
@@ -125,7 +126,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.15 : 0.87;
+      const factor = e.deltaY < 0 ? CAMERA_CONTROLS.wheelZoomIn : CAMERA_CONTROLS.wheelZoomOut;
       const nextZoom = targetZoom.current * factor;
       targetZoom.current = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, nextZoom));
     };
@@ -159,8 +160,8 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
     if (prevGameModeRef.current === 'menu' && currentGameMode === 'playing') {
       const state = useGameStore.getState();
       const pReg = state.regions[state.playerRegionId];
-      let campX = state.playerSpawnPoint?.[0] ?? pReg?.campPosition?.[0] ?? 52;
-      let campZ = state.playerSpawnPoint?.[1] ?? pReg?.campPosition?.[1] ?? 52;
+      let campX = state.playerSpawnPoint?.[0] ?? pReg?.campPosition?.[0] ?? mapWidth / 2;
+      let campZ = state.playerSpawnPoint?.[1] ?? pReg?.campPosition?.[1] ?? mapHeight / 2;
 
       const campCenterBuilding = Array.from(buildingEntities).find(
         (b) => (b.buildingType === 'campfire' || b.buildingType === 'manor' || b.buildingType === 'tent') &&
@@ -176,8 +177,8 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
 
       const targetX = state.cameraFocusTarget?.[0] ?? campX;
       const targetZ = state.cameraFocusTarget?.[1] ?? campZ;
-      const desiredAngle = state.cameraAngleTarget ?? Math.PI / 4;
-      const desiredZoom = state.cameraZoomTarget ?? 38.0;
+      const desiredAngle = state.cameraAngleTarget ?? DEFAULT_CAMERA_ANGLE;
+      const desiredZoom = state.cameraZoomTarget ?? DEFAULT_CAMERA_ZOOM;
 
       targetPos.current.set(targetX, 0, targetZ);
       currentPos.current.set(targetX, 0, targetZ);
@@ -209,8 +210,8 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
     if (currentGameMode === 'menu') {
       targetPos.current.x = mapWidth / 2;
       targetPos.current.z = mapHeight / 2;
-      targetZoom.current = 38;
-      targetAngle.current += 0.007 * delta;
+      targetZoom.current = DEFAULT_CAMERA_ZOOM;
+      targetAngle.current += CAMERA_CONTROLS.menuOrbitRadiansPerSecond * delta;
       if (useGameStore.getState().isStrategicView) {
         useGameStore.getState().setIsStrategicView(false);
       }
@@ -244,7 +245,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
 
     const isPauseMenuOpen = useGameStore.getState().activeMenuTab === 'settings' || useGameStore.getState().activeMenuTab === 'codex';
     const isBuildMode = useGameStore.getState().activeTool === 'build' || Boolean(useGameStore.getState().activeBuildType);
-    const rotSpeed = 2.4 * delta;
+    const rotSpeed = CAMERA_CONTROLS.rotationRadiansPerSecond * delta;
     if (!isBuildMode && !isPauseMenuOpen) {
       if (keysPressed.current['keyq']) {
         targetAngle.current -= rotSpeed;
@@ -257,7 +258,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
     let diffAngle = targetAngle.current - currentAngle.current;
     while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
     while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
-    const angleLerpRate = Math.min(1.0, delta * 12.0);
+    const angleLerpRate = Math.min(1.0, delta * CAMERA_CONTROLS.angleLerpRate);
     currentAngle.current += diffAngle * angleLerpRate;
 
     const curAngle = currentAngle.current;
@@ -266,7 +267,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
     const rightX = Math.cos(curAngle);
     const rightZ = -Math.sin(curAngle);
 
-    const speed = (38.0 / targetZoom.current) * 14.0 * delta;
+    const speed = (DEFAULT_CAMERA_ZOOM / targetZoom.current) * CAMERA_CONTROLS.panUnitsPerSecond * delta;
     let moveFwd = 0;
     let moveRight = 0;
 
@@ -285,7 +286,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
       clampTarget();
     }
 
-    const posLerpRate = Math.min(1.0, delta * 14.0);
+    const posLerpRate = Math.min(1.0, delta * CAMERA_CONTROLS.positionLerpRate);
     currentPos.current.x = THREE.MathUtils.lerp(currentPos.current.x, targetPos.current.x, posLerpRate);
     currentPos.current.z = THREE.MathUtils.lerp(currentPos.current.z, targetPos.current.z, posLerpRate);
 
@@ -306,10 +307,10 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
     const orthoCam = camera as THREE.OrthographicCamera;
     if (orthoCam.isOrthographicCamera) {
       const zoomDiff = targetZoom.current - orthoCam.zoom;
-      if (Math.abs(zoomDiff) > 0.002) {
-        const zoomLerpRate = Math.min(1.0, delta * 18.0);
+      if (Math.abs(zoomDiff) > CAMERA_CONTROLS.zoomUpdateEpsilon) {
+        const zoomLerpRate = Math.min(1.0, delta * CAMERA_CONTROLS.zoomLerpRate);
         let newZoom = orthoCam.zoom + zoomDiff * zoomLerpRate;
-        if (Math.abs(targetZoom.current - newZoom) < 0.02) {
+        if (Math.abs(targetZoom.current - newZoom) < CAMERA_CONTROLS.zoomSnapEpsilon) {
           newZoom = targetZoom.current;
         }
         orthoCam.zoom = newZoom;
@@ -321,7 +322,7 @@ export function TopDownCamera({ initialCenter, mapWidth = MAP_SIZE, mapHeight = 
       (window as any).__lastCameraAngle = curAngle;
 
       const currentStrat = isStrategicRef.current;
-      const isStrat = currentStrat ? orthoCam.zoom < 18.0 : orthoCam.zoom <= 17.0;
+      const isStrat = currentStrat ? orthoCam.zoom < STRATEGIC_ZOOM_EXIT_THRESHOLD : orthoCam.zoom <= STRATEGIC_ZOOM_THRESHOLD;
       if (isStrat !== currentStrat) {
         isStrategicRef.current = isStrat;
         useGameStore.getState().setIsStrategicView(isStrat);

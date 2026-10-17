@@ -3,9 +3,19 @@ import type { Thought } from '../../types/game';
 import {
   DEFAULT_SPEECH_BUBBLE_TICKS,
   EMPLOYED_THOUGHT_TICKS,
+  EMPLOYED_THOUGHT_MODIFIER,
   DISMISSED_THOUGHT_TICKS,
+  DISMISSED_THOUGHT_MODIFIER,
 } from '../../constants/economy';
 import { getBuildingWorkstation } from '../buildings/buildingNavigation';
+import { useGameStore } from '../../store/useGameStore';
+import { translations } from '../../i18n';
+
+function getLocalizedBuildingName(b: GameEntity): string {
+  const lang = useGameStore.getState().language;
+  const dict = translations[lang];
+  return (b.buildingType ? dict.buildings.items[b.buildingType]?.name : undefined) || b.name || dict.jobs.defaultBuildingFallback;
+}
 
 export function setEntitySpeech(
   entity: GameEntity,
@@ -57,7 +67,8 @@ export function assignWorkerToBuilding(
   }
 
   if (building.buildingType === 'lumberjack_hut') {
-    setEntitySpeech(worker, `Став лісорубом у ${building.name}`, 'work', currentTick);
+    const dict = translations[useGameStore.getState().language];
+    setEntitySpeech(worker, dict.jobs.becameLumberjack(getLocalizedBuildingName(building)), 'work', currentTick);
     worker.currentJob = {
       id: `idle-${worker.id}`,
       type: 'idle',
@@ -82,13 +93,15 @@ export function assignWorkerToBuilding(
         totalWork: 100,
       };
     }
-    setEntitySpeech(worker, `Став до роботи: ${building.name || 'споруда'}`, 'work', currentTick);
+    const dict = translations[useGameStore.getState().language];
+    setEntitySpeech(worker, dict.jobs.startedWorkAtBuilding(getLocalizedBuildingName(building)), 'work', currentTick);
   }
 
+  const dict = translations[useGameStore.getState().language];
   addEntityThought(worker, {
     id: 'employed',
-    text: 'Маю постійну роботу (+8)',
-    modifier: 8,
+    text: dict.jobs.haveSteadyJobThought(EMPLOYED_THOUGHT_MODIFIER),
+    modifier: EMPLOYED_THOUGHT_MODIFIER,
     durationTicks: EMPLOYED_THOUGHT_TICKS,
   });
 }
@@ -104,12 +117,13 @@ export function dismissWorkerFromBuilding(
   worker.workBuildingId = undefined;
   worker.currentJob = { id: `idle-${worker.id}`, type: 'idle', progress: 0, totalWork: 0 };
 
-  setEntitySpeech(worker, 'Звільнений з роботи...', 'alert', currentTick);
+  const dict = translations[useGameStore.getState().language];
+  setEntitySpeech(worker, dict.jobs.dismissedFromJobAlert, 'alert', currentTick);
   removeEntityThought(worker, 'employed');
   addEntityThought(worker, {
     id: 'dismissed',
-    text: 'Мене звільнили з роботи (-6)',
-    modifier: -6,
+    text: dict.jobs.dismissedFromJobThought(DISMISSED_THOUGHT_MODIFIER),
+    modifier: DISMISSED_THOUGHT_MODIFIER,
     durationTicks: DISMISSED_THOUGHT_TICKS,
   });
 }

@@ -1,3 +1,4 @@
+import { POINT_LIGHT_POOL } from '../../../constants/rendering';
 import * as THREE from 'three';
 
 export class StablePointLightPool {
@@ -30,7 +31,7 @@ export class StablePointLightPool {
   start() {
     this.active = true;
     this.underusedSince = null;
-    this.reserve(16);
+    this.reserve(POINT_LIGHT_POOL.minSlots);
     for (const light of this.sources.keys()) light.layers.mask = 0;
   }
 
@@ -63,10 +64,10 @@ export class StablePointLightPool {
       light.matrixWorld.copy(source.matrixWorld);
     }
     this.activeCount = count;
-    const required = 2 ** Math.ceil(Math.log2(Math.max(16, count)));
+    const required = 2 ** Math.ceil(Math.log2(Math.max(POINT_LIGHT_POOL.minSlots, count)));
     if (required <= this.group.children.length / 2) {
       this.underusedSince ??= now;
-      if (now - this.underusedSince >= 30_000) {
+      if (now - this.underusedSince >= POINT_LIGHT_POOL.shrinkDelayMs) {
         while (this.group.children.length > required) {
           const light = this.group.children[this.group.children.length - 1] as THREE.PointLight;
           this.group.remove(light); this.spare.push(light);

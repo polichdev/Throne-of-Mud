@@ -4,11 +4,22 @@ import { registerHooks } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
+const ctxProxy = new Proxy({}, { get: () => () => ctxProxy });
+globalThis.document = {
+  createElement() {
+    return {
+      getContext() {
+        return ctxProxy;
+      },
+    };
+  },
+};
+
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier.startsWith('.') && context.parentURL?.startsWith('file:')) {
       const candidate = fileURLToPath(new URL(specifier, context.parentURL));
-      for (const ext of ['', '.ts', '/index.ts']) {
+      for (const ext of ['', '.ts', '.tsx', '/index.ts', '/index.tsx']) {
         if (fs.existsSync(candidate + ext) && fs.statSync(candidate + ext).isFile()) {
           return { url: pathToFileURL(candidate + ext).href, shortCircuit: true };
         }
@@ -17,10 +28,10 @@ registerHooks({
     return next(specifier, context);
   },
   load(url, context, next) {
-    if (url.endsWith('.ts')) return {
+    if (url.endsWith('.ts') || url.endsWith('.tsx')) return {
       format: 'module', shortCircuit: true,
       source: ts.transpileModule(fs.readFileSync(new URL(url), 'utf8'), {
-        compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext },
+        compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX },
       }).outputText,
     };
     return next(url, context);

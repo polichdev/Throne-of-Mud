@@ -16,3 +16,13 @@ export const ENTITY_MAX_PUSH_SPEED = 1.6;
 export const ENTITY_LATERAL_DODGE_MAX = 0.03;
 
 export const DEFAULT_UNIT_MOVE_SPEED = 1.35;
+
+export const MOVEMENT_LIMITS = {
+  stuckTimeoutSeconds: 2,
+  stuckProgressEpsilon: 0.005,
+  worldMargin: 2.5,
+  royalPlazaExclusionRadius: 3.8,
+  minSimulationDistance: 30,
+  simulationZoomScale: 900,
+  simulationDistanceMargin: 10,
+} as const;

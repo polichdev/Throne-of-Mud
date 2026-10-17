@@ -5,6 +5,7 @@ import { AStar } from '../../../pathfinding/AStar';
 import { getTreeProceduralData } from '../../../world/foliageGeneration';
 import { useGameStore } from '../../../../store/useGameStore';
 import { distance2D } from '../../../../utils/mathUtils';
+import { translations } from '../../../../i18n';
 import {
   LUMBERJACK_HUT_MAX_STORAGE,
   WOODCUTTING_SEARCH_RADIUS,
@@ -16,7 +17,28 @@ import {
   CHOP_LOG_STRIKE,
   CHOP_LOG_YIELD,
   WORK_SKILL_STEP_MULTIPLIER,
+  CHOP_STRIKE_TICK_INTERVAL,
+  TREE_FALL_PROGRESS_STEP,
+  LUMBERJACK_HUT_FULL_CHECK_INTERVAL,
+  LUMBERJACK_HUT_FULL_SPEECH_CHANCE,
+  FAILED_TREE_SEARCH_COOLDOWN_TICKS,
 } from '../../../../constants/jobs';
+
+const HUT_PROXIMITY_THRESHOLD = 2.2;
+const HUT_FULL_SPEECH_DURATION = 25;
+const CHOP_FALLEN_SPEECH_DURATION = 25;
+const CHOP_TREE_SPEECH_DURATION = 20;
+const CHOP_STRIKE_SPEECH_DURATION = 15;
+const WAIT_FALL_SPEECH_DURATION = 20;
+const TREE_DOWN_SPEECH_DURATION = 25;
+const LOG_READY_SPEECH_DURATION = 30;
+const PROGRESS_PCT_EARLY = 40;
+const PROGRESS_PCT_MID = 75;
+const MAX_CANDIDATE_SEARCH_PATHS = 3;
+const TREE_FALL_MIN_DISTANCE_EPSILON = 0.01;
+const TREE_HIT_IMPACT = 1.0;
+const HALF_TILE_OFFSET = 0.5;
+const REGION_BOUNDS_MARGIN = 0.5;
 
 const failedSearchCooldowns = new Map<string, number>();
 
@@ -58,7 +80,7 @@ export class WoodcuttingJobHandler {
 
       if (building.gridPosition && unit.gridPosition) {
         const distToHut = distance2D(building.gridPosition[0], building.gridPosition[1], unit.gridPosition[0], unit.gridPosition[1]);
-        if (distToHut > 2.2 && (!unit.path || unit.path.length === 0)) {
+        if (distToHut > HUT_PROXIMITY_THRESHOLD && (!unit.path || unit.path.length === 0)) {
           const hutPath = AStar.findPath(grid, unit.gridPosition, building.gridPosition, true, uBounds);
           if (hutPath && hutPath.length > 0) {
             unit.path = hutPath;
@@ -66,10 +88,11 @@ export class WoodcuttingJobHandler {
         }
       }
 
-      if (currentTick % 120 === 0 && Math.random() < 0.3) {
+      if (currentTick % LUMBERJACK_HUT_FULL_CHECK_INTERVAL === 0 && Math.random() < LUMBERJACK_HUT_FULL_SPEECH_CHANCE) {
+        const dict = translations[useGameStore.getState().language];
         unit.speechBubble = {
-          text: `Сховище хатини повне (${hutWood}/${maxStorage})! Відпочиваю`,
-          expiresAtTick: currentTick + 25,
+          text: dict.jobs.hutStorageFull(hutWood, maxStorage),
+          expiresAtTick: currentTick + HUT_FULL_SPEECH_DURATION,
           type: 'work',
         };
       }
@@ -114,7 +137,7 @@ export class WoodcuttingJobHandler {
 
       for (let x = minSearchX; x <= maxSearchX; x++) {
         for (let z = minSearchZ; z <= maxSearchZ; z++) {
-          if (regId !== undefined && !GridMap.isCoordInRegion(regId, x, z, 0.5)) continue;
+          if (regId !== undefined && !GridMap.isCoordInRegion(regId, x, z, REGION_BOUNDS_MARGIN)) continue;
           const key = (z << 16) | x;
           if (takenTreePositions.has(key)) continue;
 
@@ -136,7 +159,7 @@ export class WoodcuttingJobHandler {
 
       candidateTrees.sort((a, b) => a.dist - b.dist);
 
-      for (const cand of candidateTrees.slice(0, 3)) {
+      for (const cand of candidateTrees.slice(0, MAX_CANDIDATE_SEARCH_PATHS)) {
         const path = AStar.findPath(grid, [ux, uz], cand.pos, true, uBounds);
         if (path && path.length > 0) {
           bestTarget = cand.pos;
@@ -149,6 +172,7 @@ export class WoodcuttingJobHandler {
 
     if (bestTarget && bestPath) {
       failedSearchCooldowns.delete(unit.id);
+      const dict = translations[useGameStore.getState().language];
       if (isFallenCandidate) {
         unit.currentJob = {
           id: `chop-log-${unit.id}-${Date.now()}`,
@@ -158,8 +182,8 @@ export class WoodcuttingJobHandler {
           totalWork: CHOP_FALLEN_LOG_TOTAL_WORK,
         };
         unit.speechBubble = {
-          text: 'Іду розрубувати повалене дерево на колоди',
-          expiresAtTick: currentTick + 25,
+          text: dict.jobs.goingToChopFallenLog,
+          expiresAtTick: currentTick + CHOP_FALLEN_SPEECH_DURATION,
           type: 'work',
         };
       } else {
@@ -171,8 +195,8 @@ export class WoodcuttingJobHandler {
           totalWork: CHOP_TREE_TOTAL_WORK,
         };
         unit.speechBubble = {
-          text: 'Іду рубати ліс для хатини лісоруба',
-          expiresAtTick: currentTick + 20,
+          text: dict.jobs.goingToChopTreeForHut,
+          expiresAtTick: currentTick + CHOP_TREE_SPEECH_DURATION,
           type: 'work',
         };
       }
@@ -180,7 +204,7 @@ export class WoodcuttingJobHandler {
       return true;
     }
 
-    failedSearchCooldowns.set(unit.id, currentTick + 30);
+    failedSearchCooldowns.set(unit.id, currentTick + FAILED_TREE_SEARCH_COOLDOWN_TICKS);
     return false;
   }
 
@@ -198,34 +222,35 @@ export class WoodcuttingJobHandler {
       unit.currentJob = { id: `idle-${Date.now()}`, type: 'idle', progress: 0, totalWork: 0 };
       return true;
     }
-    const isStrikeTick = currentTick % 10 === 0 || job.progress === 0;
+    const isStrikeTick = currentTick % CHOP_STRIKE_TICK_INTERVAL === 0 || job.progress === 0;
     if (isStrikeTick) {
       const strikePower = CHOP_TREE_BASE_STRIKE + Math.floor(woodSkill * WORK_SKILL_STEP_MULTIPLIER);
       job.progress += strikePower;
 
       const pct = Math.round((job.progress / job.totalWork) * 100);
-      if (pct <= 40) {
+      const dict = translations[useGameStore.getState().language];
+      if (pct <= PROGRESS_PCT_EARLY) {
         unit.speechBubble = {
-          text: 'Підрубую стовбур...',
-          expiresAtTick: currentTick + 15,
+          text: dict.jobs.choppingTrunk,
+          expiresAtTick: currentTick + CHOP_STRIKE_SPEECH_DURATION,
           type: 'work',
         };
-      } else if (pct <= 75) {
+      } else if (pct <= PROGRESS_PCT_MID) {
         unit.speechBubble = {
-          text: 'Стовбур тріщить!',
-          expiresAtTick: currentTick + 15,
+          text: dict.jobs.trunkCracking,
+          expiresAtTick: currentTick + CHOP_STRIKE_SPEECH_DURATION,
           type: 'work',
         };
       } else {
         unit.speechBubble = {
-          text: 'Майже впало!',
-          expiresAtTick: currentTick + 15,
+          text: dict.jobs.almostDown,
+          expiresAtTick: currentTick + CHOP_STRIKE_SPEECH_DURATION,
           type: 'work',
         };
       }
 
       if (job.targetPosition) {
-        useGameStore.getState().registerTreeHit(job.targetPosition[0], job.targetPosition[1], 1.0);
+        useGameStore.getState().registerTreeHit(job.targetPosition[0], job.targetPosition[1], TREE_HIT_IMPACT);
       }
     }
 
@@ -233,16 +258,17 @@ export class WoodcuttingJobHandler {
       const [gx, gz] = job.targetPosition;
       const { treeType } = getTreeProceduralData(gx, gz);
 
-      const [ux, , uz] = unit.position || [gx + 0.5, 0, gz + 0.5];
-      const fdx = gx + 0.5 - ux;
-      const fdz = gz + 0.5 - uz;
-      const fallAngle = Math.hypot(fdx, fdz) > 0.01 ? Math.atan2(fdx, fdz) : 0;
+      const [ux, , uz] = unit.position || [gx + HALF_TILE_OFFSET, 0, gz + HALF_TILE_OFFSET];
+      const fdx = gx + HALF_TILE_OFFSET - ux;
+      const fdz = gz + HALF_TILE_OFFSET - uz;
+      const fallAngle = Math.hypot(fdx, fdz) > TREE_FALL_MIN_DISTANCE_EPSILON ? Math.atan2(fdx, fdz) : 0;
 
       grid.removeFoliage(gx, gz);
 
       useGameStore.getState().registerTreeFall(gx, gz, treeType, fallAngle);
       useGameStore.getState().incrementFoliageVersion();
 
+      const dict = translations[useGameStore.getState().language];
       unit.currentJob = {
         id: `wait-fall-${unit.id}-${Date.now()}`,
         type: 'wait_tree_fall',
@@ -251,8 +277,8 @@ export class WoodcuttingJobHandler {
         totalWork: WAIT_TREE_FALL_TOTAL_WORK,
       };
       unit.speechBubble = {
-        text: 'Дерево падає! Чекаю приземлення...',
-        expiresAtTick: currentTick + 20,
+        text: dict.jobs.treeFallingWaitLanding,
+        expiresAtTick: currentTick + WAIT_FALL_SPEECH_DURATION,
         type: 'work',
       };
       return true;
@@ -266,11 +292,12 @@ export class WoodcuttingJobHandler {
     job: Job,
     currentTick: number
   ): boolean {
-    const fallStep = 2;
+    const fallStep = TREE_FALL_PROGRESS_STEP;
     job.progress += fallStep;
 
     if (job.progress >= job.totalWork && job.targetPosition) {
       const [gx, gz] = job.targetPosition;
+      const dict = translations[useGameStore.getState().language];
       unit.currentJob = {
         id: `chop-log-${unit.id}-${Date.now()}`,
         type: 'chop_fallen_log',
@@ -279,8 +306,8 @@ export class WoodcuttingJobHandler {
         totalWork: CHOP_FALLEN_LOG_TOTAL_WORK,
       };
       unit.speechBubble = {
-        text: 'Дерево впало! Розрубую стовбур на колоди',
-        expiresAtTick: currentTick + 25,
+        text: dict.jobs.treeDownCuttingLogs,
+        expiresAtTick: currentTick + TREE_DOWN_SPEECH_DURATION,
         type: 'work',
       };
       return true;
@@ -304,12 +331,13 @@ export class WoodcuttingJobHandler {
       return true;
     }
 
-    const isLogStrikeTick = currentTick % 10 === 0 || job.progress === 0;
+    const isLogStrikeTick = currentTick % CHOP_STRIKE_TICK_INTERVAL === 0 || job.progress === 0;
     if (isLogStrikeTick) {
       job.progress += CHOP_LOG_STRIKE;
+      const dict = translations[useGameStore.getState().language];
       unit.speechBubble = {
-        text: 'Обрубую гілки та розпилюю стовбур...',
-        expiresAtTick: currentTick + 15,
+        text: dict.jobs.trimmingBranchesAndSawing,
+        expiresAtTick: currentTick + CHOP_STRIKE_SPEECH_DURATION,
         type: 'work',
       };
     }
@@ -340,9 +368,10 @@ export class WoodcuttingJobHandler {
       }
       incrementFoliageVersion();
 
+      const dict = translations[useGameStore.getState().language];
       unit.speechBubble = {
-        text: 'Колоду підготовлено! Потрібен мул для вивезення на склад',
-        expiresAtTick: currentTick + 30,
+        text: dict.jobs.logReadyMuleNeeded,
+        expiresAtTick: currentTick + LOG_READY_SPEECH_DURATION,
         type: 'work',
       };
     }

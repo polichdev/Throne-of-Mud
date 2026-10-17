@@ -1,3 +1,4 @@
+import { IMMIGRANTS } from '../../../constants/systems';
 import { world, characterEntities, buildingEntities } from '../world';
 import { GridMap } from '../../grid/GridMap';
 import { AStar } from '../../pathfinding/AStar';
@@ -24,18 +25,13 @@ import {
   IMMIGRANT_THOUGHT_DURATION_TICKS,
 } from '../../../constants/immigration';
 import { DEFAULT_SPEECH_BUBBLE_TICKS } from '../../../constants/economy';
-import { HOUSE_TIERS_CONFIG } from '../../../constants/housing';
+import { HOUSE_TIERS_CONFIG, TENT_BED_CAPACITY } from '../../../constants/housing';
+import { translations } from '../../../i18n';
 
-const UKRAINIAN_NAMES_MALE = [
-  'Тарас', 'Богдан', 'Остап', 'Яромир', 'Михайло',
-  'Любомир', 'Дмитро', 'Назар', 'Степан', 'Василь',
-  'Олесь', 'Гриць', 'Юрко', 'Іван', 'Святослав',
-];
-
-const UKRAINIAN_NAMES_FEMALE = [
-  'Одарка', 'Мирослава', 'Соломія', 'Ганна', 'Марічка',
-  'Катерина', 'Богдана', 'Ярослава', 'Оксана', 'Наталка',
-];
+function getVillagerNamePool(lang: 'uk' | 'en', isFemale: boolean): string[] {
+  const dict = translations[lang]?.villagers || translations.uk.villagers;
+  return isFemale ? dict.femaleNames : dict.maleNames;
+}
 
 const PEASANT_COLORS = [
   '#3b82f6', '#10b981', '#06b6d4', '#8b5cf6',
@@ -62,7 +58,7 @@ export class ImmigrationSystem {
     for (const c of characterEntities) {
       if ((c.factionId === 'player' || c.factionId === undefined) && (c.regionId === playerRegionId || c.regionId === undefined)) {
         totalCharacters++;
-        totalMood += (c.needs?.mood || 60);
+        totalMood += (c.needs?.mood || IMMIGRANTS.fallbackMood);
       }
     }
 
@@ -71,12 +67,12 @@ export class ImmigrationSystem {
       if (b.isCompleted && (b.factionId === 'player' || b.factionId === undefined) && (b.regionId === playerRegionId || b.regionId === undefined)) {
         if (b.buildingType === 'peasant_house') {
           const tier = b.houseTier || 1;
-          totalBeds += (HOUSE_TIERS_CONFIG[tier]?.capacity || 2);
+          totalBeds += (HOUSE_TIERS_CONFIG[tier]?.capacity || TENT_BED_CAPACITY);
         } else if (b.buildingType === 'tent') {
-          totalBeds += 2;
+          totalBeds += TENT_BED_CAPACITY;
         } else if (b.buildingType === 'manor') {
           const tier = b.houseTier || 1;
-          totalBeds += (HOUSE_TIERS_CONFIG[tier]?.capacity || 2) + 2;
+          totalBeds += (HOUSE_TIERS_CONFIG[tier]?.capacity || TENT_BED_CAPACITY) + TENT_BED_CAPACITY;
         }
       }
     }
@@ -108,8 +104,9 @@ export class ImmigrationSystem {
 
     setImmigrationProgress(0);
 
+    const lang = useGameStore.getState().language;
     const isFemale = Math.random() < FEMALE_SPAWN_CHANCE;
-    const namePool = isFemale ? UKRAINIAN_NAMES_FEMALE : UKRAINIAN_NAMES_MALE;
+    const namePool = getVillagerNamePool(lang, isFemale);
     const chosenName = namePool[Math.floor(Math.random() * namePool.length)];
     const avatarColor = PEASANT_COLORS[Math.floor(Math.random() * PEASANT_COLORS.length)];
 
@@ -142,28 +139,28 @@ export class ImmigrationSystem {
     }
 
     const newUnitId = `unit-peasant-immigrant-${Date.now()}`;
-
     const entryPath = AStar.findPath(grid, [spawnX, spawnZ], [cx, cz], true, bounds) || [];
+    const dict = translations[lang].chronicle;
 
     world.add({
       id: newUnitId,
       name: chosenName,
-      title: 'Новий поселенець',
+      title: dict.newSettlerTitle,
       characterClass: 'peasant',
       avatarColor,
       isCharacter: true,
       factionId: 'player',
       regionId: pRegion.id,
       gridPosition: [spawnX, spawnZ],
-      position: [spawnX + 0.5, 0.3, spawnZ + 0.5],
+      position: [spawnX + 0.5, IMMIGRANTS.spawnHeight, spawnZ + 0.5],
       path: entryPath,
       moveSpeed: DEFAULT_PEASANT_MOVE_SPEED,
-      gold: Math.floor(Math.random() * 4) + 2,
+      gold: Math.floor(Math.random() * IMMIGRANTS.goldRange) + IMMIGRANTS.goldMin,
       workBuildingId: undefined,
       thoughts: [
         {
           id: 'new_settler',
-          text: `Прибув у нове поселення (+${IMMIGRANT_THOUGHT_MODIFIER})`,
+          text: dict.arrivedAtNewSettlementThought(IMMIGRANT_THOUGHT_MODIFIER),
           modifier: IMMIGRANT_THOUGHT_MODIFIER,
           durationTicks: IMMIGRANT_THOUGHT_DURATION_TICKS,
         },
@@ -176,35 +173,35 @@ export class ImmigrationSystem {
         hygiene: IMMIGRANT_STARTING_HYGIENE,
       },
       skills: {
-        farming: Math.floor(Math.random() * 5) + 4,
-        woodcutting: Math.floor(Math.random() * 5) + 4,
-        mining: Math.floor(Math.random() * 4) + 3,
-        building: Math.floor(Math.random() * 5) + 4,
-        cooking: Math.floor(Math.random() * 4) + 2,
-        brewing: Math.floor(Math.random() * 4) + 2,
-        combat: Math.floor(Math.random() * 4) + 3,
-        intellect: Math.floor(Math.random() * 5) + 3,
-        charisma: Math.floor(Math.random() * 5) + 3,
+        farming: Math.floor(Math.random() * IMMIGRANTS.farmingRange) + IMMIGRANTS.farmingMin,
+        woodcutting: Math.floor(Math.random() * IMMIGRANTS.woodcuttingRange) + IMMIGRANTS.woodcuttingMin,
+        mining: Math.floor(Math.random() * IMMIGRANTS.miningRange) + IMMIGRANTS.miningMin,
+        building: Math.floor(Math.random() * IMMIGRANTS.buildingRange) + IMMIGRANTS.buildingMin,
+        cooking: Math.floor(Math.random() * IMMIGRANTS.cookingRange) + IMMIGRANTS.cookingMin,
+        brewing: Math.floor(Math.random() * IMMIGRANTS.brewingRange) + IMMIGRANTS.brewingMin,
+        combat: Math.floor(Math.random() * IMMIGRANTS.combatRange) + IMMIGRANTS.combatMin,
+        intellect: Math.floor(Math.random() * IMMIGRANTS.intellectRange) + IMMIGRANTS.intellectMin,
+        charisma: Math.floor(Math.random() * IMMIGRANTS.charismaRange) + IMMIGRANTS.charismaMin,
       },
       currentJob: {
         id: `journey-${newUnitId}`,
         type: 'wander',
         progress: 0,
-        totalWork: 10,
+        totalWork: IMMIGRANTS.journeyWork,
       },
       speechBubble: {
-        text: 'Вітаю! Шукаю прихистку та роботи.',
+        text: dict.immigrantSeekingWorkSpeech,
         expiresAtTick: currentTick + DEFAULT_SPEECH_BUBBLE_TICKS,
         type: 'mood',
       },
     });
 
     addChronicleEvent({
-      title: 'Нові поселенці прибули!',
-      description: `До нашого поселення приєднався новий житель — ${chosenName}. Його привабило процвітання та високий рівень життя під владою Корони.`,
+      title: dict.migrantsArrivedTitle,
+      description: dict.newImmigrantJoinedDesc(chosenName),
       type: 'success',
     });
 
-    setSaveNotification(`👤 До ${settlementName} прибув новий житель: ${chosenName}!`);
+    setSaveNotification(dict.newImmigrantNotification(settlementName, chosenName));
   }
 }

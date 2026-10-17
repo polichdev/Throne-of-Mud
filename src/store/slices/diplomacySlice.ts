@@ -6,193 +6,125 @@ import type {
   DiplomaticLetter,
 } from '../../types/diplomacy';
 import { audioManager } from '../../engine/audio/AudioManager';
-
-const INITIAL_BOT_LORDS_DIPLOMACY: Record<string, LordDiplomacyState> = {
-  'bot-1': {
-    lordId: 'bot-1',
-    lordName: 'Барон фон Берг',
-    lordTitle: 'Лорд-завойовник',
-    regionId: 1,
-    regionName: 'Вальдау',
-    color: '#dc2626',
-    heraldryIcon: '',
-    personality: 'Агресивний та пихатий воїн',
-    description: 'Загартований у битвах правитель лісового краю. Визнає лише військову звитягу та сталеву дисципліну.',
-    status: 'peace',
-    opinion: 0,
-    hasRightOfPassage: false,
-    claimedByPlayer: false,
-    claimCost: 1000,
-    militaryStrength: 8,
-    wealth: 40,
-    population: 3,
-    letters: [
-      {
-        id: 'letter-berg-intro',
-        senderId: 'bot-1',
-        senderName: 'Барон фон Берг',
-        senderTitle: 'Лорд-завойовник Вальдау',
-        senderRegionName: 'Вальдау',
-        senderHeraldryColor: '#dc2626',
-        senderHeraldryIcon: '',
-        subject: 'Попередження про непорушність кордонів Вальдау',
-        body: 'До моєї твердині дійшла звістка, що в Ґольдгофі з’явився новий господар. Знайте: пущі Вальдау тримаються на сталі моїх лицарів, а не на папірцях канцлерів. Не плутайтеся під ногами моїх загонів і не зазіхайте на наші лісові багатства, якщо вам дороге життя ваших поселенців.',
-        receivedDay: 1,
-        isRead: false,
-        replyOptions: [
-          {
-            id: 'rep-berg-friendly',
-            text: 'Справжня сила полягає в мудрості, бароне. Ми пропонуємо тримати мир і поважати один одного як рівні володарі сусідніх земель.',
-            tone: 'friendly',
-            opinionChange: 15,
-            responseNote: 'Барон здивований вашою розважливістю, проте визнає вашу гідність (+15 до відносин).',
-          },
-          {
-            id: 'rep-berg-neutral',
-            text: 'Ми не шукаємо ворогів, але й не здригнемося перед погрозами. Межі визначено, нехай кожен дбає про свій край.',
-            tone: 'neutral',
-            opinionChange: 0,
-            responseNote: 'Барон фон Берг зафіксував вашу позицію без зайвих емоцій (без змін).',
-          },
-          {
-            id: 'rep-berg-hostile',
-            text: 'Зухвалі слова для того, хто ще не бачив мого війська! Спробуйте перетнути наш кордон — і ліси Вальдау стануть вашою могилою!',
-            tone: 'hostile',
-            opinionChange: -35,
-            responseNote: 'Барон розлючений вашою зухвалістю і наказує точити клинки (-35 до відносин).',
-          },
-        ],
-      },
-    ],
-  },
-  'bot-2': {
-    lordId: 'bot-2',
-    lordName: 'Леді Хільдеґард',
-    lordTitle: 'Володарка лісів та озер',
-    regionId: 2,
-    regionName: 'Айхенау',
-    color: '#2563eb',
-    heraldryIcon: '',
-    personality: 'Мудра, дипломатична та шляхетна',
-    description: 'Опікується розквітом озерних нив, торгівлею та захистом місцевих святинь. Прагне до стабільності та чесних угод.',
-    status: 'peace',
-    opinion: 20,
-    hasRightOfPassage: false,
-    claimedByPlayer: false,
-    claimCost: 1000,
-    militaryStrength: 6,
-    wealth: 60,
-    population: 3,
-    letters: [
-      {
-        id: 'letter-hildegard-intro',
-        senderId: 'bot-2',
-        senderName: 'Леді Хільдеґард',
-        senderTitle: 'Володарка лісів та озер',
-        senderRegionName: 'Айхенау',
-        senderHeraldryColor: '#2563eb',
-        senderHeraldryIcon: '',
-        subject: 'Грамота про добросусідство та визнання кордонів',
-        body: 'Вітаємо нового володаря сусідніх земель Ґольдгофу від імені дому Айхенау. Наші озерні заплави та прадавні діброви бачили чимало чвар, тому ми понад усе цінуємо спокій для нашого люду. Сподіваємося на добрі наміри, взаємну повагу та процвітання торгівлі. Чи готові ви шанувати кордони Айхенау та жити у злагоді?',
-        receivedDay: 1,
-        isRead: false,
-        replyOptions: [
-          {
-            id: 'rep-hild-friendly',
-            text: 'Приємно познайомитися, шановна Леді. Наші наміри чисті — ми прагнемо миру, взаємної поваги та квітучої торгівлі між нашими краями.',
-            tone: 'friendly',
-            opinionChange: 20,
-            responseNote: 'Леді Хільдеґард щиро втішена вашою шляхетністю та пропонує тривалий мир (+20 до відносин).',
-          },
-          {
-            id: 'rep-hild-neutral',
-            text: 'Ми шануємо сусідів доти, доки наші інтереси не перетинаються. Час покаже, чи станемо ми надійними союзниками.',
-            tone: 'neutral',
-            opinionChange: 0,
-            responseNote: 'Леді Хільдеґард прийняла відповідь із дипломатичною стриманістю (без змін).',
-          },
-          {
-            id: 'rep-hild-hostile',
-            text: 'Землі Айхенау занадто багаті, щоб належати лише вам. Не диктуйте нам умови, якщо не бажаєте зіткнутися з нашою силою.',
-            tone: 'hostile',
-            opinionChange: -30,
-            responseNote: 'Леді Хільдеґард глибоко ображена і відкликає своїх послів (-30 до відносин).',
-          },
-        ],
-      },
-    ],
-  },
-  'bot-3': {
-    lordId: 'bot-3',
-    lordName: 'Герцог Вільгельм',
-    lordTitle: 'Гірський ярл',
-    regionId: 3,
-    regionName: 'Цвайау',
-    color: '#16a34a',
-    heraldryIcon: '',
-    personality: 'Прагматичний господар гірських кряжів',
-    description: 'Суворий володар кам’яних перевалів та залізних рудень. Цінує вигоду, дотримання домовленостей та міцні стіни.',
-    status: 'peace',
-    opinion: 10,
-    hasRightOfPassage: false,
-    claimedByPlayer: false,
-    claimCost: 1000,
-    militaryStrength: 7,
-    wealth: 50,
-    population: 3,
-    letters: [
-      {
-        id: 'letter-wilhelm-intro',
-        senderId: 'bot-3',
-        senderName: 'Герцог Вільгельм',
-        senderTitle: 'Гірський ярл Цвайау',
-        senderRegionName: 'Цвайау',
-        senderHeraldryColor: '#16a34a',
-        senderHeraldryIcon: '',
-        subject: 'Про гірські перевали та безпеку купецьких валок',
-        body: 'Вітаю з кам’яних твердинь Цвайау. Наші скелі та надра багаті на міцний камінь і залізо, але суворі до необачних чужинців. Якщо ваші купці шануватимуть наші гірські закони та вчасно сплачуватимуть мито за прохід через ущелини — наші мечі боронитимуть ваші валки від грабіжників.',
-        receivedDay: 1,
-        isRead: false,
-        replyOptions: [
-          {
-            id: 'rep-wilhelm-friendly',
-            text: 'Ми завжди вітаємо чесну торгівлю та надійних сусідів. Хай гори Цвайау квітнуть, а наші каравани збагачують обидва краї.',
-            tone: 'friendly',
-            opinionChange: 20,
-            responseNote: 'Герцог Вільгельм задоволений угодою і обіцяє сприяння вашим купцям (+20 до відносин).',
-          },
-          {
-            id: 'rep-wilhelm-neutral',
-            text: 'Купці сплачуватимуть справедливе мито, доки ваші вартові забезпечують порядок на шляхах.',
-            tone: 'neutral',
-            opinionChange: 0,
-            responseNote: 'Герцог Вільгельм погодився на діловий статус відносин (без змін).',
-          },
-          {
-            id: 'rep-wilhelm-hostile',
-            text: 'Гірські шляхи належать усьому королівству, а не вам. Ми не збираємося платити жодного шеляга здирникам!',
-            tone: 'hostile',
-            opinionChange: -25,
-            responseNote: 'Герцог Вільгельм наказує перекрити гірські перевали для ваших людей (-25 до відносин).',
-          },
-        ],
-      },
-    ],
-  },
-};
+import { DIPLOMACY_CONFIG } from '../../constants/diplomacy';
+import { translations } from '../../i18n/translations';
 
 const MALE_PORTRAITS = [0, 2, 5, 7, 8];
 const FEMALE_PORTRAITS = [1, 3, 4, 6, 9];
 const pickPortrait = (pool: number[]) => pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
 
-function freshBotDiplomacy(): Record<string, LordDiplomacyState> {
+function freshBotDiplomacy(language?: string): Record<string, LordDiplomacyState> {
+  const lang = language === 'en' ? 'en' : 'uk';
+  const dict = translations[lang].diplomacy;
   const male = [...MALE_PORTRAITS];
   const female = [...FEMALE_PORTRAITS];
-  return Object.fromEntries(Object.entries(INITIAL_BOT_LORDS_DIPLOMACY).map(([id, lord]) => [id, {
-    ...lord,
-    portraitId: pickPortrait(id === 'bot-2' ? female : male),
-    letters: lord.letters.map((letter) => ({ ...letter, replyOptions: letter.replyOptions.map((option) => ({ ...option })) })),
-  }]));
+
+  const configs: Array<{
+    id: string;
+    regionId: number;
+    color: string;
+    heraldryIcon: string;
+    militaryStrength: number;
+    wealth: number;
+    population: number;
+    letterId: string;
+    replies: Array<{ id: string; tone: 'friendly' | 'neutral' | 'hostile'; change: number }>;
+  }> = [
+    {
+      id: 'bot-1',
+      regionId: 1,
+      color: '#dc2626',
+      heraldryIcon: '',
+      militaryStrength: 8,
+      wealth: 40,
+      population: 3,
+      letterId: 'letter-berg-intro',
+      replies: [
+        { id: 'rep-berg-friendly', tone: 'friendly', change: 15 },
+        { id: 'rep-berg-neutral', tone: 'neutral', change: 0 },
+        { id: 'rep-berg-hostile', tone: 'hostile', change: -35 },
+      ],
+    },
+    {
+      id: 'bot-2',
+      regionId: 2,
+      color: '#2563eb',
+      heraldryIcon: '',
+      militaryStrength: 6,
+      wealth: 60,
+      population: 3,
+      letterId: 'letter-hild-intro',
+      replies: [
+        { id: 'rep-hild-friendly', tone: 'friendly', change: 20 },
+        { id: 'rep-hild-neutral', tone: 'neutral', change: 0 },
+        { id: 'rep-hild-hostile', tone: 'hostile', change: -30 },
+      ],
+    },
+    {
+      id: 'bot-3',
+      regionId: 3,
+      color: '#16a34a',
+      heraldryIcon: '',
+      militaryStrength: 10,
+      wealth: 50,
+      population: 3,
+      letterId: 'letter-wilh-intro',
+      replies: [
+        { id: 'rep-wilh-friendly', tone: 'friendly', change: 20 },
+        { id: 'rep-wilh-neutral', tone: 'neutral', change: 0 },
+        { id: 'rep-wilh-hostile', tone: 'hostile', change: -25 },
+      ],
+    },
+  ];
+
+  return Object.fromEntries(
+    configs.map((c) => {
+      const lData = dict.initialLords[c.id];
+      const lord: LordDiplomacyState = {
+        lordId: c.id,
+        lordName: lData?.lordName || c.id,
+        lordTitle: lData?.lordTitle || '',
+        regionId: c.regionId,
+        regionName: lData?.regionName || '',
+        color: c.color,
+        heraldryIcon: c.heraldryIcon,
+        personality: lData?.personality || '',
+        description: lData?.description || '',
+        status: 'peace',
+        opinion: 0,
+        hasRightOfPassage: false,
+        claimedByPlayer: false,
+        claimCost: DIPLOMACY_CONFIG.defaultClaimCost,
+        militaryStrength: c.militaryStrength,
+        wealth: c.wealth,
+        population: c.population,
+        portraitId: pickPortrait(c.id === 'bot-2' ? female : male),
+        letters: [
+          {
+            id: c.letterId,
+            senderId: c.id,
+            senderName: lData?.lordName || c.id,
+            senderTitle: lData?.letterSenderTitle || lData?.lordTitle || '',
+            senderRegionName: lData?.regionName || '',
+            senderHeraldryColor: c.color,
+            senderHeraldryIcon: c.heraldryIcon,
+            subject: lData?.letterSubject || '',
+            body: lData?.letterBody || '',
+            receivedDay: 1,
+            isRead: false,
+            replyOptions: c.replies.map((r) => ({
+              id: r.id,
+              text: lData?.replies[r.tone]?.text || '',
+              tone: r.tone,
+              opinionChange: r.change,
+              responseNote: lData?.replies[r.tone]?.note || '',
+            })),
+          },
+        ],
+      };
+      return [c.id, lord];
+    })
+  );
 }
 
 export const createDiplomacySlice: StateCreator<
@@ -204,7 +136,7 @@ export const createDiplomacySlice: StateCreator<
   lordDiplomacy: freshBotDiplomacy(),
   selectedDiplomacyLordId: 'bot-2',
 
-  resetDiplomacy: () => set({ lordDiplomacy: freshBotDiplomacy(), selectedDiplomacyLordId: 'bot-2' }),
+  resetDiplomacy: () => set({ lordDiplomacy: freshBotDiplomacy(get().language), selectedDiplomacyLordId: 'bot-2' }),
 
   setSelectedDiplomacyLordId: (lordId) => {
     set({ selectedDiplomacyLordId: lordId });
@@ -221,8 +153,11 @@ export const createDiplomacySlice: StateCreator<
     const option = letter.replyOptions.find((o) => o.id === replyId);
     if (!option) return;
 
-    const newOpinion = Math.max(-100, Math.min(100, lord.opinion + option.opinionChange));
-    const newStatus = option.outcomeStatus ?? (newOpinion <= -60 ? 'war' : lord.status);
+    const newOpinion = Math.max(
+      DIPLOMACY_CONFIG.minOpinion,
+      Math.min(DIPLOMACY_CONFIG.maxOpinion, lord.opinion + option.opinionChange)
+    );
+    const newStatus = option.outcomeStatus ?? (newOpinion <= DIPLOMACY_CONFIG.warThresholdOpinion ? 'war' : lord.status);
 
     const updatedLetters = lord.letters.map((l) => {
       if (l.id === letterId) {
@@ -250,10 +185,13 @@ export const createDiplomacySlice: StateCreator<
 
     audioManager.playUIClick();
 
+    const lang = state.language || 'uk';
+    const dict = translations[lang].chronicle;
+
     state.addChronicleEvent({
       type: option.tone === 'hostile' ? 'danger' : 'social',
-      title: `Лист до: ${lord.lordName}`,
-      description: `Надіслано королівську відповідь: "${option.text.slice(0, 75)}..."`,
+      title: dict.diplomacyLetterSentTitle(lord.lordName),
+      description: dict.diplomacyLetterSentDesc(option.text.slice(0, 75)),
     });
   },
 
@@ -262,21 +200,23 @@ export const createDiplomacySlice: StateCreator<
     const lord = state.lordDiplomacy[lordId];
     if (!lord) return false;
 
-    if (lord.status === 'peace' && lord.opinion >= 50) {
+    if (lord.status === 'peace' && lord.opinion >= DIPLOMACY_CONFIG.allianceMinOpinion) {
       set({
         lordDiplomacy: {
           ...state.lordDiplomacy,
           [lordId]: {
             ...lord,
             status: 'alliance',
-            opinion: Math.min(100, lord.opinion + 15),
+            opinion: Math.min(DIPLOMACY_CONFIG.maxOpinion, lord.opinion + DIPLOMACY_CONFIG.allianceOpinionBonus),
           },
         },
       });
+      const peaceLang = state.language || 'uk';
+      const peaceDict = translations[peaceLang].chronicle;
       state.addChronicleEvent({
         type: 'success',
-        title: `Союз із: ${lord.lordName}`,
-        description: `Укладено непорушний оборонний союз та договір про дружбу.`,
+        title: peaceDict.diplomacyAllianceTitle(lord.lordName),
+        description: peaceDict.diplomacyAllianceDesc,
       });
       audioManager.playUIClick();
       return true;
@@ -290,17 +230,17 @@ export const createDiplomacySlice: StateCreator<
       senderRegionName: lord.regionName,
       senderHeraldryColor: lord.color,
       senderHeraldryIcon: '',
-      subject: 'Ратифікація мирного договору',
-      body: `Вашу пропозицію про мир прийнято. Нехай мечі спочивають у піхвах, а селяни без остраху обробляють межі наших володінь.`,
+      subject: translations[state.language || 'uk'].diplomacy.peaceLetter.subject,
+      body: translations[state.language || 'uk'].diplomacy.peaceLetter.body,
       receivedDay: state.time.day,
       isRead: false,
       replyOptions: [
         {
           id: `rep-peace-ack-${Date.now()}`,
-          text: 'Хай мир принесе процвітання обом нашим народам.',
+          text: translations[state.language || 'uk'].diplomacy.peaceLetter.replyText,
           tone: 'friendly',
           opinionChange: 15,
-          responseNote: 'Мир скріплено сургучними печатками обох володарів.',
+          responseNote: translations[state.language || 'uk'].diplomacy.peaceLetter.responseNote,
         },
       ],
     };
@@ -311,16 +251,19 @@ export const createDiplomacySlice: StateCreator<
         [lordId]: {
           ...lord,
           status: 'peace',
-          opinion: Math.max(0, Math.min(100, lord.opinion + 25)),
+          opinion: Math.max(0, Math.min(DIPLOMACY_CONFIG.maxOpinion, lord.opinion + DIPLOMACY_CONFIG.peaceOpinionBonus)),
           letters: [followUpLetter, ...lord.letters],
         },
       },
     });
 
+    const peaceLang = state.language || 'uk';
+    const peaceDict = translations[peaceLang].chronicle;
+
     state.addChronicleEvent({
       type: 'success',
-      title: `Лист від: ${lord.lordName} — Мирний договір`,
-      description: `Отримано ратифікацію миру. Між нашими володіннями встановлено злагоду.`,
+      title: peaceDict.diplomacyPeaceTitle(lord.lordName),
+      description: peaceDict.diplomacyPeaceDesc,
     });
 
     audioManager.playUIClick();
@@ -334,7 +277,7 @@ export const createDiplomacySlice: StateCreator<
 
     const nextValue = !lord.hasRightOfPassage;
 
-    if (nextValue && lord.opinion < -10) {
+    if (nextValue && lord.opinion < DIPLOMACY_CONFIG.rightOfPassageRefusalThreshold) {
       const refusalLetter: DiplomaticLetter = {
         id: `letter-passage-refuse-${Date.now()}`,
         senderId: lord.lordId,
@@ -343,17 +286,17 @@ export const createDiplomacySlice: StateCreator<
         senderRegionName: lord.regionName,
         senderHeraldryColor: lord.color,
         senderHeraldryIcon: '',
-        subject: 'Відмова у наданні права проходу',
-        body: `Ми не дозволимо чужим озброєним загонам безперешкодно ступати на наші землі, доки між нами немає цілковитої довіри. Спершу доведіть свої добрі наміри.`,
+        subject: translations[state.language || 'uk'].diplomacy.passageRefusalLetter.subject,
+        body: translations[state.language || 'uk'].diplomacy.passageRefusalLetter.body,
         receivedDay: state.time.day,
         isRead: false,
         replyOptions: [
           {
             id: `rep-passage-ref-ack-${Date.now()}`,
-            text: 'Ми поважаємо ваше суверенне право, але сподіваємося на порозуміння в майбутньому.',
+            text: translations[state.language || 'uk'].diplomacy.passageRefusalLetter.replyText,
             tone: 'neutral',
             opinionChange: 5,
-            responseNote: 'Відповідь надіслано гонцем.',
+            responseNote: translations[state.language || 'uk'].diplomacy.passageRefusalLetter.responseNote,
           },
         ],
       };
@@ -368,10 +311,13 @@ export const createDiplomacySlice: StateCreator<
         },
       });
 
+      const passageLang = state.language || 'uk';
+      const passageDict = translations[passageLang].chronicle;
+
       state.addChronicleEvent({
         type: 'social',
-        title: `Лист від: ${lord.lordName}`,
-        description: `Отримано послання: "${refusalLetter.subject}".`,
+        title: passageDict.diplomacyPassageRefusedTitle(lord.lordName),
+        description: passageDict.diplomacyPassageRefusedDesc(refusalLetter.subject),
       });
 
       audioManager.playUIPanelClose();
@@ -384,17 +330,20 @@ export const createDiplomacySlice: StateCreator<
         [lordId]: {
           ...lord,
           hasRightOfPassage: nextValue,
-          opinion: nextValue ? Math.min(100, lord.opinion + 10) : lord.opinion,
+          opinion: nextValue ? Math.min(DIPLOMACY_CONFIG.maxOpinion, lord.opinion + DIPLOMACY_CONFIG.rightOfPassageOpinionBonus) : lord.opinion,
         },
       },
     });
 
+    const passageLang = state.language || 'uk';
+    const passageDict = translations[passageLang].chronicle;
+
     state.addChronicleEvent({
       type: nextValue ? 'success' : 'info',
-      title: nextValue ? `Право проходу: ${lord.lordName}` : `Відкликано прохід: ${lord.lordName}`,
+      title: nextValue ? passageDict.diplomacyPassageGrantedTitle(lord.lordName) : passageDict.diplomacyPassageRevokedTitle(lord.lordName),
       description: nextValue
-        ? `Отримано дозвіл на безперешкодний прохід військ територією ${lord.regionName}.`
-        : `Право проходу територією ${lord.regionName} анульовано.`,
+        ? passageDict.diplomacyPassageGrantedDesc(lord.regionName)
+        : passageDict.diplomacyPassageRevokedDesc(lord.regionName),
     });
 
     audioManager.playUIClick();
@@ -414,17 +363,17 @@ export const createDiplomacySlice: StateCreator<
       senderRegionName: lord.regionName,
       senderHeraldryColor: lord.color,
       senderHeraldryIcon: '',
-      subject: 'Оголошення стану війни та розрив усіх угод',
-      body: `Ви порушили мирний устрій королівства! Віднині між нашими родами лунатиме лише дзвін сталі. Жоден ваш воїн чи купець не знайде пощади на наших землях!`,
+      subject: translations[state.language || 'uk'].diplomacy.warLetter.subject,
+      body: translations[state.language || 'uk'].diplomacy.warLetter.body,
       receivedDay: state.time.day,
       isRead: false,
       replyOptions: [
         {
           id: `rep-war-challenge-${Date.now()}`,
-          text: 'Хай поле бою розсудить, чия справа справедлива. До зброї!',
+          text: translations[state.language || 'uk'].diplomacy.warLetter.replyText,
           tone: 'hostile',
           opinionChange: -20,
-          responseNote: 'Виклик прийнято. Сурми скликають ратників до бою.',
+          responseNote: translations[state.language || 'uk'].diplomacy.warLetter.responseNote,
         },
       ],
     };
@@ -435,17 +384,20 @@ export const createDiplomacySlice: StateCreator<
         [lordId]: {
           ...lord,
           status: 'war',
-          opinion: -100,
+          opinion: DIPLOMACY_CONFIG.warDeclarationOpinion,
           hasRightOfPassage: false,
           letters: [warLetter, ...lord.letters],
         },
       },
     });
 
+    const warLang = state.language || 'uk';
+    const warDict = translations[warLang].chronicle;
+
     state.addChronicleEvent({
       type: 'danger',
-      title: `Лист від: ${lord.lordName} — Оголошення війни`,
-      description: `Отримано вороже послання: "${warLetter.subject}". Між нашими володіннями розпочато війну!`,
+      title: warDict.diplomacyWarTitle(lord.lordName),
+      description: warDict.diplomacyWarDesc(warLetter.subject),
     });
 
     audioManager.playUIClick();
@@ -471,24 +423,24 @@ export const createDiplomacySlice: StateCreator<
       senderRegionName: lord.regionName,
       senderHeraldryColor: lord.color,
       senderHeraldryIcon: '',
-      subject: `Протест проти територіальної претензії на ${lord.regionName}`,
-      body: `Ви наважилися висунути коронну претензію на володіння регіоном ${lord.regionName}! Це земля наших предків, і ми не віддамо її без боротьби. Якщо ви не відкличете свої зазіхання, це призведе до кровопролиття!`,
+      subject: translations[state.language || 'uk'].diplomacy.claimProtestLetter.subject(lord.regionName),
+      body: translations[state.language || 'uk'].diplomacy.claimProtestLetter.body(lord.regionName),
       receivedDay: state.time.day,
       isRead: false,
       replyOptions: [
         {
           id: `rep-claim-firm-${Date.now()}`,
-          text: 'Наша претензія спирається на давнє коронне право. Змиріться або готуйтеся платити данину.',
+          text: translations[state.language || 'uk'].diplomacy.claimProtestLetter.replyAssert,
           tone: 'hostile',
           opinionChange: -30,
-          responseNote: 'Лорд лютує, територіальну суперечку загострено.',
+          responseNote: translations[state.language || 'uk'].diplomacy.claimProtestLetter.responseAssert,
         },
         {
           id: `rep-claim-negotiate-${Date.now()}`,
-          text: 'Ми готові компенсувати ваші втрати золотом та зберегти ваше право на частину врожаю.',
+          text: translations[state.language || 'uk'].diplomacy.claimProtestLetter.replyCompensate,
           tone: 'neutral',
           opinionChange: 10,
-          responseNote: 'Лорд готовий розглянути умови компенсації.',
+          responseNote: translations[state.language || 'uk'].diplomacy.claimProtestLetter.responseCompensate,
         },
       ],
     };
@@ -500,7 +452,7 @@ export const createDiplomacySlice: StateCreator<
         [lordId]: {
           ...lord,
           claimedByPlayer: true,
-          opinion: Math.max(-100, lord.opinion - 40),
+          opinion: Math.max(DIPLOMACY_CONFIG.minOpinion, lord.opinion - DIPLOMACY_CONFIG.claimRegionOpinionPenalty),
           letters: [claimDisputeLetter, ...lord.letters],
         },
       },
@@ -510,10 +462,13 @@ export const createDiplomacySlice: StateCreator<
       owner: 'player',
     });
 
+    const claimLang = state.language || 'uk';
+    const claimDict = translations[claimLang].chronicle;
+
     state.addChronicleEvent({
       type: 'warning',
-      title: `Лист від: ${lord.lordName} — Претензія на землі`,
-      description: `Отримано протест проти претензії на ${lord.regionName}. Землі офіційно оголошено коронними.`,
+      title: claimDict.diplomacyClaimTitle(lord.lordName),
+      description: claimDict.diplomacyClaimDesc(lord.regionName),
     });
 
     audioManager.playUIClick();

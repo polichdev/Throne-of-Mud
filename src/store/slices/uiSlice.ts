@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand';
 import type { GameState, UISlice } from '../types';
 import { world } from '../../engine/ecs/world';
+import { UI_CONFIG } from '../../constants/ui';
 
 export type { UISlice };
 
@@ -13,9 +14,9 @@ export const createUISlice: StateCreator<GameState, [], [], UISlice> = (set, get
     : {
       selectedEntityId: id,
       pinnedBuildingId: state.pinnedBuildingId && state.pinnedBuildingId !== id ? null : state.pinnedBuildingId,
-      houseFloorView: state.selectedEntityId === id ? state.houseFloorView : 1,
+      houseFloorView: state.selectedEntityId === id ? state.houseFloorView : UI_CONFIG.defaultHouseFloor,
     }),
-  houseFloorView: 1,
+  houseFloorView: UI_CONFIG.defaultHouseFloor,
   setHouseFloorView: (floor) => set({ houseFloorView: floor }),
 
   activeBuildType: null,
@@ -44,7 +45,7 @@ export const createUISlice: StateCreator<GameState, [], [], UISlice> = (set, get
 
   buildRotation: 0,
   setBuildRotation: (val) => set({ buildRotation: typeof val === 'function' ? val(get().buildRotation) : val }),
-  rotateBuilding: (direction = 'cw', step = Math.PI / 12) =>
+  rotateBuilding: (direction = 'cw', step = UI_CONFIG.buildingRotationStep) =>
     set((s) => {
       const delta = direction === 'ccw' ? -step : step;
       return {
@@ -53,7 +54,7 @@ export const createUISlice: StateCreator<GameState, [], [], UISlice> = (set, get
     }),
 
   previewAnimation: null,
-  triggerAnimation: (entityId, anim, durationMs = 3500) => {
+  triggerAnimation: (entityId, anim, durationMs = UI_CONFIG.animationPreviewDurationMs) => {
     set({
       previewAnimation: {
         entityId,
@@ -115,7 +116,7 @@ export const createUISlice: StateCreator<GameState, [], [], UISlice> = (set, get
         if (get().saveNotification === msg) {
           set({ saveNotification: null });
         }
-      }, 3500);
+      }, UI_CONFIG.notificationDurationMs);
     }
   },
 });

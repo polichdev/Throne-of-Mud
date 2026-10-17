@@ -1,3 +1,4 @@
+import { SIMULATION } from '../../constants/simulation';
 import { GridMap } from '../grid/GridMap';
 import { useGameStore } from '../../store/useGameStore';
 import { MovementSystem } from '../ecs/systems/MovementSystem';
@@ -15,7 +16,7 @@ export class GameLoop {
   private isRunning = false;
   private lastTime = 0;
   private accumulator = 0;
-  private readonly TICK_RATE = 10;
+  private readonly TICK_RATE = SIMULATION.ticksPerSecond;
   private readonly TICK_TIME = 1.0 / this.TICK_RATE;
   private animFrameId: number | null = null;
 
@@ -46,10 +47,10 @@ export class GameLoop {
       return;
     }
 
-    const clampedDelta = Math.min(frameDeltaSeconds, 0.1);
+    const clampedDelta = Math.min(Math.max(0, frameDeltaSeconds), SIMULATION.maxFrameDeltaSeconds);
     this.accumulator += clampedDelta * time.speedMultiplier;
 
-    const maxTicksPerFrame = Math.max(1, Math.min(2, Math.round(time.speedMultiplier)));
+    const maxTicksPerFrame = Math.max(1, Math.min(SIMULATION.maxTicksPerFrame, Math.round(time.speedMultiplier)));
     let ticksRan = 0;
 
     while (this.accumulator >= this.TICK_TIME && ticksRan < maxTicksPerFrame) {
@@ -60,27 +61,27 @@ export class GameLoop {
       try {
         JobSystem.update(this.grid, currentTick);
 
-        const isFast = time.speedMultiplier >= 2;
+        const isFast = time.speedMultiplier >= SIMULATION.fastSpeedThreshold;
 
-        if (!isFast || currentTick % 2 === 0) {
+        if (!isFast || currentTick % SIMULATION.needsAndProductionInterval === 0) {
           NeedsSystem.update(currentTick);
           ProductionSystem.update();
         }
 
-        if (!isFast || currentTick % 3 === 0) {
+        if (!isFast || currentTick % SIMULATION.aiInterval === 0) {
           BotAISystem.update(this.grid, currentTick);
         }
 
-        if (!isFast || currentTick % 3 === 1) {
+        if (!isFast || currentTick % SIMULATION.aiInterval === SIMULATION.banditPhase) {
           BanditAISystem.update(this.grid, currentTick);
         }
 
-        if (!isFast || currentTick % 4 === 0) {
+        if (!isFast || currentTick % SIMULATION.economyAndTradeInterval === 0) {
           EconomySystem.update(currentTick);
           TradeSystem.update(this.grid, currentTick);
         }
 
-        if (currentTick % 10 === 0) {
+        if (currentTick % SIMULATION.immigrationInterval === 0) {
           ImmigrationSystem.update(this.grid, currentTick);
         }
       } catch (err) {
@@ -110,7 +111,7 @@ export class GameLoop {
   private loop = (currentTime: number): void => {
     if (!this.isRunning) return;
 
-    const frameDeltaSeconds = Math.min((currentTime - this.lastTime) / 1000, 0.1);
+    const frameDeltaSeconds = Math.min((currentTime - this.lastTime) / 1000, SIMULATION.maxFrameDeltaSeconds);
     this.lastTime = currentTime;
 
     try {

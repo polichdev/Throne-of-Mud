@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Html } from '@react-three/drei';
 import { GridMap } from '../../engine/grid/GridMap';
 import { isRoadPathValid } from '../../engine/grid/roadGeneration';
+import { useTranslation } from '../../i18n';
 
 export interface RoadSnapTarget {
   x: number;
@@ -160,6 +161,7 @@ function createRoadRibbonGeometry(
 }
 
 export function RoadPlacementPreview({ grid, startPoint, path, hoveredTile, snapTarget }: Props) {
+  const { dict } = useTranslation();
   const isValid = useMemo(() => isRoadPathValid(grid, path), [grid, path]);
 
   const materials = useMemo(() => ({
@@ -297,7 +299,7 @@ export function RoadPlacementPreview({ grid, startPoint, path, hoveredTile, snap
           <Html position={[0, 0.48, 0]} center zIndexRange={[12, 0]} style={{ pointerEvents: 'none', userSelect: 'none' }}>
             <div className="bg-stone-950/95 text-amber-200 text-[10px] px-2.5 py-1 rounded-md border border-amber-500/70 whitespace-nowrap shadow-xl backdrop-blur-md flex items-center gap-1.5 animate-bounce">
               <span>{snapTarget?.type === 'building' ? '🚪' : '🔗'}</span>
-              <span>Початок: <strong className="text-white">{snapTarget?.label}</strong></span>
+              <span>{dict.roadsUI.startPointLabel}: <strong className="text-white">{snapTarget?.label}</strong></span>
             </div>
           </Html>
         )}
@@ -381,25 +383,25 @@ export function RoadPlacementPreview({ grid, startPoint, path, hoveredTile, snap
           >
             {isValid ? (
               <div className="bg-gradient-to-r from-stone-950/95 via-amber-950/95 to-stone-950/95 text-amber-100 text-[11px] font-medium px-3.5 py-1.5 rounded-lg border border-amber-500/70 shadow-2xl flex items-center gap-2 whitespace-nowrap backdrop-blur-md">
-                <span className="text-amber-400 font-bold">🛣️ Дорога: {path.length} м</span>
+                <span className="text-amber-400 font-bold">🛣️ {dict.roadsUI.roadLength}: {path.length}m</span>
                 {snapTarget && (
                   <>
                     <span className="text-stone-500">|</span>
                     <span className="text-cyan-300 font-semibold flex items-center gap-1">
                       <span>{snapTarget.type === 'building' ? '🚪' : '🔗'}</span>
-                      <span>Приєднано: {snapTarget.label}</span>
+                      <span>{dict.roadsUI.connectedTo}: {snapTarget.label}</span>
                     </span>
                   </>
                 )}
                 <span className="text-stone-500">|</span>
-                <span className="text-emerald-400 font-semibold">Безкоштовно</span>
-                <span className="text-amber-300/90 text-[10px] ml-1">[ЛКМ: прокласти]</span>
-                <span className="text-stone-400 text-[10px]">[ПКМ: скасувати]</span>
+                <span className="text-emerald-400 font-semibold">{dict.roadsUI.freeCost}</span>
+                <span className="text-amber-300/90 text-[10px] ml-1">{dict.roadsUI.lmbBuild}</span>
+                <span className="text-stone-400 text-[10px]">{dict.roadsUI.rmbCancel}</span>
               </div>
             ) : (
               <div className="bg-gradient-to-r from-stone-950/95 via-red-950/95 to-stone-950/95 text-red-200 text-[11px] font-medium px-3.5 py-1.5 rounded-lg border border-red-500/80 shadow-2xl flex items-center gap-1.5 whitespace-nowrap backdrop-blur-md animate-pulse">
-                <span className="text-red-400 font-bold">⛔ Перешкода:</span>
-                <span>шлях заблоковано водою або спорудою</span>
+                <span className="text-red-400 font-bold">⛔ {dict.roadsUI.obstacle}:</span>
+                <span>{dict.roadsUI.blockedPath}</span>
               </div>
             )}
           </Html>

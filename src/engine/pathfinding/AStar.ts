@@ -1,3 +1,4 @@
+import { PATHFINDING } from '../../constants/pathfinding';
 import { GridMap } from '../grid/GridMap';
 
 export interface RegionBounds {
@@ -8,18 +9,17 @@ export interface RegionBounds {
   regionId?: number;
 }
 
-const MAX_GRID_CELLS = 512 * 512;
-const visitedRun = new Int32Array(MAX_GRID_CELLS);
-const closedRun = new Int32Array(MAX_GRID_CELLS);
-const gScores = new Float32Array(MAX_GRID_CELLS);
-const fScores = new Float32Array(MAX_GRID_CELLS);
-const parentIndices = new Int32Array(MAX_GRID_CELLS);
-const heapPositions = new Int32Array(MAX_GRID_CELLS);
+let visitedRun = new Int32Array(0);
+let closedRun = new Int32Array(0);
+let gScores = new Float32Array(0);
+let fScores = new Float32Array(0);
+let parentIndices = new Int32Array(0);
+let heapPositions = new Int32Array(0);
 
 let currentRunId = 1;
 
 class FastIndexMinHeap {
-  private heap = new Int32Array(2048);
+  private heap = new Int32Array(PATHFINDING.initialHeapCapacity);
   public size = 0;
 
   public clear(): void {
@@ -103,11 +103,21 @@ class FastIndexMinHeap {
 }
 
 const sharedHeap = new FastIndexMinHeap();
-const unreachablePairs = new Set<number>();
+let unreachableByGrid = new WeakMap<GridMap, Set<string>>();
+
+function ensureCapacity(cells: number): void {
+  if (visitedRun.length >= cells) return;
+  visitedRun = new Int32Array(cells);
+  closedRun = new Int32Array(cells);
+  gScores = new Float32Array(cells);
+  fScores = new Float32Array(cells);
+  parentIndices = new Int32Array(cells);
+  heapPositions = new Int32Array(cells);
+}
 
 export class AStar {
   public static clearUnreachableCache(): void {
-    unreachablePairs.clear();
+    unreachableByGrid = new WeakMap();
   }
 
   public static findPathToArea(
@@ -202,6 +212,7 @@ export class AStar {
     }
 
     const gridW = grid.width;
+    ensureCapacity(grid.width * grid.height);
 
     if (!grid.isWalkable(tx, tz)) {
       if (!allowAdjacentTarget) {
@@ -216,7 +227,7 @@ export class AStar {
         return distA - distB;
       });
 
-      const topNeighbors = neighbors.slice(0, 2);
+      const topNeighbors = neighbors.slice(0, PATHFINDING.adjacentTargetCandidates);
       for (const n of topNeighbors) {
         const subPath = AStar.findPath(grid, [sx, sz], [n.x, n.z], false, regionBounds, customMaxIterations);
         if (subPath && subPath.length > 0) {
@@ -230,13 +241,19 @@ export class AStar {
       return [[sx, sz]];
     }
 
-    const pairKey = ((sx & 0xff) | ((sz & 0xff) << 8) | ((tx & 0xff) << 16) | ((tz & 0xff) << 24)) >>> 0;
+    const pairKey = JSON.stringify([sx, sz, tx, tz, regionBounds?.regionId,
+      regionBounds?.minX, regionBounds?.maxX, regionBounds?.minZ, regionBounds?.maxZ]);
+    let unreachablePairs = unreachableByGrid.get(grid);
+    if (!unreachablePairs) {
+      unreachablePairs = new Set();
+      unreachableByGrid.set(grid, unreachablePairs);
+    }
     if (unreachablePairs.has(pairKey)) {
       return null;
     }
 
     currentRunId++;
-    if (currentRunId >= 2147483640) {
+    if (currentRunId >= PATHFINDING.runIdResetThreshold) {
       currentRunId = 1;
       visitedRun.fill(0);
       closedRun.fill(0);
@@ -256,12 +273,12 @@ export class AStar {
 
     sharedHeap.push(startIdx);
 
-    const maxIterations = customMaxIterations ?? (regionBounds ? 700 : 1600);
+    const maxIterations = customMaxIterations ?? (regionBounds ? PATHFINDING.regionalMaxIterations : PATHFINDING.maxIterations);
     let iterations = 0;
 
     const dirDx = [1, -1, 0, 0, 1, -1, 1, -1];
     const dirDz = [0, 0, 1, -1, 1, 1, -1, -1];
-    const dirCost = [1.0, 1.0, 1.0, 1.0, 1.414, 1.414, 1.414, 1.414];
+    const dirCost = [1.0, 1.0, 1.0, 1.0, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2];
 
     while (sharedHeap.size > 0 && iterations++ < maxIterations) {
       const currentIdx = sharedHeap.pop();
@@ -323,7 +340,7 @@ export class AStar {
       }
     }
 
-    if (sharedHeap.size === 0 && unreachablePairs.size < 4000) {
+    if (sharedHeap.size === 0 && unreachablePairs.size < PATHFINDING.maxUnreachableEntries) {
       unreachablePairs.add(pairKey);
     }
     return null;

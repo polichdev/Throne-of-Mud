@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useGameStore } from '../../store/useGameStore';
+import { useTranslation } from '../../i18n';
 import { world } from '../../engine/ecs/world';
 
 const TARGET_FRAME_MS = 1000 / 165;
@@ -7,6 +8,8 @@ const GOOD_FRAME_MS = TARGET_FRAME_MS * 1.05;
 const WARN_FRAME_MS = TARGET_FRAME_MS * 2.1;
 
 export const FpsMonitor: React.FC = React.memo(() => {
+  const { dict } = useTranslation();
+  const m = dict.fpsMonitor;
   const selectedEntityId = useGameStore((s) => s.selectedEntityId);
   const hasSideInspector = selectedEntityId && !world.entities.find(entity => entity.id === selectedEntityId)?.isBuilding;
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -280,11 +283,11 @@ export const FpsMonitor: React.FC = React.memo(() => {
         <button
           onClick={() => setIsCollapsed(false)}
           className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#121418]/95 backdrop-blur-md border border-[#5a4830] hover:border-amber-400 shadow-[0_8px_25px_rgba(0,0,0,0.85)] cursor-pointer group active:scale-95 transition"
-          title="Розгорнути монітор FPS"
+          title={m.expandTitle}
         >
           <div className={`w-2 h-2 rounded-full ${statusBg} animate-pulse`} />
           <span className={`font-mono font-bold text-xs ${fpsColor}`}>
-            {stats.fps} FPS
+            {stats.fps} {m.fpsLabel}
           </span>
           <span className="text-stone-500 text-[10px] font-mono">|</span>
           <span className={`font-mono text-xs ${frameTimeColor}`}>
@@ -308,14 +311,14 @@ export const FpsMonitor: React.FC = React.memo(() => {
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${statusBg} animate-pulse`} />
             <span className="text-[11px] font-bold tracking-wider text-amber-200 uppercase">
-              FPS & Час кадру
+              {m.headerTitle}
             </span>
           </div>
 
           <div className="flex items-center gap-1">
             <button
               onClick={resetStats}
-              title="Скинути статистику (Min/Max)"
+              title={m.resetStatsTitle}
               className="p-1 rounded text-stone-400 hover:text-amber-300 hover:bg-white/5 transition cursor-pointer"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -328,7 +331,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
 
             <button
               onClick={() => setIsCollapsed(true)}
-              title="Згорнути"
+              title={m.collapseTitle}
               className="p-1 rounded text-stone-400 hover:text-amber-300 hover:bg-white/5 transition cursor-pointer"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -342,7 +345,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col bg-black/40 border border-stone-800/80 rounded-xl px-2.5 py-1.5">
               <span className="text-[9px] uppercase tracking-wider text-stone-400 font-semibold">
-                FPS
+                {m.fpsLabel}
               </span>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className={`text-2xl font-mono font-black tracking-tight ${fpsColor}`}>
@@ -354,7 +357,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
 
             <div className="flex flex-col bg-black/40 border border-stone-800/80 rounded-xl px-2.5 py-1.5">
               <span className="text-[9px] uppercase tracking-wider text-stone-400 font-semibold">
-                Час кадру
+                {m.frameTimeLabel}
               </span>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className={`text-2xl font-mono font-black tracking-tight ${frameTimeColor}`}>
@@ -368,7 +371,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
           <div className="grid grid-cols-3 gap-1 bg-black/30 border border-stone-800/60 rounded-xl px-2 py-1.5 text-center">
             <div className="flex flex-col">
               <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">
-                Мін FPS
+                {m.minFps}
               </span>
               <span className="font-mono text-xs font-bold text-stone-200 mt-0.5">
                 {stats.minFps}
@@ -377,7 +380,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
 
             <div className="flex flex-col border-x border-stone-800/60">
               <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">
-                Сер FPS
+                {m.avgFps}
               </span>
               <span className="font-mono text-xs font-bold text-amber-200/90 mt-0.5">
                 {stats.avgFps}
@@ -386,7 +389,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
 
             <div className="flex flex-col">
               <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">
-                Пік ms
+                {m.peakMs}
               </span>
               <span className="font-mono text-xs font-bold text-rose-300 mt-0.5">
                 {stats.maxFrameTime}
@@ -396,71 +399,71 @@ export const FpsMonitor: React.FC = React.memo(() => {
 
           <div className="grid grid-cols-3 gap-1 bg-black/30 border border-stone-800/60 rounded-xl px-2 py-1.5 text-center">
             <div className="flex flex-col">
-              <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">Draw</span>
+              <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">{m.drawCalls}</span>
               <span className="font-mono text-xs font-bold text-stone-200 mt-0.5">{stats.drawCalls}</span>
             </div>
             <div className="flex flex-col border-x border-stone-800/60">
-              <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">Трикутники</span>
+              <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">{m.triangles}</span>
               <span className="font-mono text-xs font-bold text-amber-200/90 mt-0.5">{stats.triangles ? `${Math.round(stats.triangles / 1000)}k` : '—'}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">Симуляція</span>
+              <span className="text-[8px] text-stone-400 uppercase tracking-wider font-semibold">{m.simulation}</span>
               <span className="font-mono text-xs font-bold text-stone-200 mt-0.5">{stats.simulationMs} ms</span>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-1 bg-black/30 border border-stone-800/60 rounded-xl px-2 py-1.5 text-center">
-            <div title="Час оновлень React Three Fiber і відправлення кадру на CPU; не включає всю роботу інтерфейсу браузера.">
-              <span className="text-[8px] text-stone-400 uppercase">CPU кадр</span>
+            <div title={m.cpuFrameTip}>
+              <span className="text-[8px] text-stone-400 uppercase">{m.cpuFrame}</span>
               <div className="font-mono text-xs font-bold text-stone-200 mt-0.5">{stats.cpuFrameMs === null ? '—' : `${stats.cpuFrameMs.toFixed(1)} ms`}</div>
             </div>
-            <div className="border-x border-stone-800/60" title="Час gl.render на CPU: обхід сцени, підготовка та відправлення команд малювання.">
-              <span className="text-[8px] text-stone-400 uppercase">CPU рендер</span>
+            <div className="border-x border-stone-800/60" title={m.cpuRenderTip}>
+              <span className="text-[8px] text-stone-400 uppercase">{m.cpuRender}</span>
               <div className="font-mono text-xs font-bold text-stone-200 mt-0.5">{stats.cpuRenderMs === null ? '—' : `${stats.cpuRenderMs.toFixed(1)} ms`}</div>
             </div>
-            <div title={stats.gpuSupported ? 'Асинхронний вимір часу рендеру на GPU; включає оновлення тіней. CPU та GPU можуть працювати паралельно.' : 'Браузер не надав розширення для вимірювання GPU. Прочерк не означає нульове навантаження.'}>
-              <span className="text-[8px] text-stone-400 uppercase">GPU</span>
+            <div title={stats.gpuSupported ? m.gpuTipSupported : m.gpuTipUnsupported}>
+              <span className="text-[8px] text-stone-400 uppercase">{m.gpu}</span>
               <div className="font-mono text-xs font-bold text-amber-200 mt-0.5">{stats.gpuMs === null ? '—' : `${stats.gpuMs.toFixed(1)} ms`}</div>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-1 bg-black/20 border border-stone-800/40 rounded-lg px-1.5 py-1 text-center font-mono">
-            <div title="Частина CPU рендеру: автоматичне оновлення світових матриць сцени.">
-              <div className="text-[8px] text-stone-400">Матриці</div>
+            <div title={m.matricesTip}>
+              <div className="text-[8px] text-stone-400">{m.matrices}</div>
               <div className="text-[10px] text-stone-200">{stats.cpuMatrixMs === null ? '—' : `${stats.cpuMatrixMs.toFixed(1)} ms`}</div>
             </div>
-            <div title="Частина CPU рендеру: підготовка пакетів будівель і селян, включно з оновленням моделей після змін.">
-              <div className="text-[8px] text-stone-400">Пакети</div>
+            <div title={m.batchesTip}>
+              <div className="text-[8px] text-stone-400">{m.batches}</div>
               <div className="text-[10px] text-stone-200">{stats.cpuBatchMs === null ? '—' : `${stats.cpuBatchMs.toFixed(1)} ms`}</div>
             </div>
-            <div title="Решта CPU рендеру: списки видимості, освітлення, тіні, команди GPU та очікування драйвера.">
-              <div className="text-[8px] text-stone-400">Решта</div>
+            <div title={m.otherTip}>
+              <div className="text-[8px] text-stone-400">{m.other}</div>
               <div className="text-[10px] text-stone-200">{stats.cpuRenderOtherMs === null ? '—' : `${stats.cpuRenderOtherMs.toFixed(1)} ms`}</div>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-1 bg-black/20 border border-stone-800/40 rounded-lg px-1.5 py-1 text-center font-mono">
-            <div title={`CPU: шейдери, uniforms, буфери, команди WebGL та можливе очікування драйвера; це не час виконання GPU. Замір кожного 16-го рендеру, останній мав ${stats.sampledDrawCalls} подань. Обидва значення цього рядка належать одному заміру.`}>
-              <div className="text-[8px] text-stone-400">Подання CPU</div>
+            <div title={m.cpuSubmissionTip(stats.sampledDrawCalls)}>
+              <div className="text-[8px] text-stone-400">{m.cpuSubmission}</div>
               <div className="text-[10px] text-stone-200">{stats.cpuSubmissionMs === null ? '—' : `${stats.cpuSubmissionMs.toFixed(1)} ms`}</div>
             </div>
-            <div title="Решта того самого вибіркового заміру після віднімання матриць, пакетів і подання WebGL: обхід сцени, списки видимості, сортування, підготовка BatchedMesh, освітлення та службові витрати. Може відрізнятися від поточного кадру у рядку вище.">
-              <div className="text-[8px] text-stone-400">Підготовка CPU</div>
+            <div title={m.cpuPreparationTip}>
+              <div className="text-[8px] text-stone-400">{m.cpuPreparation}</div>
               <div className="text-[10px] text-stone-200">{stats.cpuPreparationMs === null ? '—' : `${stats.cpuPreparationMs.toFixed(1)} ms`}</div>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-1 bg-black/20 border border-stone-800/40 rounded-lg px-1.5 py-1 text-center font-mono">
-            <div title={`Найдовший CPU кадр за останній інтервал вимірювання (200 мс). Пік CPU рендеру: ${stats.cpuRenderPeakMs?.toFixed(1) ?? '—'} мс.`}>
-              <div className="text-[8px] text-stone-400">Пік CPU</div>
+            <div title={m.cpuPeakTip(stats.cpuRenderPeakMs?.toFixed(1) ?? '—')}>
+              <div className="text-[8px] text-stone-400">{m.cpuPeak}</div>
               <div className="text-[10px] text-stone-200">{stats.cpuFramePeakMs === null ? '—' : `${stats.cpuFramePeakMs.toFixed(1)} ms`}</div>
             </div>
-            <div title="Найдовше оновлення симуляції за останній інтервал вимірювання (200 мс).">
-              <div className="text-[8px] text-stone-400">Пік сим.</div>
+            <div title={m.simPeakTip}>
+              <div className="text-[8px] text-stone-400">{m.simPeak}</div>
               <div className="text-[10px] text-stone-200">{stats.simulationPeakMs === null ? '—' : `${stats.simulationPeakMs.toFixed(1)} ms`}</div>
             </div>
-            <div title="Кількість рендерів із запитом оновлення карти тіней за останній інтервал вимірювання (200 мс).">
-              <div className="text-[8px] text-stone-400">Оновл. тіней</div>
+            <div title={m.shadowRefreshesTip}>
+              <div className="text-[8px] text-stone-400">{m.shadowRefreshes}</div>
               <div className="text-[10px] text-stone-200">{stats.shadowRefreshes}</div>
             </div>
           </div>
@@ -481,15 +484,15 @@ export const FpsMonitor: React.FC = React.memo(() => {
           </div>
 
           <div className="grid grid-cols-3 gap-1 text-center text-[9px] font-mono text-stone-300">
-            <div title="Обробники кадру R3F / завдання підготовки рендера. Зростання за незмінного світу може вказувати на накопичення підписок.">Кадр: {stats.frameSubscribers}/{stats.renderTasks}</div>
-            <div title="Кількість об’єктів у сцені, включно з прихованими регіонами.">Об’єкти: {stats.sceneObjects}</div>
-            <div title={`Активні лампи / слоти в шейдері. Зареєстровано у світі: ${stats.registeredPointLights}.`}>Світло: {stats.activePointLights}/{stats.pointLightSlots}</div>
+            <div title={m.frameSubscribersTip}>{m.frameTasks}: {stats.frameSubscribers}/{stats.renderTasks}</div>
+            <div title={m.sceneObjectsTip}>{m.sceneObjects}: {stats.sceneObjects}</div>
+            <div title={m.lightsTip(stats.registeredPointLights)}>{m.lights}: {stats.activePointLights}/{stats.pointLightSlots}</div>
           </div>
 
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-[8px] text-stone-400 font-mono px-0.5">
-              <span>Графік frame time</span>
-              <span>Ціль: 6.06ms · 165 FPS</span>
+              <span>{m.frameTimeChart}</span>
+              <span>{m.targetLabel}</span>
             </div>
             <div className="w-full h-9 bg-black/60 rounded-lg border border-stone-800/90 overflow-hidden relative">
               <canvas

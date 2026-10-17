@@ -1,3 +1,5 @@
+import { SAVE_STORAGE } from '../../constants/storage';
+import { DEFAULT_CAMERA_ZOOM } from '../../constants/camera';
 import * as THREE from 'three';
 
 export interface AudioSettings {
@@ -27,7 +29,7 @@ if (typeof window !== 'undefined') {
   }
 }
 
-const AUDIO_SETTINGS_STORAGE_KEY = 'throne_of_mud_audio_settings';
+const AUDIO_SETTINGS_STORAGE_KEY = SAVE_STORAGE.audioSettings;
 
 function loadSavedAudioSettings(): AudioSettings {
   const defaultSettings: AudioSettings = {
@@ -96,7 +98,7 @@ class AudioManager {
 
   private currentCamX = 52;
   private currentCamZ = 52;
-  private currentZoom = 38;
+  private currentZoom = DEFAULT_CAMERA_ZOOM;
   private zoomFactor = 0;
   private villageDensity = 0;
   private forestDensity = 0.5;

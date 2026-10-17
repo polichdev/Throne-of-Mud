@@ -1,3 +1,4 @@
+import { WOOD_CHIPS } from '../../constants/particles';
 import { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -22,16 +23,9 @@ interface Particle {
   color: THREE.Color;
 }
 
-const MAX_PARTICLES = 120;
-const WOOD_COLORS = [
-  new THREE.Color('#b45309'),
-  new THREE.Color('#78350f'),
-  new THREE.Color('#d97706'),
-  new THREE.Color('#f59e0b'),
-  new THREE.Color('#fef08a'),
-];
-
-const SHARED_WOOD_CHIP_GEO = new THREE.BoxGeometry(0.045, 0.035, 0.075);
+const MAX_PARTICLES = WOOD_CHIPS.capacity;
+const WOOD_COLORS = WOOD_CHIPS.colors.map(color => new THREE.Color(color));
+const SHARED_WOOD_CHIP_GEO = new THREE.BoxGeometry(...WOOD_CHIPS.size);
 const SHARED_WOOD_CHIP_MAT = new THREE.MeshLambertMaterial();
 
 export function WoodChipsRenderer() {
@@ -46,40 +40,42 @@ export function WoodChipsRenderer() {
   useEffect(() => {
     const now = performance.now() / 1000;
 
+    const activeIds = new Set(activeTreeHits.map(hit => hit.id));
+    for (const id of processedHitsRef.current) {
+      if (!activeIds.has(id)) processedHitsRef.current.delete(id);
+    }
     for (const hit of activeTreeHits) {
       if (processedHitsRef.current.has(hit.id)) continue;
       processedHitsRef.current.add(hit.id);
 
-      if (processedHitsRef.current.size > 50) {
-        processedHitsRef.current.clear();
-      }
 
-      const count = Math.floor(10 + Math.random() * 6 * hit.intensity);
+
+      const count = Math.floor(WOOD_CHIPS.count + Math.random() * WOOD_CHIPS.countVariation * hit.intensity);
       for (let i = 0; i < count; i++) {
         if (particlesRef.current.length >= MAX_PARTICLES) {
           particlesRef.current.shift();
         }
 
         const angle = Math.random() * Math.PI * 2;
-        const spreadSpeed = 1.0 + Math.random() * 1.8 * hit.intensity;
-        const upSpeed = 1.8 + Math.random() * 1.6 * hit.intensity;
+        const spreadSpeed = WOOD_CHIPS.spreadSpeed + Math.random() * WOOD_CHIPS.spreadSpeedVariation * hit.intensity;
+        const upSpeed = WOOD_CHIPS.upSpeed + Math.random() * WOOD_CHIPS.upSpeedVariation * hit.intensity;
 
         const p: Particle = {
-          x: hit.x + (Math.random() - 0.5) * 0.25,
-          y: 0.4 + Math.random() * 0.35,
-          z: hit.z + (Math.random() - 0.5) * 0.25,
+          x: hit.x + (Math.random() - 0.5) * WOOD_CHIPS.spawnSpread,
+          y: WOOD_CHIPS.spawnHeight + Math.random() * WOOD_CHIPS.heightVariation,
+          z: hit.z + (Math.random() - 0.5) * WOOD_CHIPS.spawnSpread,
           vx: Math.cos(angle) * spreadSpeed,
           vy: upSpeed,
           vz: Math.sin(angle) * spreadSpeed,
           rotX: Math.random() * Math.PI * 2,
           rotY: Math.random() * Math.PI * 2,
           rotZ: Math.random() * Math.PI * 2,
-          vRotX: (Math.random() - 0.5) * 20,
-          vRotY: (Math.random() - 0.5) * 20,
-          vRotZ: (Math.random() - 0.5) * 20,
-          scale: 0.7 + Math.random() * 0.6,
+          vRotX: (Math.random() - 0.5) * WOOD_CHIPS.angularSpeed,
+          vRotY: (Math.random() - 0.5) * WOOD_CHIPS.angularSpeed,
+          vRotZ: (Math.random() - 0.5) * WOOD_CHIPS.angularSpeed,
+          scale: WOOD_CHIPS.minScale + Math.random() * WOOD_CHIPS.scaleVariation,
           birthTime: now,
-          lifeSpan: 0.75 + Math.random() * 0.45,
+          lifeSpan: WOOD_CHIPS.minLifetimeSeconds + Math.random() * WOOD_CHIPS.lifetimeVariation,
           color: WOOD_COLORS[Math.floor(Math.random() * WOOD_COLORS.length)],
         };
 
@@ -92,7 +88,7 @@ export function WoodChipsRenderer() {
     if (!meshRef.current) return;
 
     const now = performance.now() / 1000;
-    const dt = Math.min(delta, 0.05);
+    const dt = Math.min(delta, WOOD_CHIPS.maxDeltaSeconds);
     const particles = particlesRef.current;
     const dummy = dummyRef.current;
 
@@ -103,16 +99,16 @@ export function WoodChipsRenderer() {
       const age = now - p.birthTime;
 
       if (age < p.lifeSpan) {
-        p.vy -= 9.5 * dt;
+        p.vy -= WOOD_CHIPS.gravity * dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.z += p.vz * dt;
 
-        if (p.y < 0.04) {
-          p.y = 0.04;
-          p.vy = -p.vy * 0.32;
-          p.vx *= 0.65;
-          p.vz *= 0.65;
+        if (p.y < WOOD_CHIPS.groundHeight) {
+          p.y = WOOD_CHIPS.groundHeight;
+          p.vy = -p.vy * WOOD_CHIPS.restitution;
+          p.vx *= WOOD_CHIPS.groundFriction;
+          p.vz *= WOOD_CHIPS.groundFriction;
         }
 
         p.rotX += p.vRotX * dt;
@@ -141,7 +137,7 @@ export function WoodChipsRenderer() {
       const p = particles[i];
       const age = now - p.birthTime;
       const lifeProgress = age / p.lifeSpan;
-      const currentScale = p.scale * (1.0 - Math.pow(lifeProgress, 2.5));
+      const currentScale = p.scale * (1.0 - Math.pow(lifeProgress, WOOD_CHIPS.shrinkExponent));
 
       dummy.position.set(p.x, p.y, p.z);
       dummy.rotation.set(p.rotX, p.rotY, p.rotZ);

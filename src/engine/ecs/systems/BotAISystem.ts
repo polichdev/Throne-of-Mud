@@ -1,3 +1,4 @@
+import { BOT_TUNING as BOT } from '../../../constants/botTuning';
 import { GridMap } from '../../grid/GridMap';
 import { world, characterEntities, buildingEntities, type GameEntity } from '../world';
 import { useGameStore } from '../../../store/useGameStore';
@@ -7,6 +8,7 @@ import { BUILDING_BLUEPRINTS } from '../../buildings/blueprints';
 import { isOverlappingResourceDeposit } from '../../buildings/buildingValidation';
 import { getBuildingDoorInfo } from '../../buildings/buildingNavigation';
 import { HaulingJobHandler } from './jobs/HaulingJobHandler';
+import { ensureEichenauSettlementAccess } from '../../grid/settlementAccess';
 import type { BackyardExtensionType, BuildingType, HouseTier, ResourceDeposit, ResourceType, RegionData, ResourceInventory } from '../../../types/game';
 import { BACKYARD_EXTENSIONS_CONFIG, FOOD_RESOURCE_KEYS, HOUSE_TIERS_CONFIG } from '../../../constants/housing';
 import {
@@ -27,6 +29,7 @@ import {
 } from '../../../constants/ai';
 import { DEFAULT_WAGE, DEFAULT_SPEECH_BUBBLE_TICKS } from '../../../constants/economy';
 import { isNoble } from '../entityHelpers';
+import { translations } from '../../../i18n';
 
 interface BotRealmMemory {
   wood: number;
@@ -44,48 +47,15 @@ interface BotRealmMemory {
   hasOpenedCampApproaches?: boolean;
 }
 
-const UKRAINIAN_NAMES_MALE = [
-  'Тарас', 'Богдан', 'Остап', 'Яромир', 'Михайло',
-  'Любомир', 'Дмитро', 'Назар', 'Степан', 'Василь',
-  'Олесь', 'Гриць', 'Юрко', 'Іван', 'Святослав', 'Данило', 'Матвій',
-];
-
-const UKRAINIAN_NAMES_FEMALE = [
-  'Одарка', 'Мирослава', 'Соломія', 'Ганна', 'Марічка',
-  'Катерина', 'Богдана', 'Ярослава', 'Оксана', 'Наталка', 'Роксолана',
-];
+function getBotVillagerNames(lang: 'uk' | 'en', isFemale: boolean): string[] {
+  const dict = translations[lang]?.villagers || translations.uk.villagers;
+  return isFemale ? dict.femaleNames : dict.maleNames;
+}
 
 const PEASANT_COLORS = [
   '#3b82f6', '#10b981', '#06b6d4', '#8b5cf6',
   '#f97316', '#14b8a6', '#84cc16', '#0284c7', '#ec4899', '#f43f5e',
 ];
-
-const PROFESSION_TITLES: Partial<Record<BuildingType, string>> = {
-  lumberjack_hut: 'Лісоруб',
-  wheat_farm: 'Хлібороб',
-  windmill: 'Мірошник',
-  bakery: 'Пекар',
-  brewery: 'Пивовар',
-  fishermans_hut: 'Рибалка',
-  foragers_hut: 'Збирач ягід',
-  hunters_hut: 'Мисливець',
-  iron_mine: 'Гірник',
-  stone_quarry: 'Каменяр',
-  clay_pit: 'Гончар',
-  salt_works: 'Солевар',
-  charcoal_kiln: 'Вугляр',
-  iron_smelter: 'Плавильник',
-  stonecutter: 'Тесляр каменю',
-  brickworks: 'Цегляр',
-  sawmill: 'Тесляр',
-  weavers_workshop: 'Ткач',
-  foresters_hut: 'Лісник',
-  wooden_church: 'Священник',
-  tavern: 'Шинкар',
-  barracks: 'Вартовий',
-  market: 'Крамар',
-  stockpile: 'Носій',
-};
 
 function consumeResourcesFromBotSettlement(
   buildings: GameEntity[],
@@ -209,7 +179,7 @@ function completeBotHouseProject(building: GameEntity): void {
   if (building.pendingHouseTier) {
     building.houseTier = building.pendingHouseTier;
     building.pendingHouseTier = undefined;
-    building.maxBuildingHealth = (building.maxBuildingHealth || 150) + 100;
+    building.maxBuildingHealth = (building.maxBuildingHealth || BOT.houseBaseHealth) + BOT.houseUpgradeHealth;
   }
   if (building.pendingBackyardExtension) {
     building.backyardExtension = building.pendingBackyardExtension;
@@ -218,7 +188,7 @@ function completeBotHouseProject(building: GameEntity): void {
   }
   building.requiredMaterials = undefined;
   building.deliveredMaterials = undefined;
-  building.buildingHealth = building.maxBuildingHealth || 150;
+  building.buildingHealth = building.maxBuildingHealth || BOT.houseBaseHealth;
 }
 
 export class BotAISystem {
@@ -276,7 +246,7 @@ export class BotAISystem {
     currentTick: number = 0
   ): boolean {
     const failedAt = BotAISystem.failedRoadConnections.get(building.id);
-    if (failedAt !== undefined && currentTick - failedAt < 180) {
+    if (failedAt !== undefined && currentTick - failedAt < BOT.roadRetryTicks) {
       return false;
     }
 
@@ -404,18 +374,18 @@ export class BotAISystem {
       updateRegionStats,
     } = useGameStore.getState();
 
-    const isNightTime = time ? (time.hour >= 20 || time.hour < 6) : false;
+    const isNightTime = time ? (time.hour >= BOT.nightStartHour || time.hour < BOT.nightEndHour) : false;
 
     const botRegions = regions.filter((r) => r.owner === 'bot');
 
     const camTarget = (typeof window !== 'undefined' ? (window as any).__lastCameraTarget : null) as [number, number] | null;
-    let wanderingPathBudget = 1;
 
     for (const region of botRegions) {
+      let wanderingPathBudget = 2;
       const regCenter = region.campPosition || region.center;
-      const isRegionOffscreen = camTarget ? ((regCenter[0] - camTarget[0]) ** 2 + (regCenter[1] - camTarget[1]) ** 2 > 55 * 55) : false;
+      const isRegionOffscreen = camTarget ? ((regCenter[0] - camTarget[0]) ** 2 + (regCenter[1] - camTarget[1]) ** 2 > BOT.visibleRegionRadius * BOT.visibleRegionRadius) : false;
       const tickInterval = isRegionOffscreen ? BOT_AI_TICK_INTERVAL * 2 : BOT_AI_TICK_INTERVAL;
-      if ((currentTick + region.id * 3) % tickInterval !== 0) continue;
+      if ((currentTick + region.id * BOT.regionTickPhase) % tickInterval !== 0) continue;
 
       const botFactionId = `bot-${region.id}`;
       let memory = this.botMemories.get(botFactionId);
@@ -427,7 +397,7 @@ export class BotAISystem {
           food: BOT_AI_STARTING_FOOD,
           iron: BOT_AI_STARTING_IRON,
           buildStage: 0,
-          lastActionTick: currentTick - (80 - (region.id + 1) * 20),
+          lastActionTick: currentTick - (BOT.initialDecisionLeadTicks - (region.id + 1) * BOT.initialDecisionRegionOffsetTicks),
           lastWorkerAssignTick: currentTick,
           lastImmigrationTick: currentTick,
         };
@@ -436,36 +406,11 @@ export class BotAISystem {
 
       if (region.id === 2 && !memory.hasOpenedCampApproaches) {
         memory.hasOpenedCampApproaches = true;
-        const [campX, campZ] = region.campPosition || region.center;
-        let passable = 0;
-        let checked = 0;
-        for (let dx = -9; dx <= 9; dx++) {
-          for (let dz = -9; dz <= 9; dz++) {
-            const tile = grid.getTile(campX + dx, campZ + dz);
-            if (!tile || tile.terrain === 'water') continue;
-            checked++;
-            if (tile.isPassable) passable++;
-          }
-        }
-        if (checked > 0 && passable / checked < 0.75) {
-          let cleared = false;
-          for (let dx = -9; dx <= 9; dx++) {
-            for (let dz = -9; dz <= 9; dz++) {
-              if (dx * dx + dz * dz > 9 * 9) continue;
-              const x = campX + dx;
-              const z = campZ + dz;
-              const tile = grid.getTile(x, z);
-              if (!tile || tile.buildingId || tile.terrain === 'water') continue;
-              if (tile.foliageType === 'tree' || tile.foliageType === 'rock') {
-                grid.removeFoliage(x, z);
-                cleared = true;
-              }
-            }
-          }
-          if (cleared) {
-            AStar.clearUnreachableCache();
-            incrementFoliageVersion();
-          }
+        const campPos = region.campPosition || region.center;
+        const cleared = ensureEichenauSettlementAccess(grid, campPos);
+        if (cleared > 0) {
+          AStar.clearUnreachableCache();
+          incrementFoliageVersion();
         }
       }
 
@@ -535,11 +480,11 @@ export class BotAISystem {
         }
       }
 
-      if (currentTick % 30 === (region.id * 7) % 30) {
+      if (currentTick % BOT.roadConnectionIntervalTicks === (region.id * BOT.roadConnectionRegionPhase) % BOT.roadConnectionIntervalTicks) {
         let anyConnected = false;
         let attempts = 0;
         for (const b of botBuildings) {
-          if (BotAISystem.failedRoadConnections.has(b.id) && currentTick - (BotAISystem.failedRoadConnections.get(b.id) || 0) < 180) {
+          if (BotAISystem.failedRoadConnections.has(b.id) && currentTick - (BotAISystem.failedRoadConnections.get(b.id) || 0) < BOT.roadRetryTicks) {
             continue;
           }
           attempts++;
@@ -586,7 +531,7 @@ export class BotAISystem {
         house.localInventory ||= {};
         for (const [resource, amount] of Object.entries(extension.outputs)) {
           const key = resource as ResourceType;
-          house.localInventory[key] = Math.min(100, (house.localInventory[key] || 0) + (amount || 0));
+          house.localInventory[key] = Math.min(BOT.houseInventoryCapacity, (house.localInventory[key] || 0) + (amount || 0));
           if (FOOD_RESOURCE_KEYS.includes(key)) memory.food += amount || 0;
         }
       }
@@ -619,7 +564,7 @@ export class BotAISystem {
 
       for (const p of peasants) {
         if (p.needs) {
-          if (p.needs.hunger < 45) {
+          if (p.needs.hunger < BOT.eatHungerThreshold) {
             let consumedFood = false;
             for (const fh of foodHolders) {
               if (!fh.localInventory) continue;
@@ -636,26 +581,26 @@ export class BotAISystem {
               if (consumedFood) break;
             }
 
-            p.needs.hunger = 95;
+            p.needs.hunger = BOT.hungerAfterMeal;
             if (consumedFood) {
-              p.needs.mood = Math.min(100, (p.needs.mood || 80) + 5);
+              p.needs.mood = Math.min(BOT.maxNeed, (p.needs.mood || BOT.defaultMood) + BOT.mealMoodGain);
             }
           }
 
-          if (p.needs.ale !== undefined && p.needs.ale < 40) {
+          if (p.needs.ale !== undefined && p.needs.ale < BOT.drinkAleThreshold) {
             for (const b of completedBuildings) {
               if (b.localInventory && (b.localInventory.ale || 0) > 0) {
                 b.localInventory.ale = (b.localInventory.ale || 0) - 1;
                 if (b.localInventory.ale <= 0) delete b.localInventory.ale;
-                p.needs.ale = 90;
-                p.needs.mood = Math.min(100, (p.needs.mood || 80) + 10);
+                p.needs.ale = BOT.aleAfterDrink;
+                p.needs.mood = Math.min(BOT.maxNeed, (p.needs.mood || BOT.defaultMood) + BOT.drinkMoodGain);
                 break;
               }
             }
           }
 
-          if (p.needs.energy < 45) p.needs.energy = 95;
-          if (p.needs.mood < 50) p.needs.mood = 80;
+          if (p.needs.energy < BOT.restEnergyThreshold) p.needs.energy = BOT.energyAfterRest;
+          if (p.needs.mood < BOT.lowMoodThreshold) p.needs.mood = BOT.defaultMood;
         }
 
         if (p.workBuildingId) {
@@ -670,7 +615,7 @@ export class BotAISystem {
 
             if (!isGatheringOrHauling) {
               const blueprint = BUILDING_BLUEPRINTS[b.buildingType];
-              const maxCap = blueprint?.maxStorage || 30;
+              const maxCap = blueprint?.maxStorage || BOT.fallbackStorageCapacity;
               b.localInventory = b.localInventory || {};
               const curStored = Object.values(b.localInventory).reduce((acc, v) => acc + (v || 0), 0);
 
@@ -765,11 +710,14 @@ export class BotAISystem {
             availablePeasant.muleTransition = undefined;
             availablePeasant.assignedMuleHutId = undefined;
             b.assignedWorkers.push(availablePeasant.id);
-            const prof = PROFESSION_TITLES[b.buildingType] || 'Робітник';
+            const lang = useGameStore.getState().language;
+            const dict = translations[lang];
+            const prof = (b.buildingType ? dict.botAI.professions[b.buildingType] : undefined) || dict.botAI.defaultWorkerTitle;
             availablePeasant.title = prof;
-            if (!isRegionOffscreen && Math.random() < 0.2) {
+            if (!isRegionOffscreen && Math.random() < BOT.workSpeechChance) {
+              const bName = (b.buildingType ? dict.buildings.items[b.buildingType]?.name : undefined) || b.name || def.name;
               availablePeasant.speechBubble = {
-                text: `Працюю у ${b.name || def.name}! (${prof})`,
+                text: dict.botAI.workingAtBuilding(bName, prof),
                 expiresAtTick: currentTick + DEFAULT_SPEECH_BUBBLE_TICKS,
                 type: 'work',
               };
@@ -782,10 +730,10 @@ export class BotAISystem {
         const isIdleOrWandering = !p.currentJob || p.currentJob.type === 'idle' || p.currentJob.type === 'wander';
 
         if (!isNightTime && isIdleOrWandering && incompleteBuildings.length > 0 && p.gridPosition) {
-          const targetB = incompleteBuildings.find((b) => (builderCounts.get(b.id) || 0) < 3) || incompleteBuildings[0];
+          const targetB = incompleteBuildings.find((b) => (builderCounts.get(b.id) || 0) < BOT.buildersPerProject) || incompleteBuildings[0];
           const curBuilders = builderCounts.get(targetB.id) || 0;
 
-          if (curBuilders < 3 && targetB.gridPosition) {
+          if (curBuilders < BOT.buildersPerProject && targetB.gridPosition) {
             let matsDelivered = true;
             if (targetB.requiredMaterials) {
               for (const [res, needed] of Object.entries(targetB.requiredMaterials)) {
@@ -815,28 +763,38 @@ export class BotAISystem {
                     totalWork: 30,
                   };
 
+                  const pStart: [number, number] = p.position ? [Math.floor(p.position[0]), Math.floor(p.position[2])] : p.gridPosition;
                   if (!p.hasMule && hp) {
                     p.assignedMuleHutId = hp.id;
                     const hpDoor = getBuildingDoorInfo(hp);
-                    const pathToHp = isRegionOffscreen ? null : AStar.findPath(grid, p.gridPosition, hpDoor.doorApproachPos, true, region.bounds);
+                    const pathToHp = isRegionOffscreen ? null : AStar.findPath(grid, pStart, hpDoor.doorApproachPos, true, region.bounds);
                     if (pathToHp && pathToHp.length > 0) {
                       p.path = pathToHp;
+                    } else if (!isRegionOffscreen) {
+                      continue;
                     }
                   } else {
                     const storageHub = HaulingJobHandler.getSettlementStorageHub(region.id, botFactionId);
                     if (storageHub) {
                       const doorInfo = getBuildingDoorInfo(storageHub);
-                      const path = isRegionOffscreen ? null : AStar.findPath(grid, p.gridPosition, doorInfo.doorApproachPos, true, region.bounds);
+                      const path = isRegionOffscreen ? null : AStar.findPath(grid, pStart, doorInfo.doorApproachPos, true, region.bounds);
                       if (path && path.length > 0) {
                         p.path = path;
+                      } else if (!isRegionOffscreen) {
+                        continue;
                       }
+                    } else if (!isRegionOffscreen) {
+                      continue;
                     }
                   }
 
                   if (!isRegionOffscreen) {
+                    const lang = useGameStore.getState().language;
+                    const dict = translations[lang];
+                    const targetBName = (targetB.buildingType ? dict.buildings.items[targetB.buildingType]?.name : undefined) || targetB.name || dict.jobs.defaultBuildingFallback;
                     p.speechBubble = {
-                      text: p.hasMule ? `Веду мула за матеріалами для ${targetB.name || 'споруди'}!` : `Іду до прив'язі взяти мула!`,
-                      expiresAtTick: currentTick + 30,
+                      text: p.hasMule ? dict.botAI.leadingMuleForMaterials(targetBName) : dict.botAI.goingForMule,
+                      expiresAtTick: currentTick + BOT.workSpeechTicks,
                       type: 'work',
                     };
                   }
@@ -844,10 +802,17 @@ export class BotAISystem {
                 }
               }
             } else {
-              builderCounts.set(targetB.id, curBuilders + 1);
               const bW = targetB.buildingWidth || 2;
               const bH = targetB.buildingHeight || 2;
-              const buildPath = isRegionOffscreen ? null : AStar.findPathToArea(grid, p.gridPosition, targetB.gridPosition[0], targetB.gridPosition[1], bW, bH, region.bounds);
+              const pStart: [number, number] = p.position ? [Math.floor(p.position[0]), Math.floor(p.position[2])] : p.gridPosition;
+              const buildPath = isRegionOffscreen ? null : AStar.findPathToArea(grid, pStart, targetB.gridPosition[0], targetB.gridPosition[1], bW, bH, region.bounds);
+              if (!isRegionOffscreen && (!buildPath || buildPath.length === 0)) {
+                if (region.id === 2) {
+                  ensureEichenauSettlementAccess(grid, region.campPosition || region.center, [targetB]);
+                }
+                continue;
+              }
+              builderCounts.set(targetB.id, curBuilders + 1);
               p.currentJob = {
                 id: `bot-build-${targetB.id}-${Date.now()}`,
                 type: 'build_structure',
@@ -862,10 +827,13 @@ export class BotAISystem {
                 p.gridPosition = [targetB.gridPosition[0], targetB.gridPosition[1]];
                 p.position = [targetB.gridPosition[0] + 0.5, 0.05, targetB.gridPosition[1] + 0.5];
               }
-              if (!isRegionOffscreen && Math.random() < 0.2) {
+              if (!isRegionOffscreen && Math.random() < BOT.workSpeechChance) {
+                const lang = useGameStore.getState().language;
+                const dict = translations[lang];
+                const targetBName = (targetB.buildingType ? dict.buildings.items[targetB.buildingType]?.name : undefined) || targetB.name || dict.jobs.defaultBuildingFallback;
                 p.speechBubble = {
-                  text: `Зводжу ${targetB.name || 'споруду'}!`,
-                  expiresAtTick: currentTick + 30,
+                  text: dict.botAI.buildingStructure(targetBName),
+                  expiresAtTick: currentTick + BOT.workSpeechTicks,
                   type: 'work',
                 };
               }
@@ -877,7 +845,7 @@ export class BotAISystem {
         const pCooldown = (p as any).idleCooldownTicks ?? 0;
         if (!isRegionOffscreen && !isNightTime && isIdleOrWandering && (!p.path || p.path.length === 0) && currentTick >= pCooldown && p.gridPosition) {
           if (wanderingPathBudget <= 0) {
-            (p as any).idleCooldownTicks = currentTick + 20;
+            (p as any).idleCooldownTicks = currentTick + BOT.workerIdleRetryTicks;
             continue;
           }
 
@@ -895,8 +863,8 @@ export class BotAISystem {
                 const tz = bz + oz;
                 const dist = Math.hypot(tx - curX, tz - curZ);
                 if (
-                  dist >= 3 &&
-                  dist <= 12 &&
+                  dist >= BOT.wanderMinDistance &&
+                  dist <= BOT.wanderMaxDistance &&
                   tx >= region.bounds.minX + 2 &&
                   tx <= region.bounds.maxX - 2 &&
                   tz >= region.bounds.minZ + 2 &&
@@ -905,17 +873,17 @@ export class BotAISystem {
                   grid.isWalkable(tx, tz)
                 ) {
                   candidateDestinations.push([tx, tz]);
-                  if (candidateDestinations.length >= 3) break;
+                  if (candidateDestinations.length >= BOT.wanderCandidateCount) break;
                 }
               }
-              if (candidateDestinations.length >= 3) break;
+              if (candidateDestinations.length >= BOT.wanderCandidateCount) break;
             }
           }
 
           if (candidateDestinations.length === 0) {
-            for (let attempt = 0; attempt < 6; attempt++) {
+            for (let attempt = 0; attempt < BOT.wanderAttempts; attempt++) {
               const angle = Math.random() * Math.PI * 2;
-              const dist = 3 + Math.random() * 6;
+              const dist = BOT.wanderMinDistance + Math.random() * BOT.wanderDistanceVariation;
               const candX = Math.round(curX + Math.cos(angle) * dist);
               const candZ = Math.round(curZ + Math.sin(angle) * dist);
               if (
@@ -944,20 +912,22 @@ export class BotAISystem {
                 progress: 0,
                 totalWork: 20,
               };
-              (p as any).idleCooldownTicks = currentTick + 80 + Math.floor(Math.random() * 40);
-              if (Math.random() < 0.1) {
-                const phrases = ["Розім'яти б ноги", 'Огляну володіння', 'Пройдуся селом', 'Перевірю стежки', 'Гарна нині погода'];
+              (p as any).idleCooldownTicks = currentTick + BOT.workerIdleTicks + Math.floor(Math.random() * BOT.workerIdleTickVariation);
+              if (Math.random() < BOT.idleSpeechChance) {
+                const lang = useGameStore.getState().language;
+                const dict = translations[lang];
+                const phrases = [dict.jobs.peasantWander1, dict.jobs.peasantWander2, dict.jobs.peasantWander3, dict.jobs.peasantWander4, dict.jobs.peasantWander5];
                 p.speechBubble = {
                   text: phrases[Math.floor(Math.random() * phrases.length)],
-                  expiresAtTick: currentTick + 30,
+                  expiresAtTick: currentTick + BOT.workSpeechTicks,
                   type: 'mood',
                 };
               }
             } else {
-              (p as any).idleCooldownTicks = currentTick + 60;
+              (p as any).idleCooldownTicks = currentTick + BOT.workerFailedWanderTicks;
             }
           } else {
-            (p as any).idleCooldownTicks = currentTick + 60;
+            (p as any).idleCooldownTicks = currentTick + BOT.workerFailedWanderTicks;
           }
         }
       }
@@ -968,7 +938,7 @@ export class BotAISystem {
         const isLordIdle = !botLord.currentJob || botLord.currentJob.type === 'idle' || botLord.currentJob.type === 'wander';
         if (isLordIdle) {
           if (wanderingPathBudget <= 0) {
-            (botLord as any).idleCooldownTicks = currentTick + 25;
+            (botLord as any).idleCooldownTicks = currentTick + BOT.lordIdleRetryTicks;
           } else {
             const curX = botLord.gridPosition[0];
             const curZ = botLord.gridPosition[1];
@@ -1020,9 +990,9 @@ export class BotAISystem {
             }
 
             if (candidateDestinations.length === 0) {
-              for (let attempt = 0; attempt < 6; attempt++) {
+              for (let attempt = 0; attempt < BOT.wanderAttempts; attempt++) {
                 const angle = Math.random() * Math.PI * 2;
-                const dist = 3 + Math.random() * 6;
+                const dist = BOT.wanderMinDistance + Math.random() * BOT.wanderDistanceVariation;
                 const candX = Math.round(curX + Math.cos(angle) * dist);
                 const candZ = Math.round(curZ + Math.sin(angle) * dist);
                 if (
@@ -1051,20 +1021,22 @@ export class BotAISystem {
                   progress: 0,
                   totalWork: 25,
                 };
-                (botLord as any).idleCooldownTicks = currentTick + 100 + Math.floor(Math.random() * 50);
-                if (Math.random() < 0.15) {
-                  const lordPhrases = ['Оглядаю володіння', 'Перевіряю стан земель', 'Село повинно процвітати', 'Огляну будівництво та дороги'];
+                (botLord as any).idleCooldownTicks = currentTick + BOT.lordIdleTicks + Math.floor(Math.random() * BOT.lordIdleTickVariation);
+                if (Math.random() < BOT.lordSpeechChance) {
+                  const lang = useGameStore.getState().language;
+                  const dict = translations[lang];
+                  const lordPhrases = [dict.jobs.nobleWander1, dict.jobs.nobleWander2, dict.jobs.nobleWander3, dict.jobs.nobleWander4];
                   botLord.speechBubble = {
                     text: lordPhrases[Math.floor(Math.random() * lordPhrases.length)],
-                    expiresAtTick: currentTick + 35,
+                    expiresAtTick: currentTick + BOT.lordSpeechTicks,
                     type: 'mood',
                   };
                 }
               } else {
-                (botLord as any).idleCooldownTicks = currentTick + 70;
+                (botLord as any).idleCooldownTicks = currentTick + BOT.lordFailedWanderTicks;
               }
             } else {
-              (botLord as any).idleCooldownTicks = currentTick + 70;
+              (botLord as any).idleCooldownTicks = currentTick + BOT.lordFailedWanderTicks;
             }
           }
         }
@@ -1093,7 +1065,16 @@ export class BotAISystem {
           if (fallbackBuilder && fallbackBuilder.gridPosition) {
             const bW = targetB.buildingWidth || 2;
             const bH = targetB.buildingHeight || 2;
-            const buildPath = isRegionOffscreen ? null : AStar.findPathToArea(grid, fallbackBuilder.gridPosition, targetB.gridPosition[0], targetB.gridPosition[1], bW, bH, region.bounds);
+            const fbStart: [number, number] = fallbackBuilder.position
+              ? [Math.floor(fallbackBuilder.position[0]), Math.floor(fallbackBuilder.position[2])]
+              : fallbackBuilder.gridPosition;
+            const buildPath = isRegionOffscreen ? null : AStar.findPathToArea(grid, fbStart, targetB.gridPosition[0], targetB.gridPosition[1], bW, bH, region.bounds);
+            if (!isRegionOffscreen && (!buildPath || buildPath.length === 0)) {
+              if (region.id === 2) {
+                ensureEichenauSettlementAccess(grid, region.campPosition || region.center, [targetB]);
+              }
+              continue;
+            }
             builderCounts.set(targetB.id, 1);
             fallbackBuilder.currentJob = {
               id: `bot-build-${targetB.id}-${Date.now()}`,
@@ -1109,18 +1090,21 @@ export class BotAISystem {
               fallbackBuilder.gridPosition = [targetB.gridPosition[0], targetB.gridPosition[1]];
               fallbackBuilder.position = [targetB.gridPosition[0] + 0.5, 0.05, targetB.gridPosition[1] + 0.5];
             }
-            if (!isRegionOffscreen && Math.random() < 0.2) {
+            if (!isRegionOffscreen && Math.random() < BOT.workSpeechChance) {
+              const lang = useGameStore.getState().language;
+              const dict = translations[lang];
+              const targetBName = (targetB.buildingType ? dict.buildings.items[targetB.buildingType]?.name : undefined) || targetB.name || dict.jobs.defaultBuildingFallback;
               fallbackBuilder.speechBubble = {
-                text: `Зводжу ${targetB.name || 'споруду'}!`,
-                expiresAtTick: currentTick + 30,
+                text: dict.botAI.buildingStructure(targetBName),
+                expiresAtTick: currentTick + BOT.workSpeechTicks,
                 type: 'work',
               };
             }
           }
         }
 
-        if (matsDelivered && (currentTick + region.id * 3) % 20 === 0) {
-          targetB.constructionProgress = Math.min(100, (targetB.constructionProgress || 0) + 10);
+        if (matsDelivered && (currentTick + region.id * BOT.regionTickPhase) % BOT.offscreenConstructionIntervalTicks === 0) {
+          targetB.constructionProgress = Math.min(100, (targetB.constructionProgress || 0) + BOT.offscreenConstructionStep);
           if (targetB.constructionProgress >= 100) {
             targetB.constructionProgress = 100;
             completeBotHouseProject(targetB);
@@ -1133,18 +1117,18 @@ export class BotAISystem {
       let totalBeds = 0;
       for (const b of completedBuildings) {
         if (b.buildingType === 'peasant_house') totalBeds += HOUSE_TIERS_CONFIG[b.houseTier || 1].capacity;
-        else if (b.buildingType === 'tent') totalBeds += 3;
-        else if (b.buildingType === 'manor') totalBeds += 5;
+        else if (b.buildingType === 'tent') totalBeds += BOT.tentBeds;
+        else if (b.buildingType === 'manor') totalBeds += BOT.manorBeds;
       }
 
       let startedHousingProject = false;
-      const housingInterval = BOT_AI_BUILD_DECISION_INTERVAL * 2 + region.id * 13;
+      const housingInterval = BOT_AI_BUILD_DECISION_INTERVAL * 2 + region.id * BOT.housingRegionPhase;
       if (incompleteBuildings.length < 2 && currentTick - (memory.lastHousingActionTick || 0) >= housingInterval) {
         const houses = completedBuildings.filter((b) => b.buildingType === 'peasant_house' && !b.pendingHouseTier && !b.pendingBackyardExtension);
         const foodTypes = countBotFoodTypes(completedBuildings);
         const upgrades = houses.filter((b) => {
           const nextTier = (b.houseTier || 1) + 1;
-          if (nextTier > 3) return false;
+          if (nextTier > BOT.maxHouseTier) return false;
           const tier = nextTier as HouseTier;
           return foodTypes >= HOUSE_TIERS_CONFIG[tier].upgradeMinFoodTypes &&
             botHasRequiredGoods(completedBuildings, tier) &&
@@ -1184,7 +1168,7 @@ export class BotAISystem {
             targetHouse = upgrades[0];
             targetTier = ((targetHouse.houseTier || 1) + 1) as HouseTier;
           }
-          if (!targetHouse && houses.length >= 3) {
+          if (!targetHouse && houses.length >= BOT.housesBeforeUpgrade) {
             for (const house of houses) {
               if ((house.houseTier || 1) < 2 || !basicExtensions.includes(house.backyardExtension || 'none')) continue;
               const extension = pickAffordable(artisanExtensions, house);
@@ -1220,21 +1204,24 @@ export class BotAISystem {
 
         const lordBedsNeeded = botLord ? 1 : 0;
         if (peasants.length + lordBedsNeeded < totalBeds && peasants.length < BOT_AI_MAX_PEASANTS) {
-          const isFemale = Math.random() < 0.45;
-          const namePool = isFemale ? UKRAINIAN_NAMES_FEMALE : UKRAINIAN_NAMES_MALE;
+          const lang = useGameStore.getState().language;
+          const dict = translations[lang];
+          const isFemale = Math.random() < BOT.femaleSpawnChance;
+          const namePool = getBotVillagerNames(lang, isFemale);
           const chosenName = namePool[Math.floor(Math.random() * namePool.length)];
           const avatarColor = PEASANT_COLORS[Math.floor(Math.random() * PEASANT_COLORS.length)];
 
           const camp = region.campPosition || region.center;
-          const spawnX = Math.max(region.bounds.minX + 2, Math.min(region.bounds.maxX - 2, camp[0] + Math.round(Math.random() * 6 - 3)));
-          const spawnZ = Math.max(region.bounds.minZ + 2, Math.min(region.bounds.maxZ - 2, camp[1] + Math.round(Math.random() * 6 - 3)));
+          const spawnX = Math.max(region.bounds.minX + 2, Math.min(region.bounds.maxX - 2, camp[0] + Math.round(Math.random() * BOT.spawnSpread - BOT.spawnHalfSpread)));
+          const spawnZ = Math.max(region.bounds.minZ + 2, Math.min(region.bounds.maxZ - 2, camp[1] + Math.round(Math.random() * BOT.spawnSpread - BOT.spawnHalfSpread)));
 
-          const newUnitId = `unit-bot-${region.id}-peasant-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          const newUnitId = `unit-bot-${region.id}-peasant-${Date.now()}-${Math.floor(Math.random() * BOT.idRandomRange)}`;
+          const regionName = (dict.strategicMap as any)?.[region.id === 1 ? 'waldau' : region.id === 2 ? 'eichenau' : region.id === 3 ? 'zweiau' : region.id === 4 ? 'mittenwald' : 'highway']?.name || region.ukrName;
 
           world.add({
             id: newUnitId,
-            name: `${chosenName} з ${region.ukrName}`,
-            title: 'Селянин',
+            name: dict.botAI.peasantFromRegion(chosenName, regionName),
+            title: dict.botAI.defaultPeasantTitle,
             characterClass: 'peasant',
             avatarColor,
             isCharacter: true,
@@ -1248,7 +1235,7 @@ export class BotAISystem {
             thoughts: [
               {
                 id: 'settled',
-                text: `Прибув до володінь ${region.lordName} (+10)`,
+                text: dict.botAI.arrivedAtLordFiefdomThought(region.lordName, 10),
                 modifier: 10,
                 durationTicks: 2500,
               },
@@ -1261,18 +1248,18 @@ export class BotAISystem {
               hygiene: 80,
             },
             skills: {
-              farming: 4 + Math.floor(Math.random() * 5),
-              woodcutting: 4 + Math.floor(Math.random() * 5),
-              mining: 3 + Math.floor(Math.random() * 5),
-              building: 5 + Math.floor(Math.random() * 4),
-              cooking: 3 + Math.floor(Math.random() * 4),
-              brewing: 3 + Math.floor(Math.random() * 4),
-              combat: 4 + Math.floor(Math.random() * 4),
+              farming: BOT.farmingSkillBase + Math.floor(Math.random() * BOT.farmingSkillRange),
+              woodcutting: BOT.woodcuttingSkillBase + Math.floor(Math.random() * BOT.woodcuttingSkillRange),
+              mining: BOT.miningSkillBase + Math.floor(Math.random() * BOT.miningSkillRange),
+              building: BOT.buildingSkillBase + Math.floor(Math.random() * BOT.buildingSkillRange),
+              cooking: BOT.cookingSkillBase + Math.floor(Math.random() * BOT.cookingSkillRange),
+              brewing: BOT.brewingSkillBase + Math.floor(Math.random() * BOT.brewingSkillRange),
+              combat: BOT.combatSkillBase + Math.floor(Math.random() * BOT.combatSkillRange),
               intellect: 5,
               charisma: 5,
             },
             speechBubble: {
-              text: `Прибув до ${region.ukrName}! Шукаю роботу та дім.`,
+              text: dict.botAI.arrivedAtRegionSpeech(regionName),
               expiresAtTick: currentTick + DEFAULT_SPEECH_BUBBLE_TICKS,
               type: 'mood',
             },
@@ -1281,28 +1268,30 @@ export class BotAISystem {
         }
       }
 
-      const botDecisionInterval = BOT_AI_BUILD_DECISION_INTERVAL + (region.id * 17);
+      const botDecisionInterval = BOT_AI_BUILD_DECISION_INTERVAL + (region.id * BOT.buildDecisionRegionPhase);
       if (!startedHousingProject && incompleteBuildings.length < 2 && currentTick - memory.lastActionTick >= botDecisionInterval) {
         memory.lastActionTick = currentTick;
 
         const completedHitchingPosts = completedBuildings.filter((b) => b.buildingType === 'hitching_post');
         for (const hp of completedHitchingPosts) {
           const curM = hp.mulesCount ?? 1;
-          const maxM = hp.maxMules ?? 3;
+          const maxM = hp.maxMules ?? BOT.fallbackMuleCapacity;
           if (curM < maxM) {
-            const needsSecondMule = curM === 1 && (peasants.length >= 6 || incompleteBuildings.length > 0);
-            const needsThirdMule = curM === 2 && (peasants.length >= 10 || incompleteBuildings.length > 1);
+            const needsSecondMule = curM === 1 && (peasants.length >= BOT.secondMulePopulation || incompleteBuildings.length > 0);
+            const needsThirdMule = curM === 2 && (peasants.length >= BOT.thirdMulePopulation || incompleteBuildings.length > 1);
             if (needsSecondMule || needsThirdMule) {
-              if (memory.gold >= 40 || currentTick % 120 === 0) {
-                if (memory.gold >= 50) {
-                  memory.gold -= 50;
+              if (memory.gold >= BOT.mulePurchaseThreshold || currentTick % BOT.regionalStatsIntervalTicks === 0) {
+                if (memory.gold >= BOT.mulePrice) {
+                  memory.gold -= BOT.mulePrice;
                 }
                 hp.mulesCount = curM + 1;
                 const speaker = botLord || peasants[0];
                 if (speaker && !isRegionOffscreen) {
+                  const lang = useGameStore.getState().language;
+                  const dict = translations[lang];
                   speaker.speechBubble = {
-                    text: `Купили додаткового мула (${hp.mulesCount}/${maxM}) для розбудови!`,
-                    expiresAtTick: currentTick + 35,
+                    text: dict.botAI.boughtExtraMuleAlert(hp.mulesCount, maxM),
+                    expiresAtTick: currentTick + BOT.lordSpeechTicks,
                     type: 'work',
                   };
                 }
@@ -1339,7 +1328,7 @@ export class BotAISystem {
         let totalStockpileCapacity = 0;
         let totalStockpileStored = 0;
         for (const sp of botStockpiles) {
-          const cap = sp.maxStorage || 200;
+          const cap = sp.maxStorage || BOT.fallbackStockpileCapacity;
           totalStockpileCapacity += cap;
           if (sp.localInventory) {
             totalStockpileStored += Object.values(sp.localInventory).reduce((acc, v) => acc + (v || 0), 0);
@@ -1347,10 +1336,10 @@ export class BotAISystem {
         }
         const areStockpilesNearFull =
           botStockpiles.length > 0 &&
-          (totalStockpileStored >= totalStockpileCapacity * 0.7 ||
+          (totalStockpileStored >= totalStockpileCapacity * BOT.storageExpansionFraction ||
             botStockpiles.some((sp) => {
               const cur = Object.values(sp.localInventory || {}).reduce((acc, v) => acc + (v || 0), 0);
-              return cur >= (sp.maxStorage || 200) * 0.85;
+              return cur >= (sp.maxStorage || BOT.fallbackStockpileCapacity) * BOT.singleStockpileExpansionFraction;
             }));
 
         const totalCompleted = completedBuildings.length;
@@ -1360,12 +1349,12 @@ export class BotAISystem {
         const workplaceCount = totalCompleted - houseCount - count('tent') - count('campfire');
         const allowedHouses = Math.min(
           BOT_AI_MAX_PEASANTS,
-          Math.max(2, Math.min(18, 2 + Math.floor(Math.max(0, workplaceCount) / 1.1)))
+          Math.max(2, Math.min(BOT.maxWorkplaceCapacity, 2 + Math.floor(Math.max(0, workplaceCount) / BOT.workplaceCapacityScale)))
         );
         const freeBeds = totalBeds - (peasants.length + (botLord ? 1 : 0));
         const needsHousing = freeBeds <= 1 && houseCount < allowedHouses && peasants.length < BOT_AI_MAX_PEASANTS;
 
-        const maxStockpiles = Math.min(3, Math.max(1, Math.floor(totalCompleted / 6)));
+        const maxStockpiles = Math.min(BOT.maxStockpiles, Math.max(1, Math.floor(totalCompleted / BOT.buildingsPerStockpile)));
         const needsStockpile = areStockpilesNearFull && stockpileCount < maxStockpiles;
 
         let candidateGoal: { type: BuildingType; targetDeposit?: ResourceDeposit } | null = null;
@@ -1418,7 +1407,7 @@ export class BotAISystem {
         } else if (canAttempt('stockpile') && needsStockpile) {
 
           candidateGoal = { type: 'stockpile' };
-        } else if (canAttempt('peasant_house') && houseCount < 4 && needsHousing) {
+        } else if (canAttempt('peasant_house') && houseCount < BOT.initialHouseLimit && needsHousing) {
 
           candidateGoal = { type: 'peasant_house' };
         } else if (canAttempt('brewery') && count('wheat_farm') >= 1 && count('brewery') === 0) {
@@ -1441,17 +1430,17 @@ export class BotAISystem {
           candidateGoal = { type: 'brickworks' };
         } else if (canAttempt('weavers_workshop') && count('weavers_workshop') === 0) {
           candidateGoal = { type: 'weavers_workshop' };
-        } else if (canAttempt('barracks') && count('barracks') === 0 && peasants.length >= 8) {
+        } else if (canAttempt('barracks') && count('barracks') === 0 && peasants.length >= BOT.advancedBuildingPopulation) {
           candidateGoal = { type: 'barracks' };
-        } else if (canAttempt('manor') && count('manor') === 0 && peasants.length >= 8) {
+        } else if (canAttempt('manor') && count('manor') === 0 && peasants.length >= BOT.advancedBuildingPopulation) {
           candidateGoal = { type: 'manor' };
-        } else if (canAttempt('peasant_house') && houseCount < 7 && needsHousing) {
+        } else if (canAttempt('peasant_house') && houseCount < BOT.expandedHouseLimit && needsHousing) {
           candidateGoal = { type: 'peasant_house' };
         } else if (canAttempt('foresters_hut') && count('foresters_hut') === 0 && count('lumberjack_hut') >= 1) {
           candidateGoal = { type: 'foresters_hut' };
-        } else if (canAttempt('lumberjack_hut') && count('lumberjack_hut') < 2 && peasants.length >= 10) {
+        } else if (canAttempt('lumberjack_hut') && count('lumberjack_hut') < 2 && peasants.length >= BOT.thirdMulePopulation) {
           candidateGoal = { type: 'lumberjack_hut' };
-        } else if (canAttempt('wheat_farm') && count('wheat_farm') < 2 && peasants.length >= 10) {
+        } else if (canAttempt('wheat_farm') && count('wheat_farm') < 2 && peasants.length >= BOT.thirdMulePopulation) {
           candidateGoal = { type: 'wheat_farm' };
         } else if (canAttempt('peasant_house') && needsHousing) {
           candidateGoal = { type: 'peasant_house' };
@@ -1463,9 +1452,9 @@ export class BotAISystem {
           const bType = candidateGoal.type;
           const bBlueprint = BUILDING_BLUEPRINTS[bType];
           if (bBlueprint) {
-            const baseW = bBlueprint.width || 3;
+            const baseW = bBlueprint.width || BOT.fallbackBuildingWidth;
             const baseH = bBlueprint.height || 2;
-            const woodCost = bBlueprint.cost?.wood || 15;
+            const woodCost = bBlueprint.cost?.wood || BOT.fallbackWoodCost;
             const stoneCost = bBlueprint.cost?.stone || 0;
 
             let settlementWood = 0;
@@ -1492,7 +1481,7 @@ export class BotAISystem {
             let placedResult: PlacementCandidate | null = null;
 
             const checkPlacementValid = (bx: number, bz: number, w: number, h: number): boolean => {
-              if (!GridMap.isBuildingInRegion(region.id, bx, bz, w, h, 4.0)) {
+              if (!GridMap.isBuildingInRegion(region.id, bx, bz, w, h, BOT.buildingRegionMargin)) {
                 return false;
               }
 
@@ -1625,7 +1614,7 @@ export class BotAISystem {
               if (bType === 'fishermans_hut') {
                 const lakeRadii = [3.0, 4.0, 5.0, 6.0, 7.5, 9.0, 11.0, 13.0];
                 for (const r of lakeRadii) {
-                  for (let deg = 0; deg < 360; deg += 15) {
+                  for (let deg = 0; deg < 360; deg += BOT.placementAngleStepDegrees) {
                     const rad = (deg * Math.PI) / 180;
                     const cx = dx + r * Math.cos(rad);
                     const cz = dz + r * Math.sin(rad);
@@ -1640,7 +1629,7 @@ export class BotAISystem {
               } else if (bType === 'foragers_hut' || bType === 'hunters_hut') {
                 const depRadii = [3.0, 4.0, 5.0, 6.5, 8.0, 10.0];
                 for (const r of depRadii) {
-                  for (let deg = 0; deg < 360; deg += 15) {
+                  for (let deg = 0; deg < 360; deg += BOT.placementAngleStepDegrees) {
                     const rad = (deg * Math.PI) / 180;
                     const cx = dx + r * Math.cos(rad);
                     const cz = dz + r * Math.sin(rad);
@@ -1663,7 +1652,7 @@ export class BotAISystem {
                     }
                     continue;
                   }
-                  for (let deg = 0; deg < 360; deg += 15) {
+                  for (let deg = 0; deg < 360; deg += BOT.placementAngleStepDegrees) {
                     const rad = (deg * Math.PI) / 180;
                     const cx = dx + r * Math.cos(rad);
                     const cz = dz + r * Math.sin(rad);
@@ -1694,22 +1683,22 @@ export class BotAISystem {
 
                   const rx = Math.floor(key / grid.width);
                   const rz = key % grid.width;
-                  if (GridMap.isTradeHighwayTile(rx, rz) || GridMap.getDistanceToHighway(rx, rz) < 6.0) {
+                  if (GridMap.isTradeHighwayTile(rx, rz) || GridMap.getDistanceToHighway(rx, rz) < BOT.highwayBuildingClearance) {
                     continue;
                   }
-                  if (!GridMap.isCoordInRegion(region.id, rx, rz, 4.0)) {
+                  if (!GridMap.isCoordInRegion(region.id, rx, rz, BOT.buildingRegionMargin)) {
                     continue;
                   }
                   const distToCamp = Math.hypot(rx - camp[0], rz - camp[1]);
-                  if (distToCamp > 50) continue;
+                  if (distToCamp > BOT.maxBuildDistanceFromCamp) continue;
 
                   const offsets = [
-                    [rx + baseW / 2 + 1.2, rz + 0.5],
-                    [rx - baseW / 2 - 1.2, rz + 0.5],
-                    [rx + 0.5, rz + baseH / 2 + 1.2],
-                    [rx + 0.5, rz - baseH / 2 - 1.2],
-                    [rx + baseW / 2 + 1.8, rz + baseH / 2 + 1.8],
-                    [rx - baseW / 2 - 1.8, rz - baseH / 2 - 1.8],
+                    [rx + baseW / 2 + BOT.roadSideBuildingGap, rz + 0.5],
+                    [rx - baseW / 2 - BOT.roadSideBuildingGap, rz + 0.5],
+                    [rx + 0.5, rz + baseH / 2 + BOT.roadSideBuildingGap],
+                    [rx + 0.5, rz - baseH / 2 - BOT.roadSideBuildingGap],
+                    [rx + baseW / 2 + BOT.roadCornerBuildingGap, rz + baseH / 2 + BOT.roadCornerBuildingGap],
+                    [rx - baseW / 2 - BOT.roadCornerBuildingGap, rz - baseH / 2 - BOT.roadCornerBuildingGap],
                   ];
                   for (const [cx, cz] of offsets) {
                     const res = testPositionRotations(cx, cz, camp);
@@ -1731,12 +1720,12 @@ export class BotAISystem {
                 const ebW = eb.buildingWidth || 2;
                 const ebH = eb.buildingHeight || 2;
                 const offsets = [
-                  [ebx + ebW + baseW / 2 + 1.2, ebz + ebH / 2],
-                  [ebx - baseW / 2 - 1.2, ebz + ebH / 2],
-                  [ebx + ebW / 2, ebz + ebH + baseH / 2 + 1.2],
-                  [ebx + ebW / 2, ebz - baseH / 2 - 1.2],
-                  [ebx + ebW + baseW / 2 + 1.5, ebz + ebH + baseH / 2 + 1.5],
-                  [ebx - baseW / 2 - 1.5, ebz + ebH + baseH / 2 + 1.5],
+                  [ebx + ebW + baseW / 2 + BOT.roadSideBuildingGap, ebz + ebH / 2],
+                  [ebx - baseW / 2 - BOT.roadSideBuildingGap, ebz + ebH / 2],
+                  [ebx + ebW / 2, ebz + ebH + baseH / 2 + BOT.roadSideBuildingGap],
+                  [ebx + ebW / 2, ebz - baseH / 2 - BOT.roadSideBuildingGap],
+                  [ebx + ebW + baseW / 2 + BOT.neighborCornerBuildingGap, ebz + ebH + baseH / 2 + BOT.neighborCornerBuildingGap],
+                  [ebx - baseW / 2 - BOT.neighborCornerBuildingGap, ebz + ebH + baseH / 2 + BOT.neighborCornerBuildingGap],
                 ];
                 for (const [cx, cz] of offsets) {
                   const res = testPositionRotations(cx, cz, camp);
@@ -1752,7 +1741,7 @@ export class BotAISystem {
             if (!placedResult) {
               const campRadii = [6, 10, 14, 18, 22, 26, 30, 35, 40, 46, 52];
               for (const r of campRadii) {
-                const angleStep = Math.max(12, Math.floor(360 / (r * 1.8)));
+                const angleStep = Math.max(BOT.minPlacementAngleDegrees, Math.floor(360 / (r * BOT.placementSamplesPerRadius)));
                 for (let deg = 0; deg < 360; deg += angleStep) {
                   const rad = (deg * Math.PI) / 180;
                   const cx = camp[0] + r * Math.cos(rad);
@@ -1779,7 +1768,7 @@ export class BotAISystem {
                 isBuilding: true,
                 buildingType: bType,
                 buildingHealth: 30,
-                maxBuildingHealth: bBlueprint.health || 200,
+                maxBuildingHealth: bBlueprint.health || BOT.fallbackBuildingHealth,
                 buildingWidth: bWidth,
                 buildingHeight: bHeight,
                 rotationAngle: chosenRotation,
@@ -1815,6 +1804,10 @@ export class BotAISystem {
               memory.stone = Math.max(0, memory.stone - stoneCost);
               memory.buildStage++;
 
+              if (region.id === 2) {
+                ensureEichenauSettlementAccess(grid, region.campPosition || region.center, [botBuilding]);
+              }
+
               if (BotAISystem.connectBuildingToRoadNetwork(botBuilding, grid, region, resourceDeposits, currentTick)) {
                 incrementTerrainVersion();
                 incrementBuildingVersion();
@@ -1837,6 +1830,9 @@ export class BotAISystem {
                     totalWork: 30,
                   };
 
+                  const lang = useGameStore.getState().language || 'uk';
+                  const dict = translations[lang] || translations.uk;
+
                   if (!builderPeasant.hasMule && hp) {
                     builderPeasant.assignedMuleHutId = hp.id;
                     const hpPos = hp.position || [hp.gridPosition ? hp.gridPosition[0] + 1.5 : bx, 0, hp.gridPosition ? hp.gridPosition[1] + 1.0 : bz];
@@ -1845,8 +1841,8 @@ export class BotAISystem {
                       builderPeasant.path = path;
                     }
                     builderPeasant.speechBubble = {
-                      text: "Іду по мула до прив'язі!",
-                      expiresAtTick: currentTick + 30,
+                      text: dict.botAI.goingForMule,
+                      expiresAtTick: currentTick + BOT.workSpeechTicks,
                       type: 'work',
                     };
                   } else {
@@ -1858,8 +1854,8 @@ export class BotAISystem {
                         builderPeasant.path = path;
                       }
                       builderPeasant.speechBubble = {
-                        text: `Веду мула за матеріалами для ${bBlueprint.name}!`,
-                        expiresAtTick: currentTick + 30,
+                        text: dict.botAI.leadingMuleForMaterials(bBlueprint.name),
+                        expiresAtTick: currentTick + BOT.workSpeechTicks,
                         type: 'work',
                       };
                     }
@@ -1870,17 +1866,17 @@ export class BotAISystem {
               incrementBuildingVersion();
               incrementFoliageVersion();
             } else {
-              BotAISystem.failedGoals.set(`${botFactionId}-${bType}`, currentTick + 50);
+              BotAISystem.failedGoals.set(`${botFactionId}-${bType}`, currentTick + BOT.failedBuildCooldownTicks);
             }
           }
         }
       }
 
-      if (updateRegionStats && currentTick % 120 === 0) {
+      if (updateRegionStats && currentTick % BOT.regionalStatsIntervalTicks === 0) {
         const activePop = peasants.length + 1;
         const activeBuildings = completedBuildings.length;
-        const estWealth = Math.min(600, Math.round(memory.gold + memory.wood * 0.4 + memory.stone * 0.7 + memory.iron * 1.5));
-        const estApproval = Math.min(96, Math.max(60, 75 + (completedBuildings.length >= 4 ? 10 : 0)));
+        const estWealth = Math.min(BOT.maxEstimatedWealth, Math.round(memory.gold + memory.wood * BOT.woodWealthValue + memory.stone * BOT.stoneWealthValue + memory.iron * BOT.ironWealthValue));
+        const estApproval = Math.min(BOT.maxEstimatedApproval, Math.max(BOT.minEstimatedApproval, BOT.baseEstimatedApproval + (completedBuildings.length >= BOT.approvalBuildingThreshold ? BOT.developedRealmApprovalBonus : 0)));
 
         updateRegionStats(region.id, {
           population: activePop,

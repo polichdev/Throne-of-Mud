@@ -7,7 +7,12 @@ import type { RegionData } from '../../../../types/game';
 import {
   DEFAULT_BASE_WORK_STEP,
   WORK_SKILL_STEP_MULTIPLIER,
+  CONSTRUCTION_SPEECH_INTERVAL,
+  CONSTRUCTION_SPEECH_DURATION_TICKS,
 } from '../../../../constants/jobs';
+import { DEFAULT_HOUSE_MAX_HEALTH, HOUSE_TIER_HEALTH_BONUS } from '../../../../constants/housing';
+import { BOT_IMMIGRANT_INITIAL_STATS } from '../../../../constants/world';
+import { translations } from '../../../../i18n';
 
 export class ConstructionJobHandler {
   public static handleConstructionProgress(
@@ -26,16 +31,16 @@ export class ConstructionJobHandler {
       unit.isHaulingLog = false;
     }
 
-    if (job.type === 'build_structure' && currentTick % 12 === 0) {
+    if (job.type === 'build_structure' && currentTick % CONSTRUCTION_SPEECH_INTERVAL === 0) {
       unit.speechBubble = {
-        text: 'Зводжу споруду...',
-        expiresAtTick: currentTick + 15,
+        text: translations[useGameStore.getState().language].chronicle.buildingStructureSpeech,
+        expiresAtTick: currentTick + CONSTRUCTION_SPEECH_DURATION_TICKS,
         type: 'work',
       };
-    } else if (job.type === 'demolish_structure' && currentTick % 12 === 0) {
+    } else if (job.type === 'demolish_structure' && currentTick % CONSTRUCTION_SPEECH_INTERVAL === 0) {
       unit.speechBubble = {
-        text: 'Розбираю споруду...',
-        expiresAtTick: currentTick + 15,
+        text: translations[useGameStore.getState().language].chronicle.demolishingStructureSpeech,
+        expiresAtTick: currentTick + CONSTRUCTION_SPEECH_DURATION_TICKS,
         type: 'work',
       };
     }
@@ -134,7 +139,7 @@ export class ConstructionJobHandler {
         if (upgradedTier) {
           bEnt.houseTier = upgradedTier;
           bEnt.pendingHouseTier = undefined;
-          bEnt.maxBuildingHealth = (bEnt.maxBuildingHealth || 150) + 100;
+          bEnt.maxBuildingHealth = (bEnt.maxBuildingHealth || DEFAULT_HOUSE_MAX_HEALTH) + HOUSE_TIER_HEALTH_BONUS;
         }
         if (upgradedYard) {
           bEnt.backyardExtension = upgradedYard;
@@ -143,17 +148,18 @@ export class ConstructionJobHandler {
         }
         bEnt.constructionProgress = 100;
         bEnt.isCompleted = true;
-        bEnt.buildingHealth = bEnt.maxBuildingHealth || 150;
+        bEnt.buildingHealth = bEnt.maxBuildingHealth || DEFAULT_HOUSE_MAX_HEALTH;
         bEnt.requiredMaterials = undefined;
         bEnt.deliveredMaterials = undefined;
         incrementBuildingVersion();
 
         if (isPlayerUnit) {
+          const dict = translations[useGameStore.getState().language].chronicle;
           addChronicleEvent({
-            title: upgradedTier || upgradedYard ? 'Покращення завершено!' : 'Будівництво завершено!',
+            title: upgradedTier || upgradedYard ? dict.upgradeCompletedTitle : dict.constructionCompletedTitle,
             description: upgradedTier || upgradedYard
-              ? `Садибу ${bEnt.name || 'Будівля'} покращено.`
-              : `Зведено нову споруду: ${bEnt.name || 'Будівля'}.`,
+              ? dict.manorUpgradedDesc(bEnt.name || '')
+              : dict.buildingConstructedDesc(bEnt.name || ''),
             type: 'success',
           });
         } else if (bEnt.factionId && bEnt.factionId.startsWith('bot-')) {
@@ -163,8 +169,8 @@ export class ConstructionJobHandler {
               const newPId = `unit-${bEnt.factionId}-immigrant-${Date.now() % 1000}`;
               world.add({
                 id: newPId,
-                name: `Селянин (${reg.lordName})`,
-                title: 'Поселенець',
+                name: `${translations[useGameStore.getState().language].menu.peasantWalker} (${reg.lordName})`,
+                title: translations[useGameStore.getState().language].menu.peasantWalker,
                 characterClass: 'peasant',
                 avatarColor: reg.heraldryColor,
                 isCharacter: true,
@@ -172,10 +178,10 @@ export class ConstructionJobHandler {
                 regionId: reg.id,
                 gridPosition: [bEnt.gridPosition ? bEnt.gridPosition[0] + 1 : 0, bEnt.gridPosition ? bEnt.gridPosition[1] + 1 : 0],
                 position: [bEnt.gridPosition ? bEnt.gridPosition[0] + 1.5 : 0, 0.3, bEnt.gridPosition ? bEnt.gridPosition[1] + 1.5 : 0],
-                moveSpeed: 1.35,
-                gold: 4,
-                needs: { hunger: 90, energy: 90, mood: 80, ale: 60, hygiene: 80 },
-                skills: { farming: 5, woodcutting: 6, mining: 5, building: 6, cooking: 4, brewing: 3, combat: 3, intellect: 4, charisma: 4 },
+                moveSpeed: BOT_IMMIGRANT_INITIAL_STATS.moveSpeed,
+                gold: BOT_IMMIGRANT_INITIAL_STATS.gold,
+                needs: { ...BOT_IMMIGRANT_INITIAL_STATS.needs },
+                skills: { ...BOT_IMMIGRANT_INITIAL_STATS.skills },
                 currentJob: { id: `idle-${newPId}`, type: 'idle', progress: 0, totalWork: 0 },
               });
             }
@@ -188,14 +194,14 @@ export class ConstructionJobHandler {
             updateRegionStats(reg.id, {
               buildingsCount: reg.buildingsCount + (upgradedTier || upgradedYard ? 0 : 1),
               population: botPop,
-              wealth: reg.wealth + 15,
+              wealth: reg.wealth + BOT_IMMIGRANT_INITIAL_STATS.houseCompletionWealthReward,
             });
           }
         }
 
         unit.speechBubble = {
-          text: 'Будівлю зведено!',
-          expiresAtTick: currentTick + 25,
+          text: translations[useGameStore.getState().language].chronicle.buildingCompletedSpeech,
+          expiresAtTick: currentTick + CONSTRUCTION_SPEECH_DURATION_TICKS,
           type: 'work',
         };
 
@@ -277,22 +283,27 @@ export class ConstructionJobHandler {
     }
 
     if (isPlayerUnit) {
+      const lang = useGameStore.getState().language;
+      const dict = translations[lang];
       const refundsText = [
-        refundWood + storedWood > 0 ? `+${refundWood + storedWood} деревини` : '',
-        refundStone > 0 ? `+${refundStone} каменю` : '',
-        refundGold > 0 ? `+${refundGold} золота` : '',
+        refundWood + storedWood > 0 ? `+${refundWood + storedWood} ${dict.resources.wood.toLowerCase()}` : '',
+        refundStone > 0 ? `+${refundStone} ${dict.resources.stone.toLowerCase()}` : '',
+        refundGold > 0 ? `+${refundGold} ${dict.resources.gold.toLowerCase()}` : '',
       ].filter(Boolean).join(', ');
 
+      const bldName = b.name || dict.buildings.items[b.buildingType || '']?.name || '';
       addChronicleEvent({
-        title: 'Споруду розібрано!',
-        description: `${b.name || 'Будівлю'} демонтовано. Повернуто: ${refundsText || 'ресурси'}.`,
+        title: dict.chronicle.dismantleCompletedTitle,
+        description: refundsText
+          ? dict.chronicle.dismantleRefundsDesc(bldName, refundsText)
+          : dict.chronicle.dismantleCompletedDesc(bldName),
         type: 'info',
       });
     }
 
     unit.speechBubble = {
-      text: 'Споруду розібрано! Ресурси повернуто.',
-      expiresAtTick: currentTick + 25,
+      text: translations[useGameStore.getState().language].chronicle.dismantleCompletedSpeech,
+      expiresAtTick: currentTick + CONSTRUCTION_SPEECH_DURATION_TICKS,
       type: 'work',
     };
   }

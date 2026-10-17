@@ -1,0 +1,32 @@
+export const WEATHER = {
+  forecastIntervalTicks: 1080,
+  winterSnowChance: 0.65,
+  summer: { clearThreshold: 0.7, rainThreshold: 0.88 },
+  autumn: { clearThreshold: 0.4, rainThreshold: 0.82 },
+  spring: { clearThreshold: 0.6, rainThreshold: 0.88 },
+  stormRainIntensity: 0.85,
+  precipitationRisePerTick: 0.0035,
+  stormRisePerTick: 0.003,
+  precipitationFallPerTick: 0.0025,
+  precipitationVisibleThreshold: 0.08,
+  stormVisibleThreshold: 0.4,
+  lightningStormThreshold: 0.45,
+  lightningChancePerTick: 0.008,
+  lightningDecayPerTick: 0.08,
+  accumulationIntensityThreshold: 0.1,
+  snowAccumulationPerTick: 0.0005,
+  dryAccumulationPerTick: 0.0002,
+  rainMeltPerTick: 0.0006,
+  dryMeltPerTick: 0.00025,
+} as const;
+
+export const SNOW_SEASON = {
+  winterPeakDay: 15,
+  winterMeltStartDay: 20,
+  winterMeltDurationDays: 10,
+  winterResidual: 0.35,
+  winterMeltFraction: 0.65,
+  springMeltEndDay: 5,
+  springMeltDurationDays: 4,
+  springInitial: 0.3,
+} as const;

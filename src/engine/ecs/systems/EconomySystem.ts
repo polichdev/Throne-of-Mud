@@ -1,3 +1,4 @@
+import { ECONOMY_EVENTS } from '../../../constants/systems';
 import { characterEntities, buildingEntities, type GameEntity, type Thought } from '../world';
 import { useGameStore } from '../../../store/useGameStore';
 import type { ResourceInventory } from '../../../types/game';
@@ -28,6 +29,7 @@ import {
   ALE_MOOD_RESTORE,
   DEFAULT_SPEECH_DURATION_TICKS,
 } from '../../../constants/needs';
+import { translations } from '../../../i18n';
 
 export class EconomySystem {
   private static lastWageDayPaid = -1;
@@ -83,27 +85,33 @@ export class EconomySystem {
         totalWagesPaid += item.wage;
         item.worker.gold = (item.worker.gold || 0) + item.wage;
 
+        const lang = useGameStore.getState().language;
+        const dict = translations[lang].inspector;
+
         if (!item.worker.thoughts) item.worker.thoughts = [];
         item.worker.thoughts = item.worker.thoughts.filter((t: Thought) => t.id !== 'paid' && t.id !== 'unpaid');
         item.worker.thoughts.push({
           id: 'paid',
-          text: `Отримав зарплату (+${item.wage} золота)`,
+          text: dict.receivedWageThought(item.wage),
           modifier: PAID_WAGE_MOOD_BOOST,
           durationTicks: PAID_WAGE_DURATION_TICKS,
         });
 
         item.worker.speechBubble = {
-          text: `Отримав ${item.wage} золота!`,
-          expiresAtTick: currentTick + 25,
+          text: dict.receivedGoldSpeech(item.wage),
+          expiresAtTick: currentTick + ECONOMY_EVENTS.speechTicks,
           type: 'work',
         };
       } else {
         unpaidWorkersCount++;
+        const lang = useGameStore.getState().language;
+        const dict = translations[lang].inspector;
+
         if (!item.worker.thoughts) item.worker.thoughts = [];
         item.worker.thoughts = item.worker.thoughts.filter((t: Thought) => t.id !== 'paid' && t.id !== 'unpaid');
         item.worker.thoughts.push({
           id: 'unpaid',
-          text: `Затримка зарплати! (${UNPAID_WAGE_MOOD_PENALTY})`,
+          text: dict.unpaidWageThought(UNPAID_WAGE_MOOD_PENALTY),
           modifier: UNPAID_WAGE_MOOD_PENALTY,
           durationTicks: UNPAID_WAGE_DURATION_TICKS,
         });
@@ -113,7 +121,7 @@ export class EconomySystem {
         }
 
         item.worker.speechBubble = {
-          text: 'Де моє зароблене золото?!',
+          text: dict.unpaidWageSpeech,
           expiresAtTick: currentTick + DEFAULT_SPEECH_DURATION_TICKS,
           type: 'alert',
         };
@@ -157,18 +165,21 @@ export class EconomySystem {
         worker.gold -= MARKET_ITEM_PRICE_GOLD;
         worker.needs.hunger = Math.min(MAX_HUNGER, worker.needs.hunger + BREAD_HUNGER_RESTORE);
 
+        const lang = useGameStore.getState().language;
+        const dict = translations[lang].inspector;
+
         if (!worker.thoughts) worker.thoughts = [];
         worker.thoughts = worker.thoughts.filter((t) => t.id !== 'bought_bread');
         worker.thoughts.push({
           id: 'bought_bread',
-          text: `Купив смачний хліб на ринку (+${MARKET_PURCHASE_MOOD_BOOST})`,
+          text: dict.boughtBreadThought(MARKET_PURCHASE_MOOD_BOOST),
           modifier: MARKET_PURCHASE_MOOD_BOOST,
           durationTicks: MARKET_PURCHASE_MOOD_DURATION_TICKS,
         });
 
         worker.speechBubble = {
-          text: `Купив хліб на ринку (-${MARKET_ITEM_PRICE_GOLD} золото)`,
-          expiresAtTick: currentTick + 25,
+          text: dict.boughtBreadSpeech(MARKET_ITEM_PRICE_GOLD),
+          expiresAtTick: currentTick + ECONOMY_EVENTS.speechTicks,
           type: 'mood',
         };
         continue;
@@ -185,18 +196,21 @@ export class EconomySystem {
         worker.needs.ale = Math.min(MAX_ALE, worker.needs.ale + ALE_RESTORE_AMOUNT);
         worker.needs.mood = Math.min(MAX_MOOD, worker.needs.mood + ALE_MOOD_RESTORE);
 
+        const lang = useGameStore.getState().language;
+        const dict = translations[lang].inspector;
+
         if (!worker.thoughts) worker.thoughts = [];
         worker.thoughts = worker.thoughts.filter((t) => t.id !== 'bought_ale');
         worker.thoughts.push({
           id: 'bought_ale',
-          text: `Випив холодного елю на ринку (+${MARKET_PURCHASE_MOOD_BOOST})`,
+          text: dict.boughtAleThought(MARKET_PURCHASE_MOOD_BOOST),
           modifier: MARKET_PURCHASE_MOOD_BOOST,
           durationTicks: MARKET_PURCHASE_MOOD_DURATION_TICKS,
         });
 
         worker.speechBubble = {
-          text: `Купив ель на ринку (-${MARKET_ITEM_PRICE_GOLD} золото)`,
-          expiresAtTick: currentTick + 25,
+          text: dict.boughtAleSpeech(MARKET_ITEM_PRICE_GOLD),
+          expiresAtTick: currentTick + ECONOMY_EVENTS.speechTicks,
           type: 'mood',
         };
       }

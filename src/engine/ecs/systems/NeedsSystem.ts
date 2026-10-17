@@ -1,5 +1,7 @@
+import { NEED_EVENTS } from '../../../constants/systems';
 import { characterEntities } from '../world';
 import { useGameStore } from '../../../store/useGameStore';
+import { translations } from '../../../i18n';
 import {
   MIN_HUNGER,
   MAX_HUNGER,
@@ -30,6 +32,9 @@ import {
   LOW_MOOD_THRESHOLD,
   LOW_MOOD_SPEECH_CHANCE,
   DEFAULT_SPEECH_DURATION_TICKS,
+  VARIED_DIET_MIN_FOOD_TYPES,
+  VARIED_DIET_MOOD_MODIFIER,
+  VARIED_DIET_DURATION_TICKS,
 } from '../../../constants/needs';
 import { clamp, lerp } from '../../../utils/mathUtils';
 
@@ -69,13 +74,16 @@ export class NeedsSystem {
       const isPlayerUnit = unit.factionId === 'player' || unit.factionId === undefined;
 
       if (isPlayerUnit && unit.needs.hunger < HUNGER_EAT_THRESHOLD) {
+        const lang = useGameStore.getState().language;
+        const dict = translations[lang].inspector;
+
         if (vegetablesAvailable > 0) {
           vegetablesAvailable--;
           consumeResource('vegetables', 1);
           unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE);
           unit.speechBubble = {
-            text: 'Свіжі овочі з городу!',
-            expiresAtTick: currentTick + 20,
+            text: dict.eatVegetablesSpeech,
+            expiresAtTick: currentTick + NEED_EVENTS.mealSpeechTicks,
             type: 'mood',
           };
         } else if (eggsAvailable > 0) {
@@ -83,8 +91,8 @@ export class NeedsSystem {
           consumeResource('eggs', 1);
           unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE);
           unit.speechBubble = {
-            text: 'Свіжі сільські яйця!',
-            expiresAtTick: currentTick + 20,
+            text: dict.eatEggsSpeech,
+            expiresAtTick: currentTick + NEED_EVENTS.mealSpeechTicks,
             type: 'mood',
           };
         } else if (breadAvailable > 0) {
@@ -92,17 +100,17 @@ export class NeedsSystem {
           consumeResource('bread', 1);
           unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE);
           unit.speechBubble = {
-            text: 'Смачний хліб!',
-            expiresAtTick: currentTick + 20,
+            text: dict.eatBreadSpeech,
+            expiresAtTick: currentTick + NEED_EVENTS.mealSpeechTicks,
             type: 'mood',
           };
         } else if (meatAvailable > 0) {
           meatAvailable--;
           consumeResource('meat', 1);
-          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE + 10);
+          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE + NEED_EVENTS.meatHungerBonus);
           unit.speechBubble = {
-            text: 'Ситне м’ясо!',
-            expiresAtTick: currentTick + 20,
+            text: dict.eatMeatSpeech,
+            expiresAtTick: currentTick + NEED_EVENTS.mealSpeechTicks,
             type: 'mood',
           };
         } else if (fishAvailable > 0) {
@@ -110,29 +118,29 @@ export class NeedsSystem {
           consumeResource('fish', 1);
           unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE);
           unit.speechBubble = {
-            text: 'Добра риба!',
-            expiresAtTick: currentTick + 20,
+            text: dict.eatFishSpeech,
+            expiresAtTick: currentTick + NEED_EVENTS.mealSpeechTicks,
             type: 'mood',
           };
         } else if (berriesAvailable > 0) {
           berriesAvailable--;
           consumeResource('berries', 1);
-          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE - 5);
+          unit.needs.hunger = Math.min(MAX_HUNGER, unit.needs.hunger + BREAD_HUNGER_RESTORE - NEED_EVENTS.berriesHungerPenalty);
           unit.speechBubble = {
-            text: 'Солодкі лісові ягоди!',
-            expiresAtTick: currentTick + 20,
+            text: dict.eatBerriesSpeech,
+            expiresAtTick: currentTick + NEED_EVENTS.mealSpeechTicks,
             type: 'mood',
           };
         }
 
-        if (distinctFoodCount >= 2) {
+        if (distinctFoodCount >= VARIED_DIET_MIN_FOOD_TYPES) {
           if (!unit.thoughts) unit.thoughts = [];
           if (!unit.thoughts.some((t) => t.id === 'varied_diet')) {
             unit.thoughts.push({
               id: 'varied_diet',
-              text: 'Різноманітний раціон (+12)',
-              modifier: 12,
-              durationTicks: 800,
+              text: dict.variedDietThought(VARIED_DIET_MOOD_MODIFIER),
+              modifier: VARIED_DIET_MOOD_MODIFIER,
+              durationTicks: VARIED_DIET_DURATION_TICKS,
             });
           }
         }
@@ -144,8 +152,8 @@ export class NeedsSystem {
         unit.needs.ale = Math.min(MAX_ALE, unit.needs.ale + ALE_RESTORE_AMOUNT);
         unit.needs.mood = Math.min(MAX_MOOD, unit.needs.mood + ALE_MOOD_RESTORE);
         unit.speechBubble = {
-          text: 'Гарний ель гріє душу!',
-          expiresAtTick: currentTick + 25,
+          text: translations[useGameStore.getState().language].inspector.drinkAleSpeech,
+          expiresAtTick: currentTick + NEED_EVENTS.aleSpeechTicks,
           type: 'mood',
         };
       }
@@ -177,7 +185,7 @@ export class NeedsSystem {
 
       if (unit.needs.mood < LOW_MOOD_THRESHOLD && Math.random() < LOW_MOOD_SPEECH_CHANCE) {
         unit.speechBubble = {
-          text: 'Селяни обурені умовами життя!',
+          text: translations[useGameStore.getState().language].inspector.lowMoodSpeech,
           expiresAtTick: currentTick + DEFAULT_SPEECH_DURATION_TICKS,
           type: 'alert',
         };

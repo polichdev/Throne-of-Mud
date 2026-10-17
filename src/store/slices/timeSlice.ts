@@ -1,3 +1,4 @@
+import { WEATHER } from '../../constants/weather';
 import type { StateCreator } from 'zustand';
 import type { SeasonType, MonthName, WeatherType } from '../../types/game';
 import { world } from '../../engine/ecs/world';
@@ -41,7 +42,7 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
     rainIntensity: 0,
     stormIntensity: 0,
     snowIntensity: 0,
-    snowAccumulation: getTargetSnowAccumulation('Spring', 1, 7, 0),
+    snowAccumulation: getTargetSnowAccumulation('Spring', 1, DAY_START_HOUR, 0),
     lightningFlash: 0,
     speedMultiplier: 1,
     isPaused: false,
@@ -212,7 +213,7 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
           nextWeather: validWeather,
           weather: validWeather,
           isWeatherLocked: locked,
-          rainIntensity: validWeather === 'rain' ? 1.0 : validWeather === 'storm' ? 0.85 : 0,
+          rainIntensity: validWeather === 'rain' ? 1.0 : validWeather === 'storm' ? WEATHER.stormRainIntensity : 0,
           stormIntensity: validWeather === 'storm' ? 1.0 : 0,
           snowIntensity: validWeather === 'snow' ? 1.0 : 0,
           lightningFlash: validWeather === 'storm' ? 1.0 : 0,
@@ -319,22 +320,22 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
       }
 
       if (!state.time.isWeatherLocked) {
-        if (nextTick % 1080 === 0) {
+        if (nextTick % WEATHER.forecastIntervalTicks === 0) {
           targetWeather = nextWeather;
           const rand = Math.random();
           if (season === 'Winter') {
-            nextWeather = rand < 0.65 ? 'snow' : 'clear';
+            nextWeather = rand < WEATHER.winterSnowChance ? 'snow' : 'clear';
           } else if (season === 'Summer') {
-            nextWeather = rand < 0.70 ? 'clear' : rand < 0.88 ? 'rain' : 'storm';
+            nextWeather = rand < WEATHER.summer.clearThreshold ? 'clear' : rand < WEATHER.summer.rainThreshold ? 'rain' : 'storm';
           } else if (season === 'Autumn') {
-            nextWeather = rand < 0.40 ? 'clear' : rand < 0.82 ? 'rain' : 'storm';
+            nextWeather = rand < WEATHER.autumn.clearThreshold ? 'clear' : rand < WEATHER.autumn.rainThreshold ? 'rain' : 'storm';
           } else {
-            nextWeather = rand < 0.60 ? 'clear' : rand < 0.88 ? 'rain' : 'storm';
+            nextWeather = rand < WEATHER.spring.clearThreshold ? 'clear' : rand < WEATHER.spring.rainThreshold ? 'rain' : 'storm';
           }
         }
       }
 
-      const targetRain = season === 'Winter' ? 0.0 : (targetWeather === 'rain' ? 1.0 : targetWeather === 'storm' ? 0.85 : 0.0);
+      const targetRain = season === 'Winter' ? 0.0 : (targetWeather === 'rain' ? 1.0 : targetWeather === 'storm' ? WEATHER.stormRainIntensity : 0.0);
       const targetStorm = season === 'Winter' ? 0.0 : (targetWeather === 'storm' ? 1.0 : 0.0);
       const targetSnow = season === 'Winter' ? (targetWeather === 'snow' ? 1.0 : 0.0) : 0.0;
 
@@ -343,29 +344,29 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
       let curSnow = season !== 'Winter' ? 0 : (state.time.snowIntensity ?? (state.time.weather === 'snow' ? 1 : 0));
 
       if (curRain < targetRain) {
-        curRain = Math.min(targetRain, curRain + 0.0035);
+        curRain = Math.min(targetRain, curRain + WEATHER.precipitationRisePerTick);
       } else if (curRain > targetRain) {
-        curRain = Math.max(targetRain, curRain - 0.0025);
+        curRain = Math.max(targetRain, curRain - WEATHER.precipitationFallPerTick);
       }
 
       if (curStorm < targetStorm) {
-        curStorm = Math.min(targetStorm, curStorm + 0.0030);
+        curStorm = Math.min(targetStorm, curStorm + WEATHER.stormRisePerTick);
       } else if (curStorm > targetStorm) {
-        curStorm = Math.max(targetStorm, curStorm - 0.0025);
+        curStorm = Math.max(targetStorm, curStorm - WEATHER.precipitationFallPerTick);
       }
 
       if (curSnow < targetSnow) {
-        curSnow = Math.min(targetSnow, curSnow + 0.0035);
+        curSnow = Math.min(targetSnow, curSnow + WEATHER.precipitationRisePerTick);
       } else if (curSnow > targetSnow) {
-        curSnow = Math.max(targetSnow, curSnow - 0.0025);
+        curSnow = Math.max(targetSnow, curSnow - WEATHER.precipitationFallPerTick);
       }
 
       let currentWeather: WeatherType = 'clear';
       if (season === 'Winter') {
-        currentWeather = curSnow > 0.08 ? 'snow' : 'clear';
+        currentWeather = curSnow > WEATHER.precipitationVisibleThreshold ? 'snow' : 'clear';
       } else {
-        if (curRain > 0.08) {
-          currentWeather = curStorm > 0.40 ? 'storm' : 'rain';
+        if (curRain > WEATHER.precipitationVisibleThreshold) {
+          currentWeather = curStorm > WEATHER.stormVisibleThreshold ? 'storm' : 'rain';
         } else {
           currentWeather = 'clear';
         }
@@ -374,23 +375,23 @@ export const createTimeSlice: StateCreator<GameState, [], [], TimeSlice> = (set)
       let flash = state.time.lightningFlash || 0;
       if (season === 'Winter') {
         flash = 0;
-      } else if (curStorm > 0.45) {
-        if (Math.random() < 0.008 * curStorm) {
+      } else if (curStorm > WEATHER.lightningStormThreshold) {
+        if (Math.random() < WEATHER.lightningChancePerTick * curStorm) {
           flash = 1.0;
         } else if (flash > 0) {
-          flash = Math.max(0, flash - 0.08);
+          flash = Math.max(0, flash - WEATHER.lightningDecayPerTick);
         }
       } else if (flash > 0) {
-        flash = Math.max(0, flash - 0.08);
+        flash = Math.max(0, flash - WEATHER.lightningDecayPerTick);
       }
 
       const targetSnowAcc = getTargetSnowAccumulation(season, dayInSeason, hour, minute);
       let curSnowAcc = state.time.snowAccumulation ?? 0;
       if (curSnowAcc < targetSnowAcc) {
-        const snowRate = curSnow > 0.1 ? 0.0005 : 0.0002;
+        const snowRate = curSnow > WEATHER.accumulationIntensityThreshold ? WEATHER.snowAccumulationPerTick : WEATHER.dryAccumulationPerTick;
         curSnowAcc = Math.min(targetSnowAcc, curSnowAcc + snowRate);
       } else if (curSnowAcc > targetSnowAcc) {
-        const meltRate = curRain > 0.1 ? 0.0006 : 0.00025;
+        const meltRate = curRain > WEATHER.accumulationIntensityThreshold ? WEATHER.rainMeltPerTick : WEATHER.dryMeltPerTick;
         curSnowAcc = Math.max(targetSnowAcc, curSnowAcc - meltRate);
       }
 

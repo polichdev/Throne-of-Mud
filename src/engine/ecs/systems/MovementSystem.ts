@@ -1,3 +1,7 @@
+import { MOVEMENT_GEOMETRY } from '../../../constants/systems';
+import { MAP_WIDTH, MAP_HEIGHT, ROYAL_REGION_ID, ROYAL_PLAZA_X } from '../../../constants/world';
+import { MOVEMENT_LIMITS } from '../../../constants/movement';
+import { DEFAULT_CAMERA_ZOOM } from '../../../constants/camera';
 import { characterEntities, buildingEntities } from '../world';
 import type { GameEntity } from '../world';
 import { GridMap } from '../../grid/GridMap';
@@ -23,8 +27,8 @@ interface StuckInfo {
 }
 
 const stuckTracker = new Map<string, StuckInfo>();
-const ENTITY_STUCK_TIMEOUT_SECONDS = 2;
-const ENTITY_STUCK_PROGRESS_EPSILON = 0.005;
+const ENTITY_STUCK_TIMEOUT_SECONDS = MOVEMENT_LIMITS.stuckTimeoutSeconds;
+const ENTITY_STUCK_PROGRESS_EPSILON = MOVEMENT_LIMITS.stuckProgressEpsilon;
 
 const _entityList: GameEntity[] = [];
 const _isFixedList: boolean[] = [];
@@ -38,20 +42,20 @@ export function clampCoordToRegion(regionId: number, x: number, z: number, reg?:
   let cx = x;
   let cz = z;
   if (reg?.bounds) {
-    cx = Math.max(reg.bounds.minX + 0.5, Math.min(reg.bounds.maxX - 0.5, cx));
-    cz = Math.max(reg.bounds.minZ + 0.5, Math.min(reg.bounds.maxZ - 0.5, cz));
+    cx = Math.max(reg.bounds.minX + MOVEMENT_GEOMETRY.tileCenter, Math.min(reg.bounds.maxX - MOVEMENT_GEOMETRY.regionInnerMargin, cx));
+    cz = Math.max(reg.bounds.minZ + MOVEMENT_GEOMETRY.tileCenter, Math.min(reg.bounds.maxZ - MOVEMENT_GEOMETRY.regionInnerMargin, cz));
   } else {
-    cx = Math.max(2.5, Math.min(381.5, cx));
-    cz = Math.max(2.5, Math.min(381.5, cz));
+    cx = Math.max(MOVEMENT_LIMITS.worldMargin, Math.min(MAP_WIDTH - MOVEMENT_LIMITS.worldMargin, cx));
+    cz = Math.max(MOVEMENT_LIMITS.worldMargin, Math.min(MAP_HEIGHT - MOVEMENT_LIMITS.worldMargin, cz));
   }
 
-  if (regionId !== 5) {
-    const plazaZ = GridMap.getHighwayZ(192.0);
-    const distPlaza = Math.hypot(cx - 192.0, cz - plazaZ);
-    if (distPlaza < 3.8) {
-      const angle = Math.atan2(cz - plazaZ, cx - 192.0);
-      cx = 192.0 + Math.cos(angle) * 3.8;
-      cz = plazaZ + Math.sin(angle) * 3.8;
+  if (regionId !== ROYAL_REGION_ID) {
+    const plazaZ = GridMap.getHighwayZ(ROYAL_PLAZA_X);
+    const distPlaza = Math.hypot(cx - ROYAL_PLAZA_X, cz - plazaZ);
+    if (distPlaza < MOVEMENT_LIMITS.royalPlazaExclusionRadius) {
+      const angle = Math.atan2(cz - plazaZ, cx - ROYAL_PLAZA_X);
+      cx = ROYAL_PLAZA_X + Math.cos(angle) * MOVEMENT_LIMITS.royalPlazaExclusionRadius;
+      cz = plazaZ + Math.sin(angle) * MOVEMENT_LIMITS.royalPlazaExclusionRadius;
     }
   }
 
@@ -123,8 +127,8 @@ export class MovementSystem {
     }
 
     const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
-    const zoom = ((window as any).__lastCameraZoom || 38) as number;
-    const maxSimDist = Math.max(30, (900 / zoom) + 10);
+    const zoom = ((window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM) as number;
+    const maxSimDist = Math.max(MOVEMENT_LIMITS.minSimulationDistance, (MOVEMENT_LIMITS.simulationZoomScale / zoom) + MOVEMENT_LIMITS.simulationDistanceMargin);
     const maxSimDistSq = maxSimDist * maxSimDist;
 
     for (const entity of characterEntities) {
@@ -146,7 +150,7 @@ export class MovementSystem {
             GridMap.isCoordInRegion(entity.regionId, wx, wz, -2) ||
             GridMap.canRegionConnectToHighwayAt(entity.regionId, wx, wz) ||
             GridMap.isTradeHighwayTile(wx, wz) ||
-            (b ? (wx >= b.minX - 3 && wx <= b.maxX + 3 && wz >= b.minZ - 3 && wz <= b.maxZ + 3) : true);
+            (b ? (wx >= b.minX - MOVEMENT_GEOMETRY.pathRegionMargin && wx <= b.maxX + MOVEMENT_GEOMETRY.pathRegionMargin && wz >= b.minZ - MOVEMENT_GEOMETRY.pathRegionMargin && wz <= b.maxZ + MOVEMENT_GEOMETRY.pathRegionMargin) : true);
 
           if (!isAllowed) {
             entity.path = [];
@@ -190,8 +194,8 @@ export class MovementSystem {
 
         while (remainingMove > 0 && entity.path.length > 0) {
           const wp = entity.path[0];
-          const targetX = wp[0] + 0.5;
-          const targetZ = wp[1] + 0.5;
+          const targetX = wp[0] + MOVEMENT_GEOMETRY.tileCenter;
+          const targetZ = wp[1] + MOVEMENT_GEOMETRY.tileCenter;
           const currentX = entity.position[0];
           const currentZ = entity.position[2];
 
@@ -217,6 +221,12 @@ export class MovementSystem {
             const vz = (dz / distance) * remainingMove;
             entity.position[0] += vx;
             entity.position[2] += vz;
+            if (entity.gridPosition) {
+              entity.gridPosition[0] = Math.floor(entity.position[0]);
+              entity.gridPosition[1] = Math.floor(entity.position[2]);
+            } else {
+              entity.gridPosition = [Math.floor(entity.position[0]), Math.floor(entity.position[2])];
+            }
             remainingMove = 0;
           }
         }
@@ -264,7 +274,7 @@ export class MovementSystem {
 
       const cx = Math.floor(entity.position[0] / CELL_SIZE);
       const cz = Math.floor(entity.position[2] / CELL_SIZE);
-      const cellKey = (cz << 16) | (cx & 0xffff);
+      const cellKey = (cz << MOVEMENT_GEOMETRY.packedCoordinateBits) | (cx & MOVEMENT_GEOMETRY.packedCoordinateMask);
       let list = _spatialGrid.get(cellKey);
       if (!list) {
         list = [];
@@ -276,8 +286,8 @@ export class MovementSystem {
     _checkedPairs.clear();
 
     for (const [cellKey, cellIndices] of _spatialGrid) {
-      const cx = (cellKey << 16) >> 16;
-      const cz = cellKey >> 16;
+      const cx = (cellKey << MOVEMENT_GEOMETRY.packedCoordinateBits) >> MOVEMENT_GEOMETRY.packedCoordinateBits;
+      const cz = cellKey >> MOVEMENT_GEOMETRY.packedCoordinateBits;
 
       for (let i = 0; i < cellIndices.length; i++) {
         const idxA = cellIndices[i];
@@ -287,7 +297,7 @@ export class MovementSystem {
 
         for (let ox = -1; ox <= 1; ox++) {
           for (let oz = -1; oz <= 1; oz++) {
-            const nCellKey = ((cz + oz) << 16) | ((cx + ox) & 0xffff);
+            const nCellKey = ((cz + oz) << MOVEMENT_GEOMETRY.packedCoordinateBits) | ((cx + ox) & MOVEMENT_GEOMETRY.packedCoordinateMask);
             const neighborIndices = _spatialGrid.get(nCellKey);
             if (!neighborIndices) continue;
 
@@ -295,7 +305,7 @@ export class MovementSystem {
               const idxB = neighborIndices[j];
               if (idxA >= idxB) continue;
 
-              const pairKey = (idxA << 16) | idxB;
+              const pairKey = (idxA << MOVEMENT_GEOMETRY.packedCoordinateBits) | idxB;
               if (_checkedPairs.has(pairKey)) continue;
               _checkedPairs.add(pairKey);
 
@@ -317,11 +327,11 @@ export class MovementSystem {
               if (distSq >= ENTITY_COLLISION_DISTANCE_SQ) continue;
 
               let dist = Math.sqrt(distSq);
-              if (dist < 0.001) {
-                const pseudoAngle = ((idxA * 17 + idxB * 31) % 360) * (Math.PI / 180);
-                dx = Math.cos(pseudoAngle) * 0.02;
-                dz = Math.sin(pseudoAngle) * 0.02;
-                dist = 0.02;
+              if (dist < MOVEMENT_GEOMETRY.overlapEpsilon) {
+                const pseudoAngle = ((idxA * MOVEMENT_GEOMETRY.collisionHashFirstMultiplier + idxB * MOVEMENT_GEOMETRY.collisionHashSecondMultiplier) % 360) * (Math.PI / 180);
+                dx = Math.cos(pseudoAngle) * MOVEMENT_GEOMETRY.overlapSeparationDistance;
+                dz = Math.sin(pseudoAngle) * MOVEMENT_GEOMETRY.overlapSeparationDistance;
+                dist = MOVEMENT_GEOMETRY.overlapSeparationDistance;
               }
 
               const overlap = ENTITY_COLLISION_DISTANCE - dist;

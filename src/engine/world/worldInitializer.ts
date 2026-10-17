@@ -1,11 +1,18 @@
 import type { RegionData, WorldSetupConfig, ResourceDeposit } from '../../types/game';
 import { GridMap } from '../grid/GridMap';
 import { world } from '../ecs/world';
-import { DEFAULT_REGIONS, PRESET_BOT_LORDS } from '../../constants/world';
+import {
+  DEFAULT_REGIONS,
+  PRESET_BOT_LORDS,
+  CAMP_STRUCTURE_HEALTH,
+  STARTING_UNIT_CONFIG,
+} from '../../constants/world';
 import { DEFAULT_PLAYER_IDENTITY, getHeraldryGlyph } from '../../constants/playerIdentity';
 import { initResourceDeposits } from '../resources/ResourceDeposits';
 import { getSmartRoadPath, isRoadPathValid } from '../grid/roadGeneration';
 import { ensureEichenauSettlementAccess } from '../grid/settlementAccess';
+import { useGameStore } from '../../store/useGameStore';
+import { translations } from '../../i18n';
 
 export interface WorldInitResult {
   playerRegionId: number;
@@ -23,6 +30,9 @@ export function initializeWorldEntities(
   currentRegionId: number = 0,
   currentBotCount: number = 3
 ): WorldInitResult {
+  const lang = useGameStore.getState().language;
+  const dict = translations[lang];
+
   for (const entity of [...world.entities]) {
     world.remove(entity);
   }
@@ -36,7 +46,7 @@ export function initializeWorldEntities(
   const pRegion = updatedRegions[playerRegionId];
   pRegion.owner = 'player';
   pRegion.lordName = identity.rulerName;
-  pRegion.lordTitle = 'Правитель земель';
+  pRegion.lordTitle = dict.strategicMap.rulerOfLands;
   pRegion.heraldryColor = identity.shieldColor;
   pRegion.heraldryIcon = getHeraldryGlyph(identity.emblemId);
   pRegion.population = 3;
@@ -89,11 +99,11 @@ export function initializeWorldEntities(
   grid.occupyForBuilding(cx, cz, 2, 2, campfireId);
   world.add({
     id: campfireId,
-    name: 'Вогнище поселення',
+    name: dict.buildings.items.campfire?.name || 'Campfire',
     isBuilding: true,
     buildingType: 'campfire',
-    buildingHealth: 100,
-    maxBuildingHealth: 100,
+    buildingHealth: CAMP_STRUCTURE_HEALTH.campfire,
+    maxBuildingHealth: CAMP_STRUCTURE_HEALTH.campfire,
     buildingWidth: 2,
     buildingHeight: 2,
     isCompleted: true,
@@ -108,11 +118,11 @@ export function initializeWorldEntities(
   grid.occupyForBuilding(cx - 4, cz - 1, 3, 2, tentId);
   world.add({
     id: tentId,
-    name: 'Палатка поселенців',
+    name: dict.buildings.items.tent?.name || 'Tent',
     isBuilding: true,
     buildingType: 'tent',
-    buildingHealth: 150,
-    maxBuildingHealth: 150,
+    buildingHealth: CAMP_STRUCTURE_HEALTH.tent,
+    maxBuildingHealth: CAMP_STRUCTURE_HEALTH.tent,
     buildingWidth: 3,
     buildingHeight: 2,
     isCompleted: true,
@@ -127,11 +137,11 @@ export function initializeWorldEntities(
   grid.occupyForBuilding(cx + 3, cz - 1, 3, 2, hitchingPostId);
   world.add({
     id: hitchingPostId,
-    name: 'Прив\'язь для мулів',
+    name: dict.buildings.items.hitching_post?.name || 'Hitching Post',
     isBuilding: true,
     buildingType: 'hitching_post',
-    buildingHealth: 150,
-    maxBuildingHealth: 150,
+    buildingHealth: CAMP_STRUCTURE_HEALTH.hitchingPost,
+    maxBuildingHealth: CAMP_STRUCTURE_HEALTH.hitchingPost,
     buildingWidth: 3,
     buildingHeight: 2,
     isCompleted: true,
@@ -148,34 +158,34 @@ export function initializeWorldEntities(
     {
       id: 'unit-king',
       name: identity.rulerName,
-      title: 'Правитель земель',
+      title: dict.strategicMap.rulerOfLands,
       characterClass: 'king' as const,
       avatarColor: identity.shieldColor,
       gx: cx - 1,
       gz: cz + 2,
-      gold: 35,
+      gold: STARTING_UNIT_CONFIG.playerKingGold,
       skills: { farming: 3, woodcutting: 2, mining: 2, building: 4, cooking: 2, brewing: 6, combat: 8, intellect: 9, charisma: 9 },
     },
     {
       id: 'unit-peasant-1',
-      name: 'Олесь Орач',
-      title: 'Селянин',
+      name: dict.strategicMap.startingPeasant1Name,
+      title: dict.menu.peasantWalker,
       characterClass: 'peasant' as const,
       avatarColor: '#3b82f6',
       gx: cx + 2,
       gz: cz - 1,
-      gold: 3,
+      gold: STARTING_UNIT_CONFIG.playerPeasantGold,
       skills: { farming: 8, woodcutting: 7, mining: 4, building: 6, cooking: 4, brewing: 3, combat: 4, intellect: 5, charisma: 5 },
     },
     {
       id: 'unit-peasant-2',
-      name: 'Гриць Будівничий',
-      title: 'Селянин',
+      name: dict.strategicMap.startingPeasant2Name,
+      title: dict.menu.peasantWalker,
       characterClass: 'peasant' as const,
       avatarColor: '#10b981',
       gx: cx + 2,
       gz: cz + 2,
-      gold: 3,
+      gold: STARTING_UNIT_CONFIG.playerPeasantGold,
       skills: { farming: 4, woodcutting: 8, mining: 6, building: 8, cooking: 2, brewing: 2, combat: 4, intellect: 4, charisma: 4 },
     },
   ];
@@ -192,24 +202,11 @@ export function initializeWorldEntities(
       regionId: playerRegionId,
       gridPosition: [u.gx, u.gz],
       position: [u.gx + 0.5, 0.3, u.gz + 0.5],
-      moveSpeed: 1.35,
+      moveSpeed: STARTING_UNIT_CONFIG.defaultMoveSpeed,
       gold: u.gold,
       workBuildingId: undefined,
-      thoughts: [
-        {
-          id: 'settled',
-          text: 'Заснування нового табору (+10)',
-          modifier: 10,
-          durationTicks: 2500,
-        },
-      ],
-      needs: {
-        hunger: 85,
-        energy: 90,
-        mood: 75,
-        ale: 60,
-        hygiene: 80,
-      },
+      thoughts: [{ id: 'founding_camp', text: dict.strategicMap.startingCampThought, modifier: 10, durationTicks: 4000 }],
+      needs: { ...STARTING_UNIT_CONFIG.defaultPlayerNeeds },
       skills: u.skills,
       currentJob: { id: `idle-${u.id}`, type: 'idle', progress: 0, totalWork: 0 },
     });
@@ -264,11 +261,11 @@ export function initializeWorldEntities(
       grid.occupyForBuilding(bx, bz, 2, 2, bCampfireId);
       world.add({
         id: bCampfireId,
-        name: `Вогнище (${bot.name})`,
+        name: `${dict.buildings.items.campfire?.name || 'Campfire'} (${bot.name})`,
         isBuilding: true,
         buildingType: 'campfire',
-        buildingHealth: 100,
-        maxBuildingHealth: 100,
+        buildingHealth: CAMP_STRUCTURE_HEALTH.campfire,
+        maxBuildingHealth: CAMP_STRUCTURE_HEALTH.campfire,
         buildingWidth: 2,
         buildingHeight: 2,
         isCompleted: true,
@@ -283,11 +280,11 @@ export function initializeWorldEntities(
       grid.occupyForBuilding(bx - 4, bz - 1, 3, 2, bTentId);
       world.add({
         id: bTentId,
-        name: `Табір (${bot.name})`,
+        name: `${dict.buildings.items.tent?.name || 'Tent'} (${bot.name})`,
         isBuilding: true,
         buildingType: 'tent',
-        buildingHealth: 150,
-        maxBuildingHealth: 150,
+        buildingHealth: CAMP_STRUCTURE_HEALTH.tent,
+        maxBuildingHealth: CAMP_STRUCTURE_HEALTH.tent,
         buildingWidth: 3,
         buildingHeight: 2,
         isCompleted: true,
@@ -302,11 +299,11 @@ export function initializeWorldEntities(
       grid.occupyForBuilding(bx + 3, bz - 1, 3, 2, bHitchingPostId);
       world.add({
         id: bHitchingPostId,
-        name: `Прив\'язь (${bot.name})`,
+        name: `${dict.buildings.items.hitching_post?.name || 'Hitching Post'} (${bot.name})`,
         isBuilding: true,
         buildingType: 'hitching_post',
-        buildingHealth: 150,
-        maxBuildingHealth: 150,
+        buildingHealth: CAMP_STRUCTURE_HEALTH.hitchingPost,
+        maxBuildingHealth: CAMP_STRUCTURE_HEALTH.hitchingPost,
         buildingWidth: 3,
         buildingHeight: 2,
         isCompleted: true,
@@ -337,9 +334,9 @@ export function initializeWorldEntities(
         regionId: regId,
         gridPosition: [bx - 1, bz + 2],
         position: [bx - 0.5, 0.3, bz + 2.5],
-        moveSpeed: 1.35,
-        gold: 50,
-        needs: { hunger: 90, energy: 90, mood: 80, ale: 70, hygiene: 80 },
+        moveSpeed: STARTING_UNIT_CONFIG.defaultMoveSpeed,
+        gold: STARTING_UNIT_CONFIG.botLordGold,
+        needs: { ...STARTING_UNIT_CONFIG.defaultBotLordNeeds },
         skills: { farming: 2, woodcutting: 2, mining: 2, building: 4, cooking: 2, brewing: 4, combat: 8, intellect: 8, charisma: 8 },
         currentJob: { id: `idle-${botFactionId}-lord`, type: 'idle', progress: 0, totalWork: 0 },
       });
@@ -349,8 +346,8 @@ export function initializeWorldEntities(
         const pgz = pIdx === 1 ? bz - 1 : bz + 2;
         world.add({
           id: `unit-${botFactionId}-peasant-${pIdx}`,
-          name: `${pIdx === 1 ? 'Селянин' : 'Робітник'} (${bot.name})`,
-          title: 'Селянин',
+          name: `${pIdx === 1 ? dict.menu.peasantWalker : dict.strategicMap.peasantWorker} (${bot.name})`,
+          title: dict.menu.peasantWalker,
           characterClass: 'peasant',
           avatarColor: bot.peasantColor,
           isCharacter: true,
@@ -358,9 +355,9 @@ export function initializeWorldEntities(
           regionId: regId,
           gridPosition: [pgx, pgz],
           position: [pgx + 0.5, 0.3, pgz + 0.5],
-          moveSpeed: 1.35,
-          gold: 5,
-          needs: { hunger: 85, energy: 90, mood: 75, ale: 60, hygiene: 80 },
+          moveSpeed: STARTING_UNIT_CONFIG.defaultMoveSpeed,
+          gold: STARTING_UNIT_CONFIG.botPeasantGold,
+          needs: { ...STARTING_UNIT_CONFIG.defaultBotPeasantNeeds },
           skills: { farming: 6, woodcutting: 6, mining: 5, building: 6, cooking: 3, brewing: 3, combat: 3, intellect: 4, charisma: 4 },
           currentJob: { id: `idle-${botFactionId}-p${pIdx}`, type: 'idle', progress: 0, totalWork: 0 },
         });
@@ -369,8 +366,8 @@ export function initializeWorldEntities(
       activeBotIndex++;
     } else {
       botReg.owner = 'unclaimed';
-      botReg.lordName = 'Вільні землі';
-      botReg.lordTitle = 'Нейтральна територія';
+      botReg.lordName = dict.strategicMap.wildLands;
+      botReg.lordTitle = dict.strategicMap.neutralTerritory;
       botReg.heraldryColor = '#64748b';
       botReg.heraldryIcon = '🌲';
       botReg.population = 0;
@@ -420,8 +417,9 @@ export function initializeWorldEntities(
 
   const deposits = initResourceDeposits(grid);
 
-  if (playerRegionId === 2) {
-    ensureEichenauSettlementAccess(grid, [cx, cz]);
+  const eichenauReg = updatedRegions.find((r) => r.id === 2);
+  if (eichenauReg?.campPosition) {
+    ensureEichenauSettlementAccess(grid, eichenauReg.campPosition);
   }
 
   return {

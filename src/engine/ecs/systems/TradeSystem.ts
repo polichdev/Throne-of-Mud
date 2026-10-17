@@ -6,6 +6,8 @@ import { useGameStore } from '../../../store/useGameStore';
 import { distance2D } from '../../../utils/mathUtils';
 import { TRADE_ITEMS_CONFIG, getTradePrices } from '../../trade/tradeConfig';
 import { audioManager } from '../../audio/AudioManager';
+import { TRADE_SYSTEM } from '../../../constants/trade';
+import { translations } from '../../../i18n';
 
 interface MerchantState {
   entityId: string;
@@ -23,32 +25,10 @@ interface MerchantState {
   stalledTicks: number;
 }
 
-const MERCHANT_NAMES = [
-  'Альбрехт з Аугсбурга',
-  'Вальтер з Любека',
-  'Брат Готфрід (Купець)',
-  'Генріх фон Нюрнберг',
-  'Купець Райнгольд',
-  'Майстер Бруно',
-];
-
-const MERCHANT_ARRIVAL_PHRASES = [
-  'Вітання володарю! Привіз добірні товари з далекої факторії.',
-  'Чув про процвітання вашого поселення, глянемо на торгові лави!',
-  'Мій віз повний краму, відкривайте комори!',
-  'Добра дорога була сьогодні! Готовий до вигідних угод.',
-];
-
-const MERCHANT_DEPART_PHRASES = [
-  'Дякую за щедру торгівлю! Повертаюся на головний тракт.',
-  'Коні відпочили, час рушати далі головною дорогою.',
-  'Хай повняться ваші скарбниці, я вирушаю далі на схід!',
-];
-
 function generateHighwayWaypoints(fromX: number, toX: number): [number, number][] {
   const pts: [number, number][] = [];
-  const start = Math.max(2, Math.min(381, Math.round(fromX)));
-  const end = Math.max(2, Math.min(381, Math.round(toX)));
+  const start = Math.max(TRADE_SYSTEM.highwayStartX, Math.min(TRADE_SYSTEM.highwayExitX, Math.round(fromX)));
+  const end = Math.max(TRADE_SYSTEM.highwayStartX, Math.min(TRADE_SYSTEM.highwayExitX, Math.round(toX)));
   const step = start <= end ? 1 : -1;
 
   for (let x = start; step > 0 ? x <= end : x >= end; x += step) {
@@ -60,8 +40,8 @@ function generateHighwayWaypoints(fromX: number, toX: number): [number, number][
 export class TradeSystem {
   private static merchantState: MerchantState | null = null;
   private static scheduledDay: number = -1;
-  private static scheduledHour: number = 13;
-  private static scheduledMinute: number = 0;
+  private static scheduledHour: number = TRADE_SYSTEM.scheduledArrivalHour;
+  private static scheduledMinute: number = TRADE_SYSTEM.scheduledArrivalMinute;
   private static hasSpawnedToday: boolean = false;
   private static lastSpeechTick: number = 0;
 
@@ -88,15 +68,16 @@ export class TradeSystem {
 
       this.scheduledDay = currentDay;
       this.hasSpawnedToday = false;
-      this.scheduledHour = 13;
-      this.scheduledMinute = 0;
+      this.scheduledHour = TRADE_SYSTEM.scheduledArrivalHour;
+      this.scheduledMinute = TRADE_SYSTEM.scheduledArrivalMinute;
 
-      const name = MERCHANT_NAMES[(currentDay - 1) % MERCHANT_NAMES.length];
+      const names = this.getMerchantNames();
+      const name = names[(currentDay - 1) % names.length];
       setCaravanStatus({
         state: 'waiting',
         merchantName: name,
-        nextArrivalHour: 13,
-        nextArrivalMinute: 0,
+        nextArrivalHour: TRADE_SYSTEM.scheduledArrivalHour,
+        nextArrivalMinute: TRADE_SYSTEM.scheduledArrivalMinute,
       });
     }
 
@@ -129,9 +110,9 @@ export class TradeSystem {
     const distMovedSinceLast = distance2D(mx, mz, this.merchantState.lastPos[0], this.merchantState.lastPos[1]);
     this.merchantState.lastPos = [mx, mz];
 
-    if (distMovedSinceLast < 0.04 && this.merchantState.state !== 'trading') {
+    if (distMovedSinceLast < TRADE_SYSTEM.stalledDistanceThreshold && this.merchantState.state !== 'trading') {
       this.merchantState.stalledTicks++;
-      if (this.merchantState.stalledTicks > 18) {
+      if (this.merchantState.stalledTicks > TRADE_SYSTEM.stalledTicksLimit) {
         this.merchantState.stalledTicks = 0;
         const curX = Math.round(mx);
         const curZ = Math.round(mz);
@@ -140,12 +121,12 @@ export class TradeSystem {
         if (this.merchantState.state === 'traveling_on_highway') {
           merchant.path = generateHighwayWaypoints(curX, target[0]);
         } else if (this.merchantState.state === 'returning_to_highway') {
-          if (GridMap.isTradeHighwayTile(curX, curZ) || Math.abs(curZ - GridMap.getHighwayZ(curX)) <= 2.0) {
+          if (GridMap.isTradeHighwayTile(curX, curZ) || Math.abs(curZ - GridMap.getHighwayZ(curX)) <= TRADE_SYSTEM.highwayDetourTolerance) {
             this.merchantState.state = 'traveling_on_highway';
             this.findNextDestination(grid, merchant);
             return;
           }
-          const repath = AStar.findPath(grid, [curX, curZ], [target[0], target[1]], true, undefined, 6000);
+          const repath = AStar.findPath(grid, [curX, curZ], [target[0], target[1]], true, undefined, TRADE_SYSTEM.pathfindingIterationBudget);
           if (repath && repath.length > 0) {
             merchant.path = repath;
           } else {
@@ -159,7 +140,7 @@ export class TradeSystem {
             return;
           }
         } else if (this.merchantState.state === 'approaching_post') {
-          const repath = AStar.findPath(grid, [curX, curZ], [target[0], target[1]], true, undefined, 6000);
+          const repath = AStar.findPath(grid, [curX, curZ], [target[0], target[1]], true, undefined, TRADE_SYSTEM.pathfindingIterationBudget);
           if (repath && repath.length > 0) {
             merchant.path = repath;
           } else {
@@ -169,13 +150,13 @@ export class TradeSystem {
               this.merchantState.visitedPostIds.add(postId);
               this.merchantState.lastVisitedHighwayX = Math.max(
                 this.merchantState.lastVisitedHighwayX,
-                this.merchantState.highwayBranchPos[0] + 3
+                this.merchantState.highwayBranchPos[0] + TRADE_SYSTEM.highwayBranchStepOffset
               );
             }
             this.merchantState.currentTradingPostId = undefined;
             this.merchantState.state = 'returning_to_highway';
             this.merchantState.targetPos = [this.merchantState.highwayBranchPos[0], this.merchantState.highwayBranchPos[1]];
-            const returnPath = AStar.findPath(grid, [curX, curZ], this.merchantState.targetPos, true, undefined, 6000);
+            const returnPath = AStar.findPath(grid, [curX, curZ], this.merchantState.targetPos, true, undefined, TRADE_SYSTEM.pathfindingIterationBudget);
             if (returnPath && returnPath.length > 0) {
               merchant.path = returnPath;
             } else {
@@ -194,7 +175,7 @@ export class TradeSystem {
       this.merchantState.stalledTicks = 0;
     }
 
-    if (mx >= 380 || time.hour >= 21) {
+    if (mx >= TRADE_SYSTEM.highwayExitX - 1 || time.hour >= TRADE_SYSTEM.departureHour) {
       this.departMerchant(merchant, setCaravanStatus);
       return;
     }
@@ -203,7 +184,7 @@ export class TradeSystem {
       const distToTarget = distance2D(mx, mz, this.merchantState.targetPos[0], this.merchantState.targetPos[1]);
       const hasPath = Boolean(merchant.path && merchant.path.length > 0);
 
-      if (distToTarget <= 2.0 || (!hasPath && currentTick % 12 === 0)) {
+      if (distToTarget <= TRADE_SYSTEM.highwayDetourTolerance || (!hasPath && currentTick % 12 === 0)) {
         if (this.merchantState.currentTradingPostId) {
 
           const post = world.entities.find((e) => e.id === this.merchantState?.currentTradingPostId);
@@ -217,7 +198,7 @@ export class TradeSystem {
 
             const curX = Math.round(mx);
             const curZ = Math.round(mz);
-            const branchPath = AStar.findPath(grid, [curX, curZ], [destX, destZ], true, undefined, 6000);
+            const branchPath = AStar.findPath(grid, [curX, curZ], [destX, destZ], true, undefined, TRADE_SYSTEM.pathfindingIterationBudget);
             if (branchPath && branchPath.length > 0) {
               merchant.path = branchPath;
             } else {
@@ -225,7 +206,7 @@ export class TradeSystem {
               this.merchantState.visitedPostIds.add(post.id);
               this.merchantState.lastVisitedHighwayX = Math.max(
                 this.merchantState.lastVisitedHighwayX,
-                this.merchantState.highwayBranchPos[0] + 3
+                this.merchantState.highwayBranchPos[0] + TRADE_SYSTEM.highwayBranchStepOffset
               );
               this.merchantState.currentTradingPostId = undefined;
               this.findNextDestination(grid, merchant);
@@ -242,18 +223,18 @@ export class TradeSystem {
       const distToPost = distance2D(mx, mz, this.merchantState.targetPos[0], this.merchantState.targetPos[1]);
       const hasPath = Boolean(merchant.path && merchant.path.length > 0);
 
-      if (distToPost <= 2.2 || (!hasPath && distToPost <= 2.8)) {
+      if (distToPost <= TRADE_SYSTEM.postArrivalDistance || (!hasPath && distToPost <= TRADE_SYSTEM.postArrivalDistanceNoPath)) {
         const postId = this.merchantState.currentTradingPostId;
         if (postId) {
           this.merchantState.visitedPostIds.add(postId);
           this.merchantState.lastVisitedHighwayX = Math.max(
             this.merchantState.lastVisitedHighwayX,
-            this.merchantState.highwayBranchPos[0] + 3
+            this.merchantState.highwayBranchPos[0] + TRADE_SYSTEM.highwayBranchStepOffset
           );
         }
 
         this.merchantState.state = 'trading';
-        this.merchantState.tradingTicksRemaining = 60;
+        this.merchantState.tradingTicksRemaining = TRADE_SYSTEM.tradingTicks;
         merchant.path = [];
         if (postId) {
           const postEnt = world.entities.find((e) => e.id === postId);
@@ -272,7 +253,7 @@ export class TradeSystem {
       } else if (!hasPath && currentTick % 15 === 0) {
         const curX = Math.round(mx);
         const curZ = Math.round(mz);
-        const repath = AStar.findPath(grid, [curX, curZ], this.merchantState.targetPos, true, undefined, 6000);
+        const repath = AStar.findPath(grid, [curX, curZ], this.merchantState.targetPos, true, undefined, TRADE_SYSTEM.pathfindingIterationBudget);
         if (repath && repath.length > 0) {
           merchant.path = repath;
         }
@@ -291,7 +272,7 @@ export class TradeSystem {
 
         const curX = Math.round(mx);
         const curZ = Math.round(mz);
-        const returnPath = AStar.findPath(grid, [curX, curZ], [branch[0], branch[1]], true, undefined, 6000);
+        const returnPath = AStar.findPath(grid, [curX, curZ], [branch[0], branch[1]], true, undefined, TRADE_SYSTEM.pathfindingIterationBudget);
         if (returnPath && returnPath.length > 0) {
           merchant.path = returnPath;
         } else {
@@ -306,23 +287,23 @@ export class TradeSystem {
         }
 
         setCaravanStatus({ state: 'approaching' });
-        this.sayPhrase(merchant, MERCHANT_DEPART_PHRASES, currentTick);
+        this.sayPhrase(merchant, this.getDepartPhrases(), currentTick);
       }
     }
 
     else if (this.merchantState.state === 'returning_to_highway') {
       const distToHighway = distance2D(mx, mz, this.merchantState.targetPos[0], this.merchantState.targetPos[1]);
-      const isOnHighwayTile = Math.abs(mz - GridMap.getHighwayZ(mx)) <= 2.0 || distToHighway <= 2.0;
+      const isOnHighwayTile = Math.abs(mz - GridMap.getHighwayZ(mx)) <= TRADE_SYSTEM.highwayDetourTolerance || distToHighway <= TRADE_SYSTEM.highwayDetourTolerance;
       const hasPath = Boolean(merchant.path && merchant.path.length > 0);
 
-      if (isOnHighwayTile && (!hasPath || distToHighway <= 2.0)) {
+      if (isOnHighwayTile && (!hasPath || distToHighway <= TRADE_SYSTEM.highwayDetourTolerance)) {
 
         this.merchantState.state = 'traveling_on_highway';
         this.findNextDestination(grid, merchant);
       } else if (!hasPath && currentTick % 15 === 0) {
         const curX = Math.round(mx);
         const curZ = Math.round(mz);
-        const returnPath = AStar.findPath(grid, [curX, curZ], this.merchantState.targetPos, true, undefined, 6000);
+        const returnPath = AStar.findPath(grid, [curX, curZ], this.merchantState.targetPos, true, undefined, TRADE_SYSTEM.pathfindingIterationBudget);
         if (returnPath && returnPath.length > 0) {
           merchant.path = returnPath;
         }
@@ -355,11 +336,12 @@ export class TradeSystem {
 
   private static spawnMerchant(grid: GridMap, day: number): void {
     this.hasSpawnedToday = true;
-    const startX = 2;
+    const startX = TRADE_SYSTEM.highwayStartX;
     const startZ = Math.round(GridMap.getHighwayZ(startX));
     const startY = grid.getTile(startX, startZ)?.height || 0.1;
 
-    const name = MERCHANT_NAMES[(day - 1) % MERCHANT_NAMES.length];
+    const names = this.getMerchantNames();
+    const name = names[(day - 1) % names.length];
     const entityId = `merchant-caravan-${day}-${Date.now() % 10000}`;
 
     const merchantEntity: GameEntity = {
@@ -373,26 +355,17 @@ export class TradeSystem {
       regionId: undefined,
       position: [startX, startY, startZ],
       gridPosition: [startX, startZ],
-      moveSpeed: 1.6,
+      moveSpeed: TRADE_SYSTEM.merchantMoveSpeed,
       avatarColor: '#d97706',
       path: [],
       needs: {
-        hunger: 100,
-        energy: 100,
-        mood: 100,
-        ale: 100,
-        hygiene: 100,
+        hunger: TRADE_SYSTEM.merchantInitialNeeds,
+        energy: TRADE_SYSTEM.merchantInitialNeeds,
+        mood: TRADE_SYSTEM.merchantInitialNeeds,
+        ale: TRADE_SYSTEM.merchantInitialNeeds,
+        hygiene: TRADE_SYSTEM.merchantInitialNeeds,
       },
-      inventory: {
-        wood: 40,
-        stone: 30,
-        planks: 30,
-        wheat: 40,
-        bread: 30,
-        iron: 15,
-        weapons: 10,
-        clothes: 15,
-      },
+      inventory: { ...TRADE_SYSTEM.merchantInitialInventory },
     };
 
     world.add(merchantEntity);
@@ -402,13 +375,13 @@ export class TradeSystem {
       state: 'traveling_on_highway',
       currentTradingPostId: undefined,
       highwayBranchPos: [startX, startZ],
-      lastVisitedHighwayX: 2,
+      lastVisitedHighwayX: TRADE_SYSTEM.highwayStartX,
       tradingTicksRemaining: 0,
       visitedPostIds: new Set(),
       tradedPostIds: new Set(),
       targetPos: [startX, startZ],
       name,
-      carriedGold: 600,
+      carriedGold: TRADE_SYSTEM.merchantInitialGold,
       lastPos: [startX, startZ],
       stalledTicks: 0,
     };
@@ -424,21 +397,21 @@ export class TradeSystem {
   private static findNextDestination(grid: GridMap, merchant: GameEntity): void {
     if (!this.merchantState) return;
 
-    const curX = merchant.position ? merchant.position[0] : 2;
+    const curX = merchant.position ? merchant.position[0] : TRADE_SYSTEM.highwayStartX;
     const curZ = merchant.position ? merchant.position[2] : Math.round(GridMap.getHighwayZ(curX));
 
-    const isOnHighway = Math.abs(curZ - GridMap.getHighwayZ(curX)) <= 2.2;
+    const isOnHighway = Math.abs(curZ - GridMap.getHighwayZ(curX)) <= TRADE_SYSTEM.highwayApproachTolerance;
     if (!isOnHighway) {
       const returnHighwayX = this.merchantState.highwayBranchPos[0];
       const returnHighwayZ = this.merchantState.highwayBranchPos[1];
       this.merchantState.state = 'returning_to_highway';
       this.merchantState.targetPos = [returnHighwayX, returnHighwayZ];
-      const returnPath = AStar.findPath(grid, [Math.round(curX), Math.round(curZ)], [returnHighwayX, returnHighwayZ], true, undefined, 6000);
+      const returnPath = AStar.findPath(grid, [Math.round(curX), Math.round(curZ)], [returnHighwayX, returnHighwayZ], true, undefined, TRADE_SYSTEM.pathfindingIterationBudget);
       merchant.path = returnPath && returnPath.length > 0 ? returnPath : [[returnHighwayX, returnHighwayZ]];
       return;
     }
 
-    const minSearchX = Math.max(curX + 1.5, this.merchantState.lastVisitedHighwayX + 2.0);
+    const minSearchX = Math.max(curX + TRADE_SYSTEM.highwayMinSearchOffset, this.merchantState.lastVisitedHighwayX + TRADE_SYSTEM.highwayVisitedOffset);
     const eligiblePosts: GameEntity[] = [];
 
     for (const b of buildingEntities) {
@@ -464,7 +437,7 @@ export class TradeSystem {
 
     if (nextPost) {
       const postX = nextPost.gridPosition ? nextPost.gridPosition[0] : (nextPost.position ? nextPost.position[0] : curX);
-      const branchX = Math.max(2, Math.min(381, Math.round(postX)));
+      const branchX = Math.max(TRADE_SYSTEM.highwayStartX, Math.min(TRADE_SYSTEM.highwayExitX, Math.round(postX)));
       const branchZ = Math.round(GridMap.getHighwayZ(branchX));
 
       this.merchantState.currentTradingPostId = nextPost.id;
@@ -476,7 +449,7 @@ export class TradeSystem {
       merchant.path = path.length > 0 ? path : [[branchX, branchZ]];
     } else {
 
-      const exitX = 381;
+      const exitX = TRADE_SYSTEM.highwayExitX;
       const exitZ = Math.round(GridMap.getHighwayZ(exitX));
 
       this.merchantState.currentTradingPostId = undefined;
@@ -499,7 +472,7 @@ export class TradeSystem {
       const botRules = tradingPost.tradeRules || {};
       tradingPost.localInventory = tradingPost.localInventory || {};
       const botInv = tradingPost.localInventory;
-      let botGold = 250;
+      let botGold = TRADE_SYSTEM.botMerchantInitialGold;
 
       for (const item of TRADE_ITEMS_CONFIG) {
         const res = item.resource;
@@ -513,14 +486,14 @@ export class TradeSystem {
         if (rule.mode === 'import' && botStock < targetStock) {
           const needed = targetStock - botStock;
           const affordable = Math.floor(botGold / buyPrice);
-          const toBuy = Math.min(needed, affordable, 20);
+          const toBuy = Math.min(needed, affordable, TRADE_SYSTEM.botTradeBuyLimit);
           if (toBuy > 0) {
             botGold -= toBuy * buyPrice;
             botInv[res] = (botInv[res] || 0) + toBuy;
           }
         } else if (rule.mode === 'export' && botStock > targetStock) {
           const excess = botStock - targetStock;
-          const toSell = Math.min(excess, 25);
+          const toSell = Math.min(excess, TRADE_SYSTEM.botTradeSellLimit);
           if (toSell > 0) {
             botInv[res] = Math.max(0, (botInv[res] || 0) - toSell);
             botGold += toSell * sellPrice;
@@ -530,7 +503,7 @@ export class TradeSystem {
 
       const merchant = world.entities.find((e) => e.id === this.merchantState?.entityId);
       if (merchant) {
-        this.sayPhrase(merchant, MERCHANT_ARRIVAL_PHRASES, currentTick);
+        this.sayPhrase(merchant, this.getArrivalPhrases(), currentTick);
       }
       return;
     }
@@ -555,7 +528,7 @@ export class TradeSystem {
       if (rule.mode === 'import' && playerStock < targetStock) {
         const needed = targetStock - playerStock;
         const affordable = Math.floor((resources.gold || 0) / buyPrice);
-        const toBuy = Math.min(needed, affordable, 25);
+        const toBuy = Math.min(needed, affordable, TRADE_SYSTEM.playerTradeBuyLimit);
 
         if (toBuy > 0) {
           const cost = toBuy * buyPrice;
@@ -563,12 +536,15 @@ export class TradeSystem {
             addResource(res, toBuy);
             totalBought += toBuy;
             goldSpent += cost;
-            tradeSummaries.push(`+${toBuy} ${item.nameUk} (-${cost} зол.)`);
+            const lang = useGameStore.getState().language;
+            const dict = translations[lang];
+            const resName = dict.resources[res] || res;
+            tradeSummaries.push(`+${toBuy} ${resName} (-${cost} ${dict.strategicMap.goldShort})`);
           }
         }
       } else if (rule.mode === 'export' && playerStock > targetStock) {
         const excess = playerStock - targetStock;
-        const toSell = Math.min(excess, 30);
+        const toSell = Math.min(excess, TRADE_SYSTEM.playerTradeSellLimit);
 
         if (toSell > 0) {
           const revenue = toSell * sellPrice;
@@ -576,7 +552,10 @@ export class TradeSystem {
             addResource('gold', revenue);
             totalSold += toSell;
             goldEarned += revenue;
-            tradeSummaries.push(`-${toSell} ${item.nameUk} (+${revenue} зол.)`);
+            const lang = useGameStore.getState().language;
+            const dict = translations[lang];
+            const resName = dict.resources[res] || res;
+            tradeSummaries.push(`-${toSell} ${resName} (+${revenue} ${dict.strategicMap.goldShort})`);
           }
         }
       }
@@ -584,12 +563,15 @@ export class TradeSystem {
 
     const merchant = world.entities.find((e) => e.id === this.merchantState?.entityId);
     if (merchant) {
-      this.sayPhrase(merchant, MERCHANT_ARRIVAL_PHRASES, currentTick);
+      this.sayPhrase(merchant, this.getArrivalPhrases(), currentTick);
     }
 
     if (totalBought > 0 || totalSold > 0) {
       audioManager.playUIClick();
-      const summaryText = tradeSummaries.slice(0, 3).join(', ') + (tradeSummaries.length > 3 ? ` (+ще ${tradeSummaries.length - 3})` : '');
+      const lang = useGameStore.getState().language;
+      const dict = translations[lang];
+      const moreText = tradeSummaries.length > 3 ? dict.tradePost.moreItems(tradeSummaries.length - 3) : '';
+      const summaryText = tradeSummaries.slice(0, 3).join(', ') + moreText;
 
       setCaravanStatus({
         lastTradeSummary: summaryText,
@@ -597,13 +579,28 @@ export class TradeSystem {
     }
   }
 
+  private static getMerchantNames(): string[] {
+    const lang = useGameStore.getState().language;
+    return translations[lang].tradePost.merchantNames;
+  }
+
+  private static getArrivalPhrases(): string[] {
+    const lang = useGameStore.getState().language;
+    return translations[lang].tradePost.merchantArrivalPhrases;
+  }
+
+  private static getDepartPhrases(): string[] {
+    const lang = useGameStore.getState().language;
+    return translations[lang].tradePost.merchantDepartPhrases;
+  }
+
   private static sayPhrase(entity: GameEntity, phrases: string[], currentTick: number): void {
-    if (currentTick - this.lastSpeechTick < 40) return;
+    if (currentTick - this.lastSpeechTick < TRADE_SYSTEM.speechCooldownTicks) return;
     this.lastSpeechTick = currentTick;
     const text = phrases[Math.floor(Math.random() * phrases.length)];
     entity.speechBubble = {
       text,
-      expiresAtTick: currentTick + 45,
+      expiresAtTick: currentTick + TRADE_SYSTEM.speechDurationTicks,
       type: 'work',
     };
   }
