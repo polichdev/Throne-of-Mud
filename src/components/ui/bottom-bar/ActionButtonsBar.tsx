@@ -17,7 +17,7 @@ interface ActionButtonsBarProps {
 }
 
 export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ onToggleTab }) => {
-  const { dict, language } = useTranslation();
+  const { dict } = useTranslation();
   const { focusTownCenter } = useTownCenterFocus();
 
   const activeTool = useGameStore((s) => s.activeTool);
@@ -59,8 +59,8 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
           className={`w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeTool === 'road' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          data-ui-tip={language === 'uk' ? 'Прокладання доріг (R)' : 'Pave Roads (R)'}
-          aria-label={language === 'uk' ? 'Прокладання доріг' : 'Pave Roads'}
+          data-ui-tip={dict.dock.roadsTip}
+          aria-label={dict.dock.roadsLabel}
           aria-pressed={activeTool === 'road'}
         >
           <DockRoadIcon />
@@ -71,8 +71,8 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
           className={`w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'buildings' || activeTool === 'build' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          data-ui-tip={language === 'uk' ? 'Будівництво споруд (B / H)' : 'Construction Menu (B / H)'}
-          aria-label={language === 'uk' ? 'Будівництво споруд' : 'Construction Menu'}
+          data-ui-tip={dict.dock.buildingsTip}
+          aria-label={dict.dock.buildingsLabel}
           aria-pressed={activeMenuTab === 'buildings' || activeTool === 'build'}
         >
           <DockBuildIcon />
@@ -83,8 +83,8 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
           className={`w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'military' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          data-ui-tip={language === 'uk' ? 'Військо та скликання ополчення (V / M)' : 'Military & Peasant Levies (V / M)'}
-          aria-label={language === 'uk' ? 'Військо та скликання ополчення' : 'Military and Peasant Levies'}
+          data-ui-tip={dict.dock.militaryTip}
+          aria-label={dict.dock.militaryLabel}
           aria-pressed={activeMenuTab === 'military'}
         >
           <DockMilitaryIcon />
@@ -95,8 +95,8 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
           className={`w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'trade' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          data-ui-tip={language === 'uk' ? 'Економіка, зарплати та ринок (E)' : 'Economy, Wages & Market (E)'}
-          aria-label={language === 'uk' ? 'Економіка, зарплати та ринок' : 'Economy, Wages and Market'}
+          data-ui-tip={dict.dock.tradeTip}
+          aria-label={dict.dock.tradeLabel}
           aria-pressed={activeMenuTab === 'trade'}
         >
           <DockTradeIcon />
@@ -107,8 +107,8 @@ export const ActionButtonsBar: React.FC<ActionButtonsBarProps> = React.memo(({ o
           className={`relative w-11 h-11 manor-square-btn ui-tip-anchor flex items-center justify-center transition cursor-pointer ${
             activeMenuTab === 'codex' ? 'active ring-2 ring-amber-400 shadow-[0_0_14px_rgba(245,158,11,0.6)]' : ''
           }`}
-          data-ui-tip={language === 'uk' ? 'Дипломатія та листи королівств (L)' : 'Kingdom Diplomacy & Letters (L)'}
-          aria-label={language === 'uk' ? 'Дипломатія та листи королівств' : 'Kingdom Diplomacy and Letters'}
+          data-ui-tip={dict.dock.diplomacyTip}
+          aria-label={dict.dock.diplomacyLabel}
           aria-pressed={activeMenuTab === 'codex'}
         >
           <DockDiplomacyIcon />

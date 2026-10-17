@@ -6,7 +6,7 @@ import { audioManager } from '../../../engine/audio/AudioManager';
 import { characterEntities, world } from '../../../engine/ecs/world';
 import type { MilitiaUnitType } from '../../../types/game';
 import { SpearmanIllustration, SwordsmanIllustration, ArcherIllustration, PikemanIllustration, AddSquadCardIllustration } from './MilitiaCardIllustrations';
-import { WeaponsIcon, PeasantsIcon, ClarionHornIcon, CompassIcon, CrossCloseIcon, MedievalInfoIcon } from '../MedievalIcons';
+import { WeaponsIcon, PeasantsIcon, ClarionHornIcon, CompassIcon, CrossCloseIcon, MedievalInfoIcon } from '../icons';
 
 interface MilitiaBarProps {
   grid: GridMap;
@@ -14,10 +14,10 @@ interface MilitiaBarProps {
 }
 
 const unitTypes = [
-  { type: 'spearmen', uk: 'Списники', en: 'Spearmen', Portrait: SpearmanIllustration, needsWeapons: false },
-  { type: 'swordsmen', uk: 'Мечники', en: 'Swordsmen', Portrait: SwordsmanIllustration, needsWeapons: true },
-  { type: 'archers', uk: 'Лучники', en: 'Archers', Portrait: ArcherIllustration, needsWeapons: true },
-  { type: 'pikemen', uk: 'Пікінери', en: 'Pikemen', Portrait: PikemanIllustration, needsWeapons: true },
+  { type: 'spearmen', Portrait: SpearmanIllustration, needsWeapons: false },
+  { type: 'swordsmen', Portrait: SwordsmanIllustration, needsWeapons: true },
+  { type: 'archers', Portrait: ArcherIllustration, needsWeapons: true },
+  { type: 'pikemen', Portrait: PikemanIllustration, needsWeapons: true },
 ] as const;
 
 const DisbandSquadIcon: React.FC = () => (
@@ -30,8 +30,7 @@ const DisbandSquadIcon: React.FC = () => (
 );
 
 export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose }) => {
-  const { language } = useTranslation();
-  const isUkr = language === 'uk';
+  const { dict } = useTranslation();
   const militiaSquads = useGameStore((s) => s.militiaSquads);
   const selectedMilitiaSquadId = useGameStore((s) => s.selectedMilitiaSquadId);
   const setSelectedMilitiaSquadId = useGameStore((s) => s.setSelectedMilitiaSquadId);
@@ -55,6 +54,13 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
   }
   const totalAvailableCount = idlePeasantsCount + workingPeasantsCount;
   const selectedSquad = useMemo(() => militiaSquads.find((sq) => sq.id === selectedMilitiaSquadId) || null, [militiaSquads, selectedMilitiaSquadId]);
+
+  const unitTypeNames: Record<MilitiaUnitType, string> = {
+    spearmen: dict.military.squadSpearmen,
+    swordsmen: dict.military.squadSwordsmen,
+    archers: dict.military.squadArchers,
+    pikemen: dict.military.squadPikemen,
+  };
 
   const handleCreateSquad = useCallback((type: MilitiaUnitType) => {
     const squad = createMilitiaSquad(type, grid);
@@ -87,27 +93,28 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
         <div className="realm-militia-muster realm-paper-panel realm-militia-panel">
           <div className="realm-militia-muster-heading">
             <ClarionHornIcon className="w-5 h-5" />
-            <span>{isUkr ? 'Скликати ополчення' : 'Form Militia'}</span>
-            <button onClick={() => setShowFormPanel(false)} title={isUkr ? 'Згорнути' : 'Collapse'}><CrossCloseIcon className="w-4 h-4" /></button>
+            <span>{dict.militiaBar.formMilitia}</span>
+            <button onClick={() => setShowFormPanel(false)} title={dict.militiaBar.collapse}><CrossCloseIcon className="w-4 h-4" /></button>
           </div>
           <div className="realm-militia-muster-content">
             <div className="realm-militia-unit-row">
-              {unitTypes.map(({ type, uk, en, Portrait, needsWeapons }) => {
+              {unitTypes.map(({ type, Portrait, needsWeapons }) => {
                 const available = totalAvailableCount > 0 && (!needsWeapons || weaponsCount > 0);
                 const count = Math.min(5, totalAvailableCount, needsWeapons ? weaponsCount : 5);
+                const typeName = unitTypeNames[type];
                 const reason = totalAvailableCount === 0
-                  ? (isUkr ? 'Немає вільних селян' : 'No peasants available')
+                  ? dict.militiaBar.noPeasantsAvailable
                   : needsWeapons && weaponsCount === 0
-                    ? (isUkr ? 'Потрібна зброя' : 'Weapons needed')
-                    : (isUkr ? `Скликати загін (${count} чол.)` : `Form squad (${count} men)`);
+                    ? dict.militiaBar.weaponsNeeded
+                    : dict.militiaBar.formSquadWithCount(count);
                 return (
                   <button key={type} data-unit={type} className="realm-militia-unit-card" disabled={!available}
-                    onClick={() => handleCreateSquad(type)} title={`${isUkr ? uk : en} · ${reason}`}>
+                    onClick={() => handleCreateSquad(type)} title={`${typeName} · ${reason}`}>
                     <span className="realm-militia-unit-portrait"><Portrait /></span>
-                    <span className="realm-militia-unit-name">{isUkr ? uk : en}</span>
+                    <span className="realm-militia-unit-name">{typeName}</span>
                     <span className="realm-militia-unit-cost">
                       {needsWeapons ? <WeaponsIcon className="w-4 h-4" /> : <PeasantsIcon className="w-4 h-4" />}
-                      {needsWeapons ? `${Math.min(5, totalAvailableCount)} / ${weaponsCount}` : (isUkr ? 'без зброї' : 'no weapons')}
+                      {needsWeapons ? `${Math.min(5, totalAvailableCount)} / ${weaponsCount}` : dict.militiaBar.noWeapons}
                     </span>
                     <span className="realm-militia-unit-action">{available ? '+' : '!'}</span>
                   </button>
@@ -115,11 +122,11 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
               })}
             </div>
             <div className="realm-militia-resources">
-              <div className="realm-militia-resource"><PeasantsIcon className="w-5 h-5" /><span>{isUkr ? 'Селяни' : 'Peasants'}</span><strong>{totalAvailableCount}</strong></div>
-              <div className="realm-militia-resource"><WeaponsIcon className="w-5 h-5" /><span>{isUkr ? 'Зброя' : 'Weapons'}</span><strong>{weaponsCount}</strong></div>
-              <div className="realm-militia-resource realm-militia-resource-sub"><span>{isUkr ? 'Вільні' : 'Idle'}</span><strong>{idlePeasantsCount}</strong></div>
-              <div className="realm-militia-resource realm-militia-resource-sub"><span>{isUkr ? 'Працюють' : 'Working'}</span><strong>{workingPeasantsCount}</strong></div>
-              <p><MedievalInfoIcon className="w-4 h-4" />{isUkr ? 'Натисніть на картку, щоб скликати загін.' : 'Select a card to form a squad.'}</p>
+              <div className="realm-militia-resource"><PeasantsIcon className="w-5 h-5" /><span>{dict.militiaBar.peasants}</span><strong>{totalAvailableCount}</strong></div>
+              <div className="realm-militia-resource"><WeaponsIcon className="w-5 h-5" /><span>{dict.militiaBar.weapons}</span><strong>{weaponsCount}</strong></div>
+              <div className="realm-militia-resource realm-militia-resource-sub"><span>{dict.militiaBar.idle}</span><strong>{idlePeasantsCount}</strong></div>
+              <div className="realm-militia-resource realm-militia-resource-sub"><span>{dict.militiaBar.working}</span><strong>{workingPeasantsCount}</strong></div>
+              <p><MedievalInfoIcon className="w-4 h-4" />{dict.militiaBar.clickToFormSquad}</p>
             </div>
           </div>
         </div>
@@ -146,18 +153,18 @@ export const MilitiaBar: React.FC<MilitiaBarProps> = React.memo(({ grid, onClose
             audioManager.playUIClick();
             setShowFormPanel(!showFormPanel);
           }} className={`realm-militia-add-card ${showFormPanel ? 'is-selected' : ''}`}
-            title={isUkr ? 'Скликати новий загін ополчення' : 'Form new militia squad'}>
+            title={dict.militiaBar.formNewMilitiaSquad}>
             <AddSquadCardIllustration />
           </button>
         </div>
         {selectedSquad && (
           <div className="realm-militia-squad-actions">
-            <button className="realm-militia-action-rally" onClick={() => rallyMilitiaSquad(selectedSquad.id, grid)} title={isUkr ? 'До строю: зібрати загін' : 'Rally squad'} aria-label={isUkr ? 'Зібрати загін' : 'Rally squad'}><ClarionHornIcon className="w-5 h-5" /></button>
-            <button className="realm-militia-action-focus" onClick={handleFocusSelected} title={isUkr ? 'Показати загін на карті' : 'Center camera on squad'} aria-label={isUkr ? 'Показати загін на карті' : 'Focus on squad'}><CompassIcon className="w-5 h-5" /></button>
-            <button className="realm-militia-action-disband" onClick={() => disbandMilitiaSquad(selectedSquad.id)} title={isUkr ? 'Розпустити загін і повернути селян до роботи' : 'Disband squad and return peasants to work'} aria-label={isUkr ? 'Розпустити загін' : 'Disband squad'}><DisbandSquadIcon /></button>
+            <button className="realm-militia-action-rally" onClick={() => rallyMilitiaSquad(selectedSquad.id, grid)} title={dict.militiaBar.rallySquad} aria-label={dict.militiaBar.rallySquad}><ClarionHornIcon className="w-5 h-5" /></button>
+            <button className="realm-militia-action-focus" onClick={handleFocusSelected} title={dict.militiaBar.focusSquad} aria-label={dict.militiaBar.focusSquad}><CompassIcon className="w-5 h-5" /></button>
+            <button className="realm-militia-action-disband" onClick={() => disbandMilitiaSquad(selectedSquad.id)} title={dict.militiaBar.disbandSquad} aria-label={dict.militiaBar.disbandSquad}><DisbandSquadIcon /></button>
           </div>
         )}
-        <button className="realm-militia-close" onClick={onClose} title={isUkr ? 'Закрити панель ополчення' : 'Close militia panel'} aria-label={isUkr ? 'Закрити панель ополчення' : 'Close militia panel'}><CrossCloseIcon className="w-4 h-4" /></button>
+        <button className="realm-militia-close" onClick={onClose} title={dict.militiaBar.closeMilitiaPanel} aria-label={dict.militiaBar.closeMilitiaPanel}><CrossCloseIcon className="w-4 h-4" /></button>
       </div>
     </div>
   );

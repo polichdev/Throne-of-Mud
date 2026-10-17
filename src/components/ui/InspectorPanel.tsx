@@ -8,7 +8,7 @@ import {
   ShieldIcon,
   StoneIcon,
   WeaponsIcon,
-} from './MedievalIcons';
+} from './icons';
 import { useTranslation } from '../../i18n';
 import { BuildingInspectorSection } from './inspector/BuildingInspectorSection';
 import { BuildingInspectorWindow } from './inspector/BuildingInspectorWindow';
@@ -21,7 +21,7 @@ export function InspectorPanel() {
 }
 
 function InspectorPanelContent({ selectedEntityId }: { selectedEntityId: string }) {
-  const { dict, language } = useTranslation();
+  const { dict } = useTranslation();
   const setSelectedEntityId = useGameStore((s) => s.setSelectedEntityId);
   const playerRegionId = useGameStore((s) => s.playerRegionId);
   const regions = useGameStore((s) => s.regions);
@@ -120,21 +120,23 @@ function InspectorPanelContent({ selectedEntityId }: { selectedEntityId: string 
           </div>
           <div>
             <h3 className="font-cinzel font-bold text-amber-200 text-base leading-tight">
-              {selectedEntity.name || (language === 'uk' ? "Об'єкт" : 'Entity')}
+              {isResourceDeposit
+                ? dict.deposits[selectedEntity.id]?.name || selectedEntity.name || dict.inspector.entity
+                : selectedEntity.name || dict.inspector.entity}
             </h3>
             <span className="text-[11px] text-stone-400 uppercase tracking-wider font-mono font-medium">
               {isNoble
                 ? dict.inspector.lordTitle
                 : isBandit
-                ? (language === 'uk' ? 'Мандрівні розбійники' : 'Roaming Bandits')
+                ? dict.inspector.roamingBandits
                 : isBuilding
                 ? selectedEntity.buildingType
                   ? dict.buildings.items[selectedEntity.buildingType]?.name || selectedEntity.buildingType
                   : dict.inspector.selectedBuilding
                 : isResourceDeposit
-                ? selectedEntity.harvestBuildingLabel || (language === 'uk' ? 'Родовище' : 'Deposit')
+                ? dict.deposits[selectedEntity.id]?.harvestBuilding || selectedEntity.harvestBuildingLabel || dict.inspector.deposit
                 : employerBuilding
-                ? `${language === 'uk' ? 'Працює:' : 'Employed:'} ${employerBuilding.name}`
+                ? `${dict.inspector.assignedWork}: ${employerBuilding.name}`
                 : dict.inspector.unemployed}
             </span>
           </div>
@@ -151,12 +153,10 @@ function InspectorPanelContent({ selectedEntityId }: { selectedEntityId: string 
         <div className="bg-rose-950/40 border border-rose-800/50 p-2.5 rounded-xl text-xs flex flex-col gap-1">
           <span className="font-bold text-rose-200 flex items-center gap-1.5">
             <WeaponsIcon className="w-3.5 h-3.5 text-rose-400" />
-            {language === 'uk' ? 'Загін лісових розбійників' : 'Bandit Outlaw Warband'}
+            {dict.inspector.banditWarband}
           </span>
           <span className="text-slate-300 text-[11px] leading-relaxed">
-            {language === 'uk'
-              ? 'Мандрівна ватага озброєних грабіжників. Блукають хащами та дикими стежками, вишукуючи приховані місця для табору.'
-              : 'A wandering band of armed outlaws roaming across forests and borders.'}
+            {dict.inspector.banditWarbandDesc}
           </span>
         </div>
       )}
@@ -165,12 +165,13 @@ function InspectorPanelContent({ selectedEntityId }: { selectedEntityId: string 
         <div className="bg-amber-950/30 border border-amber-700/50 p-2.5 rounded-xl text-xs flex flex-col gap-1">
           <span className="font-bold text-amber-200 flex items-center gap-1">
             <ShieldIcon className="w-3.5 h-3.5 text-amber-400" />
-            {language === 'uk' ? 'Підданий сусіднього лорда' : 'Subject of neighboring fief'}
+            {dict.inspector.subjectNeighborLord}
           </span>
           <span className="text-slate-400 text-[11px]">
-            {language === 'uk'
-              ? `Належить до земель ${ownerRegion?.lordName || 'чужого лорда'} (${ownerRegion?.name || 'сусідній регіон'}).`
-              : `Sworn to ${ownerRegion?.lordName || 'neighboring lord'} (${ownerRegion?.name || 'neighboring fief'}).`}
+            {dict.inspector.swornToFief(
+              ownerRegion?.lordName || dict.inspector.neighborLord,
+              ownerRegion?.name || dict.strategicMap.neighborFief
+            )}
           </span>
         </div>
       )}

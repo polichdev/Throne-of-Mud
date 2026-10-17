@@ -6,10 +6,10 @@ import { PAINTED_BUILDING_ART } from '../inspector/buildingArt';
 import { useGameStore } from '../../../store/useGameStore';
 import { audioManager } from '../../../engine/audio/AudioManager';
 import { useTranslation } from '../../../i18n';
-import { WoodIcon, StoneIcon, GoldIcon } from '../MedievalIcons';
-import { IlluminatedIcon } from '../IlluminatedIcons';
-import type { IlluminatedIconKind } from '../IlluminatedIcons';
-import { RESOURCE_UI } from '../resourcePresentation';
+import { WoodIcon, StoneIcon, GoldIcon } from '../icons';
+import { IlluminatedIcon } from '../icons';
+import type { IlluminatedIconKind } from '../icons';
+import { RESOURCE_UI, getResourceName } from '../resourcePresentation';
 
 interface BuildingCardProps {
   blueprint: BuildingBlueprint;
@@ -145,7 +145,7 @@ export const BuildingCard: React.FC<BuildingCardProps> = React.memo(({ blueprint
           {blueprint.cost.wood ? <span className={resources.wood < blueprint.cost.wood ? 'missing' : ''}><WoodIcon size={15} />{blueprint.cost.wood}</span> : null}
           {blueprint.cost.stone ? <span className={resources.stone < blueprint.cost.stone ? 'missing' : ''}><StoneIcon size={15} />{blueprint.cost.stone}</span> : null}
           {blueprint.cost.gold ? <span className={resources.gold < blueprint.cost.gold ? 'missing' : ''}><GoldIcon size={15} />{blueprint.cost.gold}</span> : null}
-          {!blueprint.cost.wood && !blueprint.cost.stone && !blueprint.cost.gold && <span>{language === 'uk' ? 'Безкоштовно' : 'Free'}</span>}
+          {!blueprint.cost.wood && !blueprint.cost.stone && !blueprint.cost.gold && <span>{dict.roads.cost}</span>}
         </span>
       </button>
       {isTooltipOpen && tooltipPosition && typeof document !== 'undefined' && createPortal(
@@ -153,25 +153,25 @@ export const BuildingCard: React.FC<BuildingCardProps> = React.memo(({ blueprint
           <h3>{bTrans.name}</h3>
           {PAINTED_BUILDING_ART[blueprint.type] && <img src={PAINTED_BUILDING_ART[blueprint.type]} alt="" decoding="async" />}
           <div className="building-card-tooltip-cost">
-            <strong>{language === 'uk' ? 'Будівництво' : 'Construction'}</strong>
+            <strong>{dict.buildings.cost}</strong>
             {costEntries.length ? costEntries.map(([key, amount]) => {
               const meta = RESOURCE_UI[key];
               return <span key={key} className={resources[key] < amount ? 'missing' : ''}>
                 <IlluminatedIcon kind={meta.icon} size={18} />
-                {language === 'uk' ? meta.uk : meta.en}: {amount} <small>({resources[key]})</small>
+                {getResourceName(key, language)}: {amount} <small>({resources[key]})</small>
               </span>;
-            }) : <span>{language === 'uk' ? 'Без витрат' : 'Free'}</span>}
+            }) : <span>{dict.roads.cost}</span>}
           </div>
           <p>{bTrans.description}</p>
           {blueprint.workSlots > 0 && <div className="building-card-tooltip-workers">
-            {language === 'uk' ? 'Робочі місця' : 'Workplaces'}: {blueprint.workSlots}
+            {dict.buildings.workers}: {blueprint.workSlots}
           </div>}
           {(inputEntries.length > 0 || outputEntries.length > 0) && <div className="building-card-tooltip-production">
-            <strong>{language === 'uk' ? 'Виробництво' : 'Production'}</strong>
+            <strong>{dict.inspector.production}</strong>
             <div>
-              {inputEntries.map(([key, amount]) => <span key={key}>{amount} {language === 'uk' ? RESOURCE_UI[key].uk : RESOURCE_UI[key].en}</span>)}
+              {inputEntries.map(([key, amount]) => <span key={key}>{amount} {getResourceName(key, language)}</span>)}
               {inputEntries.length > 0 && <b>→</b>}
-              {outputEntries.map(([key, amount]) => <span key={key}>{amount} {language === 'uk' ? RESOURCE_UI[key].uk : RESOURCE_UI[key].en}</span>)}
+              {outputEntries.map(([key, amount]) => <span key={key}>{amount} {getResourceName(key, language)}</span>)}
             </div>
           </div>}
         </div>,

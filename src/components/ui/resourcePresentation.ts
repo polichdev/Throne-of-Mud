@@ -1,28 +1,44 @@
 import type { ResourceInventory } from '../../types/game';
-import type { IlluminatedIconKind } from './IlluminatedIcons';
+import type { IlluminatedIconKind } from './icons';
+import { translations, type SupportedLanguage } from '../../i18n';
 
-export const RESOURCE_UI: Record<keyof ResourceInventory, { uk: string; en: string; icon: IlluminatedIconKind }> = {
-  wood: { uk: 'Деревина', en: 'Timber', icon: 'wood' },
-  stone: { uk: 'Камінь', en: 'Stone', icon: 'stone' },
-  wheat: { uk: 'Пшениця', en: 'Wheat', icon: 'wheat' },
-  flour: { uk: 'Борошно', en: 'Flour', icon: 'flour' },
-  bread: { uk: 'Хліб', en: 'Bread', icon: 'bread' },
-  ale: { uk: 'Ель', en: 'Ale', icon: 'ale' },
-  gold: { uk: 'Золото', en: 'Gold', icon: 'gold' },
-  weapons: { uk: 'Зброя', en: 'Weapons', icon: 'weapons' },
-  fish: { uk: 'Риба', en: 'Fish', icon: 'fish' },
-  berries: { uk: 'Ягоди', en: 'Berries', icon: 'berry' },
-  iron: { uk: 'Залізо', en: 'Iron', icon: 'iron' },
-  clay: { uk: 'Глина', en: 'Clay', icon: 'clay' },
-  salt: { uk: 'Сіль', en: 'Salt', icon: 'salt' },
-  meat: { uk: 'М’ясо', en: 'Meat', icon: 'meat' },
-  hides: { uk: 'Шкури', en: 'Hides', icon: 'hides' },
-  vegetables: { uk: 'Овочі', en: 'Vegetables', icon: 'vegetables' },
-  eggs: { uk: 'Яйця', en: 'Eggs', icon: 'eggs' },
-  iron_ore: { uk: 'Залізна руда', en: 'Iron ore', icon: 'iron_ore' },
-  coal: { uk: 'Вугілля', en: 'Coal', icon: 'coal' },
-  cut_stone: { uk: 'Тесаний камінь', en: 'Dressed stone', icon: 'cut_stone' },
-  clay_bricks: { uk: 'Цегла', en: 'Bricks', icon: 'brick' },
-  planks: { uk: 'Дошки', en: 'Planks', icon: 'planks' },
-  clothes: { uk: 'Одяг', en: 'Clothes', icon: 'clothes' },
+export const RESOURCE_ICONS: Record<keyof ResourceInventory, IlluminatedIconKind> = {
+  wood: 'wood',
+  stone: 'stone',
+  wheat: 'wheat',
+  flour: 'flour',
+  bread: 'bread',
+  ale: 'ale',
+  gold: 'gold',
+  weapons: 'weapons',
+  fish: 'fish',
+  berries: 'berry',
+  iron: 'iron',
+  clay: 'clay',
+  salt: 'salt',
+  meat: 'meat',
+  hides: 'hides',
+  vegetables: 'vegetables',
+  eggs: 'eggs',
+  iron_ore: 'iron_ore',
+  coal: 'coal',
+  cut_stone: 'cut_stone',
+  clay_bricks: 'brick',
+  planks: 'planks',
+  clothes: 'clothes',
 };
+
+export const RESOURCE_UI = new Proxy({} as Record<keyof ResourceInventory, { uk: string; en: string; icon: IlluminatedIconKind }>, {
+  get: (_, prop: string) => {
+    const key = prop as keyof ResourceInventory;
+    return {
+      uk: translations.uk.resources[key] || key,
+      en: translations.en.resources[key] || key,
+      icon: RESOURCE_ICONS[key] || 'materials',
+    };
+  },
+});
+
+export function getResourceName(key: keyof ResourceInventory, lang: SupportedLanguage): string {
+  return translations[lang]?.resources[key] || key;
+}

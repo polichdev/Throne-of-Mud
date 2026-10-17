@@ -1,7 +1,7 @@
 import type { BuildingType } from '../../../types/game';
 import { BUILDING_BLUEPRINTS } from '../../../engine/buildings/blueprints';
 import { BuildingIllustration } from '../bottom-bar/BuildingCardIllustrations';
-import { HammerIcon, HouseTierIcon, WheatIcon, WoodIcon, StorageIcon, ShieldIcon } from '../MedievalIcons';
+import { HammerIcon, HouseTierIcon, WheatIcon, WoodIcon, StorageIcon, ShieldIcon } from '../icons';
 import { PAINTED_BUILDING_ART } from './buildingArt';
 
 export function BuildingInspectorIllustration({ type, tier, showSeal }: { type: BuildingType; tier: number; showSeal: boolean }) {

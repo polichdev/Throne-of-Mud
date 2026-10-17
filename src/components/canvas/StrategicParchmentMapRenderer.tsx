@@ -1,3 +1,4 @@
+import { DEFAULT_CAMERA_ZOOM } from '../../constants/camera';
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -7,12 +8,14 @@ import { INITIAL_RESOURCE_DEPOSITS } from '../../engine/resources/ResourceDeposi
 import { startCooperativeTask } from './performance/cooperativeTask';
 import { audioManager } from '../../engine/audio/AudioManager';
 import { isMilitiaDestinationAllowed } from '../../engine/combat/formationUtils';
+import { useTranslation } from '../../i18n';
 
 interface Props {
   grid: GridMap;
 }
 
 export function StrategicParchmentMapRenderer({ grid }: Props) {
+  const { dict } = useTranslation();
   const meshRef = useRef<THREE.Mesh>(null);
   const matRef = useRef<THREE.MeshBasicMaterial>(null);
 
@@ -757,13 +760,13 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       yield;
     }
 
-    const townArt: Record<number, { type: 'castle' | 'timber' | 'mill' | 'citadel'; title: string }> = {
-      0: { type: 'castle', title: 'Ґольдгоф' },
-      1: { type: 'timber', title: 'Вальдау' },
-      2: { type: 'mill', title: 'Айхенау' },
-      3: { type: 'citadel', title: 'Цвайау' },
-      4: { type: 'timber', title: 'Міттенвальд' },
-      5: { type: 'citadel', title: 'Королівський Тракт' },
+    const townArt: Record<number, { type: 'castle' | 'timber' | 'mill' | 'citadel' }> = {
+      0: { type: 'castle' },
+      1: { type: 'timber' },
+      2: { type: 'mill' },
+      3: { type: 'citadel' },
+      4: { type: 'timber' },
+      5: { type: 'citadel' },
     };
 
     for (const reg of regions) {
@@ -772,7 +775,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       const tx = camp[0] * scale;
       const tz = camp[1] * scale;
       const isPlayer = reg.id === playerRegionId;
-      const art = townArt[reg.id] || { type: 'castle', title: reg.name };
+      const art = townArt[reg.id] || { type: 'castle' };
 
       ctx.fillStyle = 'rgba(30, 20, 10, 0.4)';
       ctx.beginPath();
@@ -905,7 +908,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
       ctx.fillStyle = isPlayer ? '#fef08a' : '#f5f5f4';
       ctx.font = 'bold 13px "Cinzel", Georgia, serif';
       ctx.fillText(
-        isPlayer ? `★ ${reg.name} (ВАШЕ) ★` : `🏰 ${reg.name}`,
+        isPlayer ? `★ ${reg.name} (${dict.strategicMap.yours}) ★` : `🏰 ${reg.name}`,
         tx,
         by
       );
@@ -1023,10 +1026,10 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
 
     ctx.font = 'bold 15px serif';
     ctx.fillStyle = '#261507';
-    ctx.fillText('ПН', compX, compY - compR - 8);
-    ctx.fillText('ПД', compX, compY + compR + 10);
-    ctx.fillText('ЗХ', compX - compR - 10, compY + 2);
-    ctx.fillText('СХ', compX + compR + 10, compY + 2);
+    ctx.fillText(dict.strategicMap.compassNorth, compX, compY - compR - 8);
+    ctx.fillText(dict.strategicMap.compassSouth, compX, compY + compR + 10);
+    ctx.fillText(dict.strategicMap.compassWest, compX - compR - 10, compY + 2);
+    ctx.fillText(dict.strategicMap.compassEast, compX + compR + 10, compY + 2);
 
     ctx.strokeStyle = '#382210';
     ctx.lineWidth = 3.0;
@@ -1121,7 +1124,7 @@ export function StrategicParchmentMapRenderer({ grid }: Props) {
 
   useFrame(({ camera }) => {
     const orthoCam = camera as THREE.OrthographicCamera;
-    const zoom = orthoCam.zoom || 38;
+    const zoom = orthoCam.zoom || DEFAULT_CAMERA_ZOOM;
 
     const motion = cameraMotionRef.current;
     const target = (window as any).__lastCameraTarget as [number, number] | undefined;

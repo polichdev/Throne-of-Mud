@@ -10,7 +10,7 @@ import {
   HammerIcon,
   WoodIcon,
   StoneIcon,
-} from '../MedievalIcons';
+} from '../icons';
 import { NeedBar, SkillBadge } from './InspectorCommon';
 import { useGameStore } from '../../../store/useGameStore';
 import { useTranslation } from '../../../i18n';
@@ -29,7 +29,7 @@ export function CharacterInspectorSection({
   isForeign,
   isCommandingLevies,
 }: CharacterInspectorSectionProps) {
-  const { dict, language } = useTranslation();
+  const { dict } = useTranslation();
   const callLevyMilitia = useGameStore((s) => s.callLevyMilitia);
   const lordPreach = useGameStore((s) => s.lordPreach);
   const triggerAnimation = useGameStore((s) => s.triggerAnimation);
@@ -57,7 +57,7 @@ export function CharacterInspectorSection({
                 {isCommandingLevies ? dict.inspector.disbandLevies : dict.inspector.rallyLevies}
               </span>
               <span className="text-[10px] bg-slate-900/60 px-1.5 py-0.5 rounded text-slate-300 font-mono">
-                {isCommandingLevies ? (language === 'uk' ? 'Активно' : 'Active') : (language === 'uk' ? 'До 3 воїнів' : 'Up to 3')}
+                {isCommandingLevies ? dict.inspector.active : dict.inspector.upToWarriors.replace('{count}', '3')}
               </span>
             </button>
 
@@ -79,7 +79,7 @@ export function CharacterInspectorSection({
                 }
                 addEntityThought(entity, {
                   id: 'studied',
-                  text: language === 'uk' ? 'Вивчив трактат про правління (+10)' : 'Studied governance treatise (+10)',
+                  text: dict.inspector.studiedThought,
                   modifier: 10,
                   durationTicks: 1500,
                 });
@@ -88,9 +88,9 @@ export function CharacterInspectorSection({
             >
               <span className="flex items-center gap-1.5">
                 <ScrollIcon className="w-3.5 h-3.5 text-blue-400" />
-                {language === 'uk' ? 'Вивчати рукописи' : 'Study Manuscripts'}
+                {dict.inspector.studyManuscripts}
               </span>
-              <span className="text-[10px] text-blue-400 font-mono">+1 {language === 'uk' ? 'Інтелект' : 'Intellect'}</span>
+              <span className="text-[10px] text-blue-400 font-mono">{dict.inspector.studyManuscriptsProgress}</span>
             </button>
           </div>
         </div>
@@ -99,10 +99,10 @@ export function CharacterInspectorSection({
       <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            {language === 'uk' ? 'Думки та Психоемоційний стан' : 'Thoughts & State of Mind'}
+            {dict.inspector.thoughtsState}
           </span>
           <span className="text-[10px] font-mono text-slate-500">
-            {(entity.thoughts || []).length} {language === 'uk' ? 'думок' : 'thoughts'}
+            {(entity.thoughts || []).length} {dict.inspector.thoughtsCount}
           </span>
         </div>
 
@@ -127,7 +127,7 @@ export function CharacterInspectorSection({
             ))
           ) : (
             <span className="text-[11px] text-slate-500 italic py-1 text-center">
-              {language === 'uk' ? 'Спокійний стан, без виражених думок.' : 'Tranquil state of mind, content.'}
+              {dict.inspector.tranquilState}
             </span>
           )}
         </div>
@@ -136,7 +136,7 @@ export function CharacterInspectorSection({
       {entity.needs && (
         <div className="flex flex-col gap-2 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800">
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            {language === 'uk' ? 'Потреби та Стан' : 'Needs & Vitality'}
+            {dict.inspector.needsVitality}
           </span>
           <NeedBar
             label={dict.inspector.hunger}
@@ -157,7 +157,7 @@ export function CharacterInspectorSection({
             color={entity.needs.mood > 50 ? 'text-emerald-400' : 'text-rose-400'}
           />
           <NeedBar
-            label={language === 'uk' ? 'Задоволення елем' : 'Ale Satisfaction'}
+            label={dict.inspector.aleSatisfaction}
             value={entity.needs.ale}
             icon={AleIcon}
             color="text-yellow-400"
@@ -168,17 +168,17 @@ export function CharacterInspectorSection({
       {entity.skills && (
         <div className="flex flex-col gap-1.5 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800">
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            {language === 'uk' ? 'Навички та Майстерність' : 'Skills & Proficiencies'}
+            {dict.inspector.skillsProficiencies}
           </span>
           <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-            <SkillBadge label={language === 'uk' ? 'Землеробство' : 'Farming'} level={entity.skills.farming} icon={BreadIcon} />
-            <SkillBadge label={language === 'uk' ? 'Лісоруб' : 'Woodcutting'} level={entity.skills.woodcutting} icon={WoodIcon} />
-            <SkillBadge label={language === 'uk' ? 'Гірництво' : 'Mining'} level={entity.skills.mining} icon={StoneIcon} />
-            <SkillBadge label={language === 'uk' ? 'Будівництво' : 'Building'} level={entity.skills.building} icon={HammerIcon} />
-            <SkillBadge label={language === 'uk' ? 'Пивоваріння' : 'Brewing'} level={entity.skills.brewing} icon={AleIcon} />
-            <SkillBadge label={language === 'uk' ? 'Бій' : 'Combat'} level={entity.skills.combat} icon={WeaponsIcon} />
-            <SkillBadge label={language === 'uk' ? 'Інтелект' : 'Intellect'} level={entity.skills.intellect} icon={ScrollIcon} />
-            <SkillBadge label={language === 'uk' ? 'Харизма' : 'Charisma'} level={entity.skills.charisma} icon={CrownIcon} />
+            <SkillBadge label={dict.inspector.skillFarming} level={entity.skills.farming} icon={BreadIcon} />
+            <SkillBadge label={dict.inspector.skillWoodcutting} level={entity.skills.woodcutting} icon={WoodIcon} />
+            <SkillBadge label={dict.inspector.skillMining} level={entity.skills.mining} icon={StoneIcon} />
+            <SkillBadge label={dict.inspector.skillBuilding} level={entity.skills.building} icon={HammerIcon} />
+            <SkillBadge label={dict.inspector.skillBrewing} level={entity.skills.brewing} icon={AleIcon} />
+            <SkillBadge label={dict.inspector.skillCombat} level={entity.skills.combat} icon={WeaponsIcon} />
+            <SkillBadge label={dict.inspector.skillIntellect} level={entity.skills.intellect} icon={ScrollIcon} />
+            <SkillBadge label={dict.inspector.skillCharisma} level={entity.skills.charisma} icon={CrownIcon} />
           </div>
         </div>
       )}
@@ -186,32 +186,32 @@ export function CharacterInspectorSection({
       {!isForeign && (
         <div className="flex flex-col gap-2 bg-amber-950/30 p-2.5 rounded-xl border border-amber-800/40">
           <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1">
-            Тестування Анімацій (Norland FX)
+            {dict.inspector.animTesting}
           </span>
           <div className="grid grid-cols-2 gap-1.5">
             <button
               onClick={() => triggerAnimation(entity.id, 'idle', 4000)}
               className="px-2 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 flex items-center justify-center gap-1 transition active:scale-95"
             >
-              Спокій
+              {dict.inspector.animIdle}
             </button>
             <button
               onClick={() => triggerAnimation(entity.id, 'walk', 4000)}
               className="px-2 py-1.5 bg-blue-900/40 hover:bg-blue-800/60 text-blue-200 rounded-lg text-xs font-medium border border-blue-700/60 flex items-center justify-center gap-1 transition active:scale-95"
             >
-              Рух
+              {dict.inspector.animWalk}
             </button>
             <button
               onClick={() => triggerAnimation(entity.id, 'attack', 3500)}
               className="px-2 py-1.5 bg-rose-900/40 hover:bg-rose-800/60 text-rose-200 rounded-lg text-xs font-medium border border-rose-700/60 flex items-center justify-center gap-1 transition active:scale-95 shadow-sm"
             >
-              Удар
+              {dict.inspector.animAttack}
             </button>
             <button
               onClick={() => triggerAnimation(entity.id, 'chop', 4000)}
               className="px-2 py-1.5 bg-amber-900/40 hover:bg-amber-800/60 text-amber-200 rounded-lg text-xs font-medium border border-amber-700/60 flex items-center justify-center gap-1 transition active:scale-95"
             >
-              Рубати
+              {dict.inspector.animChop}
             </button>
           </div>
         </div>

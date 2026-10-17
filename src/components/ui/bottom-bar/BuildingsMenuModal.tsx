@@ -12,7 +12,7 @@ import {
   CrossCloseIcon,
   PeasantsIcon,
   RoadIcon,
-} from '../MedievalIcons';
+} from '../icons';
 import { audioManager } from '../../../engine/audio/AudioManager';
 import { useTranslation } from '../../../i18n';
 import { BuildingCard } from './BuildingCard';
@@ -22,7 +22,7 @@ interface BuildingsMenuModalProps {
 }
 
 export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(({ onClose }) => {
-  const { dict, language } = useTranslation();
+  const { dict } = useTranslation();
 
   const activeBuildType = useGameStore((s) => s.activeBuildType);
   const setActiveBuildType = useGameStore((s) => s.setActiveBuildType);
@@ -156,18 +156,19 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
     observer.observe(tray);
     window.addEventListener('resize', measure);
     return () => { observer.disconnect(); window.removeEventListener('resize', measure); };
-  }, [activeCategory, language]);
+  }, [activeCategory]);
+
   const sectionBreaks: Partial<Record<typeof activeCategory, Partial<Record<BuildingType, string>>>> = {
     gathering: {
-      stone_quarry: language === 'uk' ? 'Копальні' : 'Mines',
-      fishermans_hut: language === 'uk' ? 'Добування' : 'Gathering',
-      stockpile: language === 'uk' ? 'Зберігання' : 'Storage',
+      stone_quarry: dict.buildingsMenu.categoryMines,
+      fishermans_hut: dict.buildingsMenu.categoryGathering,
+      stockpile: dict.buildingsMenu.categoryStorage,
     },
     industry: {
-      charcoal_kiln: language === 'uk' ? 'Матеріали' : 'Materials',
-      weavers_workshop: language === 'uk' ? 'Ремесла' : 'Crafts',
+      charcoal_kiln: dict.buildingsMenu.categoryMaterials,
+      weavers_workshop: dict.buildingsMenu.categoryCrafts,
     },
-    trade: { hitching_post: language === 'uk' ? 'Перевезення' : 'Transport' },
+    trade: { hitching_post: dict.buildingsMenu.categoryTransport },
   };
 
   return (
@@ -177,8 +178,8 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
           <button
             onClick={handleScrollLeft}
             className="ui-tip-anchor ui-tip-left absolute -left-2 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full manor-circle-btn text-amber-200 hover:text-amber-100 flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.85)] hover:scale-110 active:scale-95 transition cursor-pointer"
-            data-ui-tip={language === 'uk' ? 'Попередні споруди' : 'Previous buildings'}
-            aria-label={language === 'uk' ? 'Прокрутити вліво' : 'Scroll left'}
+            data-ui-tip={dict.buildingsMenu.prevBuildings}
+            aria-label={dict.buildingsMenu.scrollLeft}
           >
             <svg className="w-4 h-4 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
@@ -219,8 +220,8 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
           <button
             onClick={handleScrollRight}
             className="ui-tip-anchor ui-tip-right absolute -right-2 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full manor-circle-btn text-amber-200 hover:text-amber-100 flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.85)] hover:scale-110 active:scale-95 transition cursor-pointer"
-            data-ui-tip={language === 'uk' ? 'Наступні споруди' : 'Next buildings'}
-            aria-label={language === 'uk' ? 'Прокрутити вправо' : 'Scroll right'}
+            data-ui-tip={dict.buildingsMenu.nextBuildings}
+            aria-label={dict.buildingsMenu.scrollRight}
           >
             <svg className="w-4 h-4 drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
@@ -267,13 +268,13 @@ export const BuildingsMenuModal: React.FC<BuildingsMenuModalProps> = React.memo(
               ? 'bg-[#1e2318] border-emerald-700/60 text-emerald-300'
               : 'bg-[#15171c] border-stone-800 text-stone-400 hover:text-stone-200'
           }`}
-          data-ui-tip={language === 'uk' ? 'Прив\'язка споруд до доріг та сітки' : 'Snap buildings to roads & grid'}
-          aria-label={language === 'uk' ? 'Прив’язка до дороги' : 'Snap to road'}
+          data-ui-tip={dict.buildingsMenu.snapToRoad}
+          aria-label={dict.buildingsMenu.snapToRoad}
           aria-pressed={roadSnapEnabled}
         >
           <RoadIcon className="construction-road-icon" />
           <span className="text-[11px] font-bold whitespace-nowrap">
-            {language === 'uk' ? 'Прив\'язка до дороги' : 'Snap to road'}
+            {dict.buildingsMenu.snapToRoad}
           </span>
           <div
             className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${

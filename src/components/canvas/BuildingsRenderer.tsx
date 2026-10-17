@@ -1,3 +1,5 @@
+import { getBuildingVisibilityDistance } from '../../constants/rendering';
+import { DEFAULT_CAMERA_ZOOM } from '../../constants/camera';
 import { useRef, memo, useState, useMemo, useEffect, useLayoutEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -112,8 +114,8 @@ export function BuildingsRenderer() {
       setBatchRevision(value => value + 1);
     }
     const camTarget = (window as any).__lastCameraTarget;
-    const zoom = (window as any).__lastCameraZoom || 38;
-    const maxDist = Math.max(38, Math.min(50, (1200 / zoom) + 12));
+    const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
+    const maxDist = getBuildingVisibilityDistance(zoom);
     const maxDistSq = maxDist * maxDist;
 
     if (buildingFrameVersion !== lastStatesVersion.current) {

@@ -6,8 +6,8 @@ import {
   MedievalAlertIcon,
   MedievalCheckIcon,
   MedievalInfoIcon,
-} from './MedievalIcons';
-import { ChronicleBookIcon } from './ChronicleBookIcon';
+} from './icons';
+import { ChronicleBookIcon } from './icons';
 
 export const EventLog: React.FC = React.memo(() => {
   const { dict } = useTranslation();

@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
-import { RoadIcon, EraserIcon, CrossCloseIcon } from './MedievalIcons';
+import { RoadIcon, EraserIcon, CrossCloseIcon } from './icons';
 import { useGameStore } from '../../store/useGameStore';
 import { audioManager } from '../../engine/audio/AudioManager';
 import { useTranslation } from '../../i18n';
@@ -9,7 +9,7 @@ interface RoadToolPanelProps {
 }
 
 export const RoadToolPanel: React.FC<RoadToolPanelProps> = React.memo(({ onCancel }) => {
-  const { dict, language } = useTranslation();
+  const { dict } = useTranslation();
 
   const activeTool = useGameStore((s) => s.activeTool);
   const roadEraseMode = useGameStore((s) => s.roadEraseMode);
@@ -101,12 +101,12 @@ export const RoadToolPanel: React.FC<RoadToolPanelProps> = React.memo(({ onCance
       <div className="flex items-center gap-3 bg-black/50 backdrop-blur-sm px-4 py-1 rounded-full border border-[#2e2618]/80 text-[10px] font-mono text-slate-400">
         <span>
           <kbd className="px-1 py-0.5 rounded bg-[#2a2118] border border-[#4a3c28] text-amber-300 font-bold">LMB</kbd>{' '}
-          — {language === 'uk' ? 'початок/кінець відрізка' : 'start/end segment'}
+          — {dict.roadsUI.segmentHint}
         </span>
         <span className="text-[#3d3222]">│</span>
         <span>
           <kbd className="px-1 py-0.5 rounded bg-[#2a2118] border border-[#4a3c28] text-red-300 font-bold">RMB / E</kbd>{' '}
-          — {language === 'uk' ? 'стерти тайл' : 'erase tile'}
+          — {dict.roadsUI.eraseHint}
         </span>
         <span className="text-[#3d3222]">│</span>
         <span>

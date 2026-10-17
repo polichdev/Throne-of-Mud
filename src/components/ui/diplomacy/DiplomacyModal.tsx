@@ -4,7 +4,7 @@ import { useTranslation } from '../../../i18n';
 import { audioManager } from '../../../engine/audio/AudioManager';
 import {
   CrownIcon,
-} from '../MedievalIcons';
+} from '../icons';
 import {
   DiplomacySealIcon,
   PeacePactIcon,
@@ -23,8 +23,7 @@ interface DiplomacyModalProps {
 }
 
 export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClose }) => {
-  const { language } = useTranslation();
-  const isUkr = language === 'uk';
+  const { dict, language } = useTranslation();
 
   const lordDiplomacy = useGameStore((s) => s.lordDiplomacy);
   const sendDiplomaticReply = useGameStore((s) => s.sendDiplomaticReply);
@@ -68,37 +67,37 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
     if (status === 'war') {
       return (
         <span className="px-2 py-0.5 rounded text-[10px] font-cinzel font-bold bg-rose-950 border border-rose-600 text-rose-300">
-          {isUkr ? 'ВІЙНА' : 'WAR'}
+          {dict.diplomacy.warBadge}
         </span>
       );
     }
     if (status === 'alliance') {
       return (
         <span className="px-2 py-0.5 rounded text-[10px] font-cinzel font-bold bg-amber-950 border border-amber-500 text-amber-300">
-          {isUkr ? 'СОЮЗ' : 'ALLIANCE'}
+          {dict.diplomacy.allianceBadge}
         </span>
       );
     }
     if (hasPassage) {
       return (
         <span className="px-2 py-0.5 rounded text-[10px] font-cinzel font-bold bg-sky-950 border border-sky-600 text-sky-300">
-          {isUkr ? 'ПРОХІД' : 'PASSAGE'}
+          {dict.diplomacy.passageBadge}
         </span>
       );
     }
     return (
       <span className="px-2 py-0.5 rounded text-[10px] font-cinzel font-bold bg-emerald-950 border border-emerald-600 text-emerald-300">
-        {isUkr ? 'МИР' : 'PEACE'}
+        {dict.diplomacy.peaceBadge}
       </span>
     );
   };
 
   const getOpinionInfo = (opinion: number) => {
-    if (opinion >= 50) return { text: isUkr ? 'Прихильні' : 'Friendly', color: 'text-emerald-400' };
-    if (opinion >= 10) return { text: isUkr ? 'Доброзичливі' : 'Favorable', color: 'text-emerald-300' };
-    if (opinion >= -20) return { text: isUkr ? 'Нейтральні' : 'Neutral', color: 'text-stone-300' };
-    if (opinion >= -50) return { text: isUkr ? 'Напружені' : 'Strained', color: 'text-amber-400' };
-    return { text: isUkr ? 'Ворожі' : 'Hostile', color: 'text-rose-500' };
+    if (opinion >= 50) return { text: dict.diplomacy.opinionFriendly, color: 'text-emerald-400' };
+    if (opinion >= 10) return { text: dict.diplomacy.opinionFavorable, color: 'text-emerald-300' };
+    if (opinion >= -20) return { text: dict.diplomacy.opinionNeutral, color: 'text-stone-300' };
+    if (opinion >= -50) return { text: dict.diplomacy.opinionStrained, color: 'text-amber-400' };
+    return { text: dict.diplomacy.opinionHostile, color: 'text-rose-500' };
   };
 
   const currentLetter = activeLord?.letters[0] || null;
@@ -107,7 +106,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
   );
 
   return (
-    <div className="realm-diplomacy-screen fixed inset-0 z-[100] pointer-events-auto select-none font-sans" role="dialog" aria-modal="true" aria-label={isUkr ? 'Дипломатія' : 'Diplomacy'}>
+    <div className="realm-diplomacy-screen fixed inset-0 z-[100] pointer-events-auto select-none font-sans" role="dialog" aria-modal="true" aria-label={dict.dock.diplomacyLabel}>
       <div className="realm-paper-panel realm-large-modal realm-diplomacy-modal relative w-full h-full flex flex-col overflow-hidden text-stone-200">
         
         <div className="realm-diplomacy-heading flex items-center justify-between px-5 py-3 border-b border-[#3d3222] bg-[#11131a]">
@@ -117,7 +116,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
             </div>
             <div>
               <h2 className="text-sm font-cinzel font-bold text-amber-100 tracking-wider">
-                {isUkr ? 'ДИПЛОМАТІЯ' : 'DIPLOMACY'}
+                {dict.diplomacy.screenTitle}
               </h2>
             </div>
           </div>
@@ -126,7 +125,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-black/60 border border-amber-900/60 text-xs font-cinzel font-bold text-amber-300">
               <CrownIcon className="w-3.5 h-3.5 text-amber-400" />
               <span>{influence}</span>
-              <span className="text-[10px] text-stone-400 font-sans font-normal ml-0.5">{isUkr ? 'Впливу' : 'Influence'}</span>
+              <span className="text-[10px] text-stone-400 font-sans font-normal ml-0.5">{dict.diplomacy.influenceLabel}</span>
             </div>
 
             <button
@@ -145,7 +144,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
           
           <div className="realm-diplomacy-lords shrink-0 border-r border-[#655338] flex flex-col p-4 gap-3 overflow-y-auto">
             <span className="text-[10px] font-cinzel font-bold text-amber-300/80 px-1 tracking-wider uppercase">
-              {isUkr ? 'Правителі на карті' : 'Lords on Map'}
+              {dict.diplomacy.lordsOnMap}
             </span>
 
             <div className="flex flex-col gap-2">
@@ -231,7 +230,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                   >
                     <PeacePactIcon className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
                     <span className="text-xs font-cinzel font-bold text-emerald-200">
-                      {activeLord.status === 'war' ? (isUkr ? 'Укласти мир' : 'Propose Peace') : (isUkr ? 'Мирний пакт' : 'Peace Treaty')}
+                      {activeLord.status === 'war' ? dict.diplomacy.proposePeace : dict.diplomacy.peaceTreaty}
                     </span>
                   </button>
 
@@ -245,7 +244,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                   >
                     <MilitaryPassageIcon className="w-5 h-5 text-sky-400 group-hover:scale-110 transition" />
                     <span className="text-xs font-cinzel font-bold">
-                      {activeLord.hasRightOfPassage ? (isUkr ? 'Прохід надано' : 'Passage Granted') : (isUkr ? 'Право проходу' : 'Request Passage')}
+                      {activeLord.hasRightOfPassage ? dict.diplomacy.passageGranted : dict.diplomacy.requestPassage}
                     </span>
                   </button>
 
@@ -258,13 +257,13 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                         }}
                         className="py-1 px-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-cinzel font-bold text-[11px] transition cursor-pointer text-center"
                       >
-                        {isUkr ? 'Підтвердити' : 'Confirm'}
+                        {dict.diplomacy.confirm}
                       </button>
                       <button
                         onClick={() => setConfirmWar(false)}
                         className="py-1 px-2 rounded-lg bg-stone-800 text-stone-300 font-cinzel text-[10px] transition cursor-pointer text-center"
                       >
-                        {isUkr ? 'Скасувати' : 'Cancel'}
+                        {dict.diplomacy.cancel}
                       </button>
                     </div>
                   ) : (
@@ -279,7 +278,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                     >
                       <WarSwordsIcon className="w-5 h-5 text-rose-400 group-hover:scale-110 transition" />
                       <span className="text-xs font-cinzel font-bold">
-                        {activeLord.status === 'war' ? (isUkr ? 'Стан війни' : 'At War') : (isUkr ? 'Оголосити війну' : 'Declare War')}
+                        {activeLord.status === 'war' ? dict.diplomacy.atWar : dict.diplomacy.declareWar}
                       </span>
                     </button>
                   )}
@@ -298,8 +297,8 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                     <ClaimBannerIcon className={`w-5 h-5 transition ${activeLord.claimedByPlayer || influence >= activeLord.claimCost ? 'text-stone-950 group-hover:scale-110' : 'text-stone-500'}`} />
                     <span className="text-xs font-cinzel font-bold">
                       {activeLord.claimedByPlayer
-                        ? (isUkr ? 'Землю приєднано' : 'Claimed')
-                        : (isUkr ? 'Захопити (1000)' : 'Claim (1000)')}
+                        ? dict.diplomacy.claimed
+                        : dict.diplomacy.claimCost}
                     </span>
                   </button>
                 </div>
@@ -314,7 +313,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                         </h4>
                       </div>
                       <span className="text-[10px] text-[#6b5336] font-sans">
-                        {isUkr ? `День ${currentLetter.receivedDay}` : `Day ${currentLetter.receivedDay}`}
+                        {dict.diplomacy.dayNumber(currentLetter.receivedDay)}
                       </span>
                     </div>
 
@@ -329,7 +328,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                     {!currentLetter.selectedReplyId ? (
                       <div className="mt-1 pt-3 border-t-2 border-dashed border-[#a89066] flex flex-col gap-2 font-sans">
                         <span className="text-[10px] font-cinzel font-bold text-[#6b5030] uppercase tracking-wider">
-                          {isUkr ? 'Ваша відповідь:' : 'Your Royal Reply:'}
+                          {dict.diplomacy.royalReply}
                         </span>
 
                         <div className="flex flex-col gap-2">
@@ -341,7 +340,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                             >
                               <div className="flex items-center justify-between text-[11px]">
                                 <span className="font-bold text-[#3b2713] font-cinzel">
-                                  {opt.tone === 'friendly' ? (isUkr ? 'Ввічливо' : 'Friendly') : opt.tone === 'hostile' ? (isUkr ? 'Вороже' : 'Hostile') : (isUkr ? 'Нейтрально' : 'Neutral')}
+                                  {opt.tone === 'friendly' ? dict.diplomacy.toneFriendly : opt.tone === 'hostile' ? dict.diplomacy.toneHostile : dict.diplomacy.toneNeutral}
                                 </span>
                                 <span className={`font-mono font-bold text-[10px] px-1.5 py-0.2 rounded ${
                                   opt.opinionChange > 0 ? 'text-emerald-800 bg-emerald-900/20' : opt.opinionChange < 0 ? 'text-rose-800 bg-rose-900/20' : 'text-stone-700 bg-stone-500/20'
@@ -360,7 +359,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = React.memo(({ onClo
                       <div className="mt-1 pt-2 border-t border-[#a89066] bg-[#e6d6b8] p-3 rounded-lg border border-[#9c8257] flex flex-col gap-1 font-sans">
                         <div className="flex items-center gap-1.5 text-[10px] font-cinzel font-bold text-amber-900">
                           <WaxSealStampIcon className="w-3.5 h-3.5 text-amber-800" />
-                          <span>{isUkr ? 'Надіслана королівська відповідь:' : 'Dispatched Reply:'}</span>
+                          <span>{dict.diplomacy.dispatchedReply}</span>
                         </div>
                         <p className="text-xs text-[#2b1c0e] italic font-serif">
                           «{selectedReply?.text}»

@@ -7,8 +7,8 @@ import {
   CrossCloseIcon,
   GoldIcon,
   ScalesIcon,
-} from '../MedievalIcons';
-import { IlluminatedIcon } from '../IlluminatedIcons';
+} from '../icons';
+import { IlluminatedIcon } from '../icons';
 import { RESOURCE_UI } from '../resourcePresentation';
 import { audioManager } from '../../../engine/audio/AudioManager';
 import { Plus, Minus, ArrowRight } from 'lucide-react';
@@ -18,7 +18,7 @@ interface TradePostModalProps {
 }
 
 export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClose }) => {
-  const { dict, language } = useTranslation();
+  const { dict } = useTranslation();
   const settlementName = useGameStore((s) => s.settlementName);
   const resources = useGameStore((s) => s.resources);
   const tradeRules = useGameStore((s) => s.tradeRules);
@@ -129,8 +129,8 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
             <span className="col-span-3">{dict.tradePost.headers.item}</span>
             <span className="col-span-1 text-center">{dict.tradePost.headers.currentStock}</span>
             <span className="col-span-2 text-center">{dict.tradePost.headers.targetStock}</span>
-            <span className="col-span-2 text-center">{language === 'uk' ? 'Експорт' : 'Export'}</span>
-            <span className="col-span-2 text-center">{language === 'uk' ? 'Імпорт' : 'Import'}</span>
+            <span className="col-span-2 text-center">{dict.tradePost.exportHeader}</span>
+            <span className="col-span-2 text-center">{dict.tradePost.importHeader}</span>
           </div>
 
           {filteredItems.map((item) => {
@@ -184,7 +184,7 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                   </div>
                   <div className="flex flex-col min-w-0">
                     <span className="text-[11px] font-bold text-stone-200 truncate leading-tight">
-                      {language === 'uk' ? item.nameUk : item.nameEn}
+                      {dict.resources[item.resource] || item.resource}
                     </span>
                   </div>
                 </div>
@@ -256,7 +256,7 @@ export const TradePostModal: React.FC<TradePostModalProps> = React.memo(({ onClo
                     </button>
                   </div>
                 </div>
-                <div className="realm-trade-import col-span-2 flex items-center justify-center gap-1 font-mono text-[11px] font-bold text-[#c7d8b5]" title={language === 'uk' ? 'Ціна купівлі в купця' : 'Price paid to the merchant'}>
+                <div className="realm-trade-import col-span-2 flex items-center justify-center gap-1 font-mono text-[11px] font-bold text-[#c7d8b5]" title={dict.tradePost.pricePaidMerchant}>
                   <span>{importPrice}</span>
                   <GoldIcon className="w-2.5 h-2.5 text-yellow-400" />
                 </div>

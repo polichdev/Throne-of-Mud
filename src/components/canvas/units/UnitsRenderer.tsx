@@ -1,0 +1,1405 @@
+import { getBuildingVisibilityDistance } from '../../../constants/rendering';
+import { SHARED_STATIC_MATS, SHARED_GEOS } from './unitMeshAssets';
+import { DEFAULT_CAMERA_ZOOM } from '../../../constants/camera';
+import { useRef, useState, memo, useMemo, useLayoutEffect } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
+import * as THREE from 'three';
+import { characterEntities, buildingEntities } from '../../../engine/ecs/world';
+import type { GameEntity } from '../../../engine/ecs/world';
+import { useGameStore } from '../../../store/useGameStore';
+import { localizeSpeech } from '../../../i18n/speech';
+import { GridMap } from '../../../engine/grid/GridMap';
+import { audioManager } from '../../../engine/audio/AudioManager';
+import { getUnitAppearance } from './unitMaterials';
+import { isHouseSleeperVisible } from './houseFloorVisibility';
+import { useHiddenGroupCulling } from '../performance/hiddenGroupCulling';
+import { useAnimatedMeshBatches } from './useAnimatedMeshBatches';
+import { useStaticUnitMeshMatrices } from './useStaticUnitMeshMatrices';
+import { groundShadowMaterial, GROUND_SHADOW_RENDER_ORDER } from '../performance/groundShadows';
+
+export function UnitsRenderer({ grid }: { grid?: GridMap }) {
+  const unitsRootRef = useRef<THREE.Group>(null);
+  useHiddenGroupCulling(unitsRootRef);
+  const invalidateBatches = useAnimatedMeshBatches(unitsRootRef);
+  const selectedEntityId = useGameStore((state) => state.selectedEntityId);
+  const setSelectedEntityId = useGameStore((state) => state.setSelectedEntityId);
+  const setSelectedMilitiaSquadId = useGameStore((state) => state.setSelectedMilitiaSquadId);
+  const setActiveMenuTab = useGameStore((state) => state.setActiveMenuTab);
+  const previewAnimation = useGameStore((state) => state.previewAnimation);
+  const isGamePaused = useGameStore((state) => state.time.isPaused || state.time.speedMultiplier === 0);
+
+  const isStrategicView = useGameStore((state) => state.isStrategicView);
+
+  const [units, setUnits] = useState<GameEntity[]>(() => Array.from(characterEntities));
+  const lastUnitCountRef = useRef<number>(characterEntities.size);
+
+  useFrame(() => {
+    if (characterEntities.size !== lastUnitCountRef.current) {
+      lastUnitCountRef.current = characterEntities.size;
+      setUnits(Array.from(characterEntities));
+    }
+  });
+
+  return (
+    <group ref={unitsRootRef} visible={!isStrategicView}>
+      {units.map((unit) => {
+        return (
+          <Unit3DMemo
+            key={unit.id}
+            unit={unit}
+            onModelCommit={invalidateBatches}
+            grid={grid}
+            isSelected={selectedEntityId === unit.id && !unit.isLevy}
+            isGamePaused={isGamePaused}
+            previewAnimation={previewAnimation?.entityId === unit.id ? previewAnimation : null}
+            onSelect={() => {
+              if (unit.isLevy) {
+                useGameStore.getState().syncMilitiaSquadsFromWorld();
+                const squads = useGameStore.getState().militiaSquads;
+                const squadId = unit.militiaSquadId || squads[0]?.id;
+                if (squadId) {
+                  unit.militiaSquadId = squadId;
+                  setSelectedEntityId(null);
+                  setSelectedMilitiaSquadId(squadId);
+                  setActiveMenuTab('military');
+                  audioManager.playUIClick();
+                }
+              } else {
+                setSelectedMilitiaSquadId(null);
+                setSelectedEntityId(unit.id);
+              }
+            }}
+          />
+        );
+      })}
+      <ActiveSpeechBubblesRenderer />
+    </group>
+  );
+}
+
+function ActiveSpeechBubblesRenderer() {
+  const isStrategicView = useGameStore((s) => s.isStrategicView);
+  const language = useGameStore((s) => s.language);
+  const [bubbles, setBubbles] = useState<Array<{ id: string; unit: GameEntity; text: string; isBanditLeader: boolean }>>([]);
+  const lastKeyRef = useRef('');
+
+  useFrame(() => {
+    if (isStrategicView) {
+      if (bubbles.length > 0) {
+        lastKeyRef.current = '';
+        setBubbles([]);
+      }
+      return;
+    }
+
+    const { time, selectedEntityId, houseFloorView } = useGameStore.getState();
+    const curTick = time?.tick ?? 0;
+    const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
+    const zoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
+    const maxDist = Math.max(38, (1200 / zoom) + 12);
+    const maxDistSq = maxDist * maxDist;
+
+    let key = '';
+    const active: Array<{ id: string; unit: GameEntity; text: string; isBanditLeader: boolean }> = [];
+
+    for (const unit of characterEntities) {
+      const bubble = unit.speechBubble;
+      if (bubble && bubble.text && curTick < (bubble.expiresAtTick || 0) && unit.position) {
+        let sleepingBuildingType: string | undefined;
+        if (unit.currentJob?.type === 'sleep' && (unit.currentJob.bedIndex ?? 0) >= 2 && !unit.path?.length) {
+          for (const building of buildingEntities) {
+            if (building.id === unit.currentJob.targetBuildingId) {
+              sleepingBuildingType = building.buildingType;
+              break;
+            }
+          }
+        }
+        if (!isHouseSleeperVisible(unit.currentJob, Boolean(unit.path?.length), sleepingBuildingType, selectedEntityId, houseFloorView)) continue;
+        const ux = unit.position[0];
+        const uz = unit.position[2];
+
+        if (camTarget) {
+          const distSq = (ux - camTarget[0]) ** 2 + (uz - camTarget[1]) ** 2;
+          if (distSq > maxDistSq) continue;
+        }
+
+        const isBandit = unit.characterClass === 'bandit' || unit.factionId === 'bandit' || unit.id.startsWith('bandit-');
+        const isBanditLeader = isBandit && unit.id.includes('leader');
+        const text = localizeSpeech(bubble.text, language, bubble.type);
+        active.push({ id: unit.id, unit, text, isBanditLeader });
+        key += `${unit.id}:${text};`;
+        if (active.length >= 4) break;
+      }
+    }
+
+    if (key !== lastKeyRef.current) {
+      lastKeyRef.current = key;
+      setBubbles(active);
+    }
+  });
+
+  if (isStrategicView || bubbles.length === 0) return null;
+
+  return (
+    <>
+      {bubbles.map(({ id, unit, text, isBanditLeader }) => (
+        <ActiveBubbleItem key={id} unit={unit} text={text} isBanditLeader={isBanditLeader} />
+      ))}
+    </>
+  );
+}
+
+function ActiveBubbleItem({ unit, text, isBanditLeader }: { unit: GameEntity; text: string; isBanditLeader: boolean }) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame(() => {
+    if (!groupRef.current || !unit.position) return;
+    const [ux, uy, uz] = unit.position;
+    groupRef.current.position.set(ux, uy + (isBanditLeader ? 1.9 : 1.35), uz);
+  });
+
+  const [ux, uy, uz] = unit.position || [0, 0, 0];
+
+  return (
+    <group ref={groupRef} position={[ux, uy + (isBanditLeader ? 1.9 : 1.35), uz]}>
+      <Html
+        center
+        zIndexRange={[10, 0]}
+        style={{ pointerEvents: 'none', userSelect: 'none' }}
+      >
+        <div className="flex flex-col items-center pointer-events-none select-none">
+          <div className="bg-stone-950/90 text-stone-100 text-[10px] font-medium px-2 py-0.5 rounded-lg border border-amber-500/60 shadow-[0_2px_8px_rgba(0,0,0,0.85)] flex items-center gap-1 whitespace-nowrap backdrop-blur-[1px]">
+            <span>{text}</span>
+          </div>
+          <div className="w-1.5 h-1.5 bg-stone-950 border-r border-b border-amber-500/60 rotate-45 -mt-1 shadow-sm" />
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+function companionMask(unit: GameEntity): number {
+  return (unit.hasMule || unit.muleTransition ? 1 : 0) | (unit.hasHorseCart || unit.isMerchant ? 2 : 0);
+}
+
+function companionParentVisible(root: THREE.Group): boolean {
+  for (let parent = root.parent; parent; parent = parent.parent) if (!parent.visible) return false;
+  return true;
+}
+
+function Unit3D({
+  unit,
+  grid,
+  isSelected,
+  isGamePaused,
+  previewAnimation,
+  onSelect,
+  onModelCommit,
+}: {
+  unit: GameEntity;
+  grid?: GridMap;
+  unitClass?: string;
+  isSelected: boolean;
+  isGamePaused: boolean;
+  previewAnimation: { anim: 'idle' | 'walk' | 'attack' | 'chop'; expiresAt: number } | null;
+  onSelect: () => void;
+  onModelCommit: () => void;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+  const characterBodyRef = useRef<THREE.Group>(null);
+  useHiddenGroupCulling(groupRef);
+  useStaticUnitMeshMatrices(groupRef);
+  const torsoRef = useRef<THREE.Group>(null);
+  const leftLegRef = useRef<THREE.Group>(null);
+  const rightLegRef = useRef<THREE.Group>(null);
+  const rightArmRef = useRef<THREE.Group>(null);
+  const leftArmRef = useRef<THREE.Group>(null);
+  const twoHandedRigRef = useRef<THREE.Group>(null);
+  const standardArmsRef = useRef<THREE.Group>(null);
+  const hammerRef = useRef<THREE.Group>(null);
+  const pickaxeRef = useRef<THREE.Group>(null);
+  const swordRef = useRef<THREE.Group>(null);
+  const spearRef = useRef<THREE.Group>(null);
+  const bowRef = useRef<THREE.Group>(null);
+  const scepterRef = useRef<THREE.Group>(null);
+  const shadowDiscRef = useRef<THREE.Mesh>(null);
+  const detailsRef = useRef<THREE.Group>(null);
+  const headMeshRef = useRef<THREE.Mesh>(null);
+  const [companions, setCompanions] = useState(() => companionMask(unit));
+  const mountedCompanions = useRef(companions);
+  useLayoutEffect(onModelCommit);
+
+  const prevPos = useRef<[number, number]>([unit.position?.[0] || 0, unit.position?.[2] || 0]);
+  const facingAngle = useRef<number>((unit.id.charCodeAt(unit.id.length - 1) * 1.2) % (Math.PI * 2));
+
+  const characterClass = unit.characterClass || 'peasant';
+  const isLord = characterClass === 'lord' || characterClass === 'king';
+  const isLady = characterClass === 'lady';
+  const isKnight = characterClass === 'warrior';
+  const isBandit = characterClass === 'bandit' || unit.factionId === 'bandit' || unit.id.startsWith('bandit-');
+  const isPeasant = !isLord && !isLady && !isKnight && !isBandit;
+
+  const app = useMemo(() => getUnitAppearance(unit.id, characterClass, Boolean(unit.isLevy)), [unit.id, characterClass, unit.isLevy]);
+  const multiHeadMats = useMemo(() => [
+    app.skinMat,
+    app.faceMat,
+  ], [app.skinMat, app.faceMat]);
+  const staticMats = SHARED_STATIC_MATS;
+
+  const prevPhaseRef = useRef<number>(0);
+  const prevFootstepRef = useRef<number>(0);
+  const prevJobIdRef = useRef<string | null>(null);
+  const targetBuildingTypeRef = useRef<string | undefined>(undefined);
+
+  useFrame(({ clock }, delta) => {
+    const nextCompanions = companionMask(unit);
+    if (nextCompanions !== mountedCompanions.current) {
+      mountedCompanions.current = nextCompanions;
+      setCompanions(nextCompanions);
+    }
+    if (!groupRef.current || !unit.position) return;
+    if (!groupRef.current.parent?.visible) return;
+
+    const [ux, uy, uz] = unit.position;
+
+    const camTarget = (window as any).__lastCameraTarget;
+    const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
+    let isVisible = true;
+    if (camTarget) {
+      const distSq = (ux - camTarget[0]) ** 2 + (uz - camTarget[1]) ** 2;
+      const maxDist = getBuildingVisibilityDistance(zoom);
+      isVisible = distSq < maxDist * maxDist;
+      groupRef.current.visible = isVisible;
+      if (!isVisible) {
+        return;
+      }
+    } else {
+      groupRef.current.visible = true;
+    }
+
+    const curPath = unit.path;
+
+    const movedSincePreviousFrame = Math.hypot(
+      ux - prevPos.current[0],
+      uz - prevPos.current[1],
+    );
+    const isMovingNow = !isGamePaused && Boolean(curPath && curPath.length > 0) && movedSincePreviousFrame > 0.0005;
+    const curJob = unit.currentJob;
+    const curJobType = curJob?.type;
+    const isSleepingNow = !isMovingNow && curJobType === 'sleep';
+
+    if (detailsRef.current) {
+      detailsRef.current.visible = zoom >= 42;
+    }
+
+    groupRef.current.position.set(ux, uy || 0, uz);
+
+    const isActivelyWorkingNow = !isGamePaused && !isMovingNow && Boolean(curJobType && curJobType !== 'idle' && curJobType !== 'wander');
+    const isActivelyChoppingStandingNow = isActivelyWorkingNow && curJobType === 'chop_tree';
+    const isActivelyChoppingFallenNow = isActivelyWorkingNow && curJobType === 'chop_fallen_log';
+    const isPreviewChoppingNow = !isGamePaused && previewAnimation?.anim === 'chop' && (previewAnimation.expiresAt > Date.now());
+    const isActivelyChoppingNow = isActivelyChoppingStandingNow || isActivelyChoppingFallenNow || isPreviewChoppingNow;
+    const isActivelyBuildingNow = isActivelyWorkingNow && (curJobType === 'build_structure' || curJobType === 'demolish_structure');
+    const isActivelyMiningNow = isActivelyWorkingNow && curJobType === 'mine_rock';
+    const isActivelyFightingNow = !isGamePaused && !isMovingNow && curJobType === 'fight';
+    const isSittingNow = !isMovingNow && curJobType === 'sit_by_fire';
+
+    const targetBuildingId = curJob?.targetBuildingId || unit.workBuildingId;
+    if (curJob?.id !== prevJobIdRef.current) {
+      prevJobIdRef.current = curJob?.id || null;
+      targetBuildingTypeRef.current = undefined;
+      if (targetBuildingId) {
+        for (const b of buildingEntities) {
+          if (b.id === targetBuildingId) {
+            targetBuildingTypeRef.current = b.buildingType;
+            break;
+          }
+        }
+      }
+    }
+    const targetBuildingType = targetBuildingTypeRef.current;
+    const { selectedEntityId, houseFloorView } = useGameStore.getState();
+    if (!isHouseSleeperVisible(curJob, Boolean(curPath?.length), targetBuildingType, selectedEntityId, houseFloorView)) {
+      groupRef.current.visible = false;
+      return;
+    }
+
+    const isFarmingNow =
+      isActivelyWorkingNow &&
+      (curJobType === 'plant_crops' ||
+        curJobType === 'harvest_wheat' ||
+        (curJobType === 'work_at_building' && targetBuildingType === 'wheat_farm'));
+
+    if (isFarmingNow && (unit.hasMule || unit.muleTransition)) {
+      unit.hasMule = false;
+      unit.muleTransition = undefined;
+      unit.assignedMuleHutId = undefined;
+    }
+
+    const isCounterWorker =
+      targetBuildingType === 'market' ||
+      targetBuildingType === 'tavern' ||
+      (targetBuildingType === 'bakery' && Boolean(curJob?.targetPosition && curJob.targetPosition[1] > 0));
+
+    const isCalmBuilding =
+      isCounterWorker ||
+      targetBuildingType === 'wooden_church' ||
+      targetBuildingType === 'manor' ||
+      targetBuildingType === 'stockpile' ||
+      targetBuildingType === 'tent';
+
+    const isCraftingBuildingWorker =
+      isActivelyWorkingNow &&
+      curJobType === 'work_at_building' &&
+      !isCalmBuilding &&
+      targetBuildingType !== 'wheat_farm';
+
+    const isMilitiaSpear = Boolean(unit.isLevy && (!unit.militiaWeapon || unit.militiaWeapon === 'spear' || unit.militiaWeapon === 'pike'));
+    const isMilitiaSword = Boolean(unit.isLevy && unit.militiaWeapon === 'sword');
+    const isMilitiaBow = Boolean(unit.isLevy && unit.militiaWeapon === 'bow');
+
+    if (twoHandedRigRef.current) twoHandedRigRef.current.visible = isActivelyChoppingNow;
+    if (standardArmsRef.current) standardArmsRef.current.visible = !isActivelyChoppingNow;
+    if (hammerRef.current) hammerRef.current.visible = isActivelyBuildingNow;
+    if (pickaxeRef.current) pickaxeRef.current.visible = isActivelyMiningNow;
+    if (spearRef.current) spearRef.current.visible = isMilitiaSpear && !isSleepingNow && !isSittingNow;
+    if (bowRef.current) bowRef.current.visible = isMilitiaBow && !isSleepingNow && !isSittingNow;
+    if (swordRef.current) swordRef.current.visible = (isActivelyFightingNow || isMilitiaSword || (isBandit && !isSleepingNow && !isSittingNow));
+    if (scepterRef.current) scepterRef.current.visible = isLord && !isMovingNow && !isSleepingNow && !isSittingNow;
+    if (shadowDiscRef.current) shadowDiscRef.current.visible = !isSleepingNow;
+
+    if (isGamePaused) {
+      if (isSleepingNow) {
+        const bedAngle = curJob?.targetAngle !== undefined ? curJob.targetAngle : (facingAngle.current || 0);
+        const offX = 0.30 * Math.sin(bedAngle);
+        const offZ = 0.30 * Math.cos(bedAngle);
+        if (characterBodyRef.current) {
+          characterBodyRef.current.rotation.order = 'YXZ';
+          characterBodyRef.current.rotation.set(-Math.PI / 2, bedAngle, 0);
+          characterBodyRef.current.position.set(offX, 0.08, offZ);
+        }
+        if (torsoRef.current) {
+          torsoRef.current.position.set(0, 0, 0);
+          torsoRef.current.rotation.set(0, 0, 0);
+          torsoRef.current.scale.set(1, 1, 1);
+        }
+        if (leftLegRef.current) leftLegRef.current.rotation.set(0, 0, 0);
+        if (rightLegRef.current) rightLegRef.current.rotation.set(0, 0, 0);
+        if (leftArmRef.current) leftArmRef.current.rotation.set(-0.15, 0, -0.15);
+        if (rightArmRef.current) rightArmRef.current.rotation.set(-0.15, 0, 0.15);
+      } else if (isSittingNow) {
+        const sitAngle = curJob?.targetAngle !== undefined ? curJob.targetAngle : facingAngle.current;
+        if (characterBodyRef.current) {
+          characterBodyRef.current.rotation.order = 'XYZ';
+          characterBodyRef.current.rotation.set(0, sitAngle, 0);
+          characterBodyRef.current.position.set(0, -0.07, 0);
+        }
+        if (torsoRef.current) {
+          torsoRef.current.position.set(0, 0, 0);
+          torsoRef.current.rotation.set(0.12, 0, 0);
+          torsoRef.current.scale.set(1, 1, 1);
+        }
+        if (leftLegRef.current) leftLegRef.current.rotation.set(-1.25, 0.12, 0);
+        if (rightLegRef.current) rightLegRef.current.rotation.set(-1.25, -0.12, 0);
+        if (leftArmRef.current) leftArmRef.current.rotation.set(-0.85, 0.25, -0.1);
+        if (rightArmRef.current) rightArmRef.current.rotation.set(-0.85, -0.25, 0.1);
+      } else {
+        if (characterBodyRef.current) {
+          characterBodyRef.current.position.set(0, 0, 0);
+          characterBodyRef.current.rotation.set(0, facingAngle.current, 0);
+        }
+        if (torsoRef.current) {
+          torsoRef.current.position.set(0, 0, 0);
+          torsoRef.current.rotation.set(0, 0, 0);
+          torsoRef.current.scale.set(1, 1, 1);
+        }
+        if (leftLegRef.current) leftLegRef.current.rotation.set(0, 0, 0);
+        if (rightLegRef.current) rightLegRef.current.rotation.set(0, 0, 0);
+        if (leftArmRef.current) leftArmRef.current.rotation.set(0, 0, 0);
+        if (rightArmRef.current) rightArmRef.current.rotation.set(0, 0, 0);
+      }
+      return;
+    }
+
+    let targetAngle = facingAngle.current;
+
+    const isTileTargetedJob =
+      curJobType === 'chop_tree' ||
+      curJobType === 'chop_fallen_log' ||
+      curJobType === 'mine_rock' ||
+      curJobType === 'build_structure' ||
+      curJobType === 'demolish_structure' ||
+      curJobType === 'plant_crops' ||
+      curJobType === 'harvest_wheat';
+
+    if (isActivelyWorkingNow && isTileTargetedJob && curJob?.targetPosition) {
+      const [tx, tz] = curJob.targetPosition;
+      let targetX = tx + 0.5;
+      let targetZ = tz + 0.5;
+
+      if (curJobType === 'chop_fallen_log' && grid) {
+        const tile = grid.getTile(tx, tz);
+        if (tile?.foliageAngle !== undefined) {
+          targetX = tx + 0.5 + Math.sin(tile.foliageAngle) * 0.6;
+          targetZ = tz + 0.5 + Math.cos(tile.foliageAngle) * 0.6;
+        }
+      }
+
+      const tdx = targetX - ux;
+      const tdz = targetZ - uz;
+      if (Math.hypot(tdx, tdz) > 0.05) {
+        targetAngle = Math.atan2(tdx, tdz);
+      }
+    } else if (isMovingNow && curPath && curPath.length > 0) {
+      const nextWp = curPath[0];
+      const wdx = nextWp[0] + 0.5 - ux;
+      const wdz = nextWp[1] + 0.5 - uz;
+      if (Math.hypot(wdx, wdz) > 0.05) {
+        targetAngle = Math.atan2(wdx, wdz);
+      }
+    } else if (curJob?.targetAngle !== undefined) {
+      targetAngle = curJob.targetAngle;
+    } else {
+      const dx = ux - prevPos.current[0];
+      const dz = uz - prevPos.current[1];
+      if (movedSincePreviousFrame > 0.002) {
+        targetAngle = Math.atan2(dx, dz);
+      }
+    }
+
+    let diff = targetAngle - facingAngle.current;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    const turnRate = isMovingNow ? 6.5 : 9.0;
+    facingAngle.current += diff * Math.min(1.0, turnRate * (delta || 0.016));
+
+    if (characterBodyRef.current && !isSleepingNow) {
+      characterBodyRef.current.rotation.y = facingAngle.current;
+    }
+    prevPos.current = [ux, uz];
+
+    let action: 'idle' | 'walk' | 'attack' | 'chop_standing' | 'chop_fallen' | 'build' | 'farm' | 'craft' | 'sleep' | 'sit' = 'idle';
+
+    if (previewAnimation && previewAnimation.expiresAt > Date.now()) {
+      action = previewAnimation.anim === 'chop' ? 'chop_standing' : (previewAnimation.anim as any);
+    } else if (isMovingNow) {
+      action = 'walk';
+    } else if (isSleepingNow) {
+      action = 'sleep';
+    } else if (isSittingNow) {
+      action = 'sit';
+    } else if (isActivelyFightingNow) {
+      action = 'attack';
+    } else if (isActivelyChoppingStandingNow) {
+      action = 'chop_standing';
+    } else if (isActivelyChoppingFallenNow) {
+      action = 'chop_fallen';
+    } else if (isFarmingNow) {
+      action = 'farm';
+    } else if (isActivelyBuildingNow || isActivelyMiningNow) {
+      action = 'build';
+    } else if (isCraftingBuildingWorker) {
+      action = 'craft';
+    } else {
+      action = 'idle';
+    }
+
+    const t = clock.getElapsedTime();
+    const phase = (t * 4.8) % (Math.PI * 2);
+
+    if (action === 'chop_standing' || action === 'chop_fallen') {
+      const strikeImpactPhase = 4.4;
+      if (prevPhaseRef.current < strikeImpactPhase && phase >= strikeImpactPhase) {
+        if (curJob?.targetPosition) {
+          const [tx, tz] = curJob.targetPosition;
+          useGameStore.getState().registerTreeHit(tx + 0.5, tz + 0.5, action === 'chop_standing' ? 1.0 : 1.3);
+        }
+      }
+    }
+    prevPhaseRef.current = phase;
+
+    if (action === 'walk') {
+      const walkCycle = Math.sin(t * 8);
+
+      const isPlayerUnit = !unit.factionId || unit.factionId === 'player';
+      if (isPlayerUnit || isSelected) {
+        if (prevFootstepRef.current < 0 && walkCycle >= 0) {
+          audioManager.playPeasantFootstep(ux, uz);
+        } else if (prevFootstepRef.current > 0 && walkCycle <= 0) {
+          audioManager.playPeasantFootstep(ux, uz);
+        }
+      }
+      prevFootstepRef.current = walkCycle;
+
+      if (leftLegRef.current) leftLegRef.current.rotation.set(walkCycle * 0.45, 0, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(-walkCycle * 0.45, 0, 0);
+      if (leftArmRef.current) leftArmRef.current.rotation.set(-walkCycle * 0.4, 0, 0);
+      if (rightArmRef.current) rightArmRef.current.rotation.set(walkCycle * 0.4, 0, 0);
+      if (torsoRef.current) {
+        torsoRef.current.position.set(0, 0, 0);
+        torsoRef.current.rotation.set(0, 0, 0);
+        torsoRef.current.scale.set(1, 1, 1);
+      }
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.order = 'XYZ';
+        characterBodyRef.current.rotation.set(0, facingAngle.current, -diff * 0.12);
+        characterBodyRef.current.position.set(0, Math.abs(Math.sin(t * 8)) * 0.03, 0);
+      }
+    } else if (action === 'chop_standing') {
+      let rigRotX = 0;
+      let rigRotY = 0;
+      let rigRotZ = 0;
+
+      let bRotX = 0;
+      let bRotY = 0;
+      let bRotZ = 0;
+      let bPosY = 0;
+
+      if (phase < 3.2) {
+        const p = phase / 3.2;
+        const ease = Math.sin(p * Math.PI * 0.5);
+
+        bRotY = 0.45 * ease;
+        bRotX = -0.10 * ease;
+        bRotZ = -0.08 * ease;
+        bPosY = 0.02 * ease;
+
+        rigRotX = -0.65 * ease;
+        rigRotY = -0.35 * ease;
+        rigRotZ = 0.35 * ease;
+      } else if (phase < 4.4) {
+        const p = (phase - 3.2) / 1.2;
+        const ease = Math.pow(p, 2.2);
+
+        bRotY = 0.45 - 0.90 * ease;
+        bRotX = -0.10 + 0.35 * ease;
+        bRotZ = -0.08 + 0.30 * ease;
+        bPosY = 0.02 - 0.06 * ease;
+
+        rigRotX = -0.65 + 1.25 * ease;
+        rigRotY = -0.35 + 0.70 * ease;
+        rigRotZ = 0.35 - 0.60 * ease;
+      } else {
+        const p = (phase - 4.4) / (Math.PI * 2 - 4.4);
+
+        bRotY = -0.45 + 0.45 * p;
+        bRotX = 0.25 - 0.25 * p;
+        bRotZ = 0.22 - 0.22 * p;
+        bPosY = -0.04 + 0.04 * p;
+
+        rigRotX = 0.60 - 0.60 * p;
+        rigRotY = 0.35 - 0.35 * p;
+        rigRotZ = -0.25 + 0.25 * p;
+      }
+
+      if (torsoRef.current) {
+        torsoRef.current.position.set(0, 0, 0);
+        torsoRef.current.scale.set(1, 1, 1);
+      }
+      if (twoHandedRigRef.current) twoHandedRigRef.current.rotation.set(rigRotX, rigRotY, rigRotZ);
+      if (leftLegRef.current) leftLegRef.current.rotation.set(-0.12, 0.15, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(0.10, -0.1, 0);
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.set(bRotX, facingAngle.current + bRotY, bRotZ);
+        characterBodyRef.current.position.set(0, bPosY, 0);
+      }
+    } else if (action === 'chop_fallen') {
+      let rigRotX = 0;
+      let bRotX = 0.15;
+      let bPosY = -0.02;
+
+      if (phase < 3.2) {
+        const p = phase / 3.2;
+        const ease = Math.sin(p * Math.PI * 0.5);
+        rigRotX = -0.65 * ease;
+        bRotX = 0.15 - 0.10 * ease;
+        bPosY = -0.02 + 0.02 * ease;
+      } else if (phase < 4.4) {
+        const p = (phase - 3.2) / 1.2;
+        const ease = Math.pow(p, 2.2);
+        rigRotX = -0.65 + 1.45 * ease;
+        bRotX = 0.05 + 0.38 * ease;
+        bPosY = 0.00 - 0.05 * ease;
+      } else {
+        const p = (phase - 4.4) / (Math.PI * 2 - 4.4);
+        rigRotX = 0.80 - 0.80 * p;
+        bRotX = 0.43 - 0.28 * p;
+        bPosY = -0.05 + 0.03 * p;
+      }
+
+      if (torsoRef.current) {
+        torsoRef.current.position.set(0, 0, 0);
+        torsoRef.current.scale.set(1, 1, 1);
+      }
+      if (twoHandedRigRef.current) twoHandedRigRef.current.rotation.set(rigRotX, 0, 0);
+      if (leftLegRef.current) leftLegRef.current.rotation.set(0.12, 0.1, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(-0.12, -0.1, 0);
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.set(bRotX, facingAngle.current, 0);
+        characterBodyRef.current.position.set(0, bPosY, 0);
+      }
+    } else if (action === 'build') {
+      const buildCycle = Math.sin(t * 10);
+      if (torsoRef.current) {
+        torsoRef.current.position.set(0, 0, 0);
+        torsoRef.current.rotation.set(0, 0, 0);
+        torsoRef.current.scale.set(1, 1, 1);
+      }
+      if (rightArmRef.current) rightArmRef.current.rotation.set(-0.4 + buildCycle * 0.7, 0, 0);
+      if (leftArmRef.current) leftArmRef.current.rotation.set(0.2, 0, 0);
+      if (leftLegRef.current) leftLegRef.current.rotation.set(0, 0, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(0, 0, 0);
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.order = 'XYZ';
+        characterBodyRef.current.rotation.set(0, facingAngle.current, 0);
+        characterBodyRef.current.position.set(0, buildCycle > 0 ? 0 : -0.02, 0);
+      }
+    } else if (action === 'farm') {
+      const farmCycle = Math.sin(t * 5.0);
+      if (torsoRef.current) {
+        torsoRef.current.position.set(0, -0.04, 0.05);
+        torsoRef.current.rotation.set(0.65 + farmCycle * 0.08, 0, 0);
+        torsoRef.current.scale.set(1, 1, 1);
+      }
+      if (rightArmRef.current) rightArmRef.current.rotation.set(-0.9 + farmCycle * 0.35, -0.15, 0.1);
+      if (leftArmRef.current) leftArmRef.current.rotation.set(-0.8 - farmCycle * 0.35, 0.15, -0.1);
+      if (leftLegRef.current) leftLegRef.current.rotation.set(0.2, 0.08, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(-0.1, -0.08, 0);
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.order = 'XYZ';
+        characterBodyRef.current.rotation.set(0, facingAngle.current, 0);
+        characterBodyRef.current.position.set(0, -0.05, 0);
+      }
+    } else if (action === 'craft') {
+      const craftCycle = Math.sin(t * 3.5);
+      const craftCycleAlt = Math.cos(t * 3.5);
+      const craftBreathe = Math.sin(t * 2.5) * 0.005;
+      if (torsoRef.current) {
+        torsoRef.current.position.set(0, craftBreathe, 0);
+        torsoRef.current.rotation.set(0.12, 0, 0);
+        torsoRef.current.scale.set(1, 1, 1);
+      }
+      if (rightArmRef.current) rightArmRef.current.rotation.set(-0.65 + craftCycle * 0.18, -0.15, 0.1);
+      if (leftArmRef.current) leftArmRef.current.rotation.set(-0.65 - craftCycleAlt * 0.18, 0.15, -0.1);
+      if (leftLegRef.current) leftLegRef.current.rotation.set(0, 0, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(0, 0, 0);
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.order = 'XYZ';
+        characterBodyRef.current.rotation.set(0, facingAngle.current, 0);
+        characterBodyRef.current.position.set(0, 0, 0);
+      }
+    } else if (action === 'attack') {
+      const attackCycle = Math.sin(t * 14);
+      if (torsoRef.current) {
+        torsoRef.current.position.set(0, 0, 0);
+        torsoRef.current.rotation.set(0, 0, 0);
+        torsoRef.current.scale.set(1, 1, 1);
+      }
+      if (rightArmRef.current) rightArmRef.current.rotation.set(-0.8 + attackCycle * 0.9, 0, 0);
+      if (leftArmRef.current) leftArmRef.current.rotation.set(0.2, 0, 0);
+      if (leftLegRef.current) leftLegRef.current.rotation.set(0, 0, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(0, 0, 0);
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.order = 'XYZ';
+        characterBodyRef.current.rotation.set(0, facingAngle.current, 0);
+        characterBodyRef.current.position.set(0, 0, 0);
+      }
+    } else if (action === 'sleep') {
+      const bedAngle = curJob?.targetAngle !== undefined ? curJob.targetAngle : (facingAngle.current || 0);
+      facingAngle.current = bedAngle;
+
+      const breathe = Math.sin(t * 2.2) * 0.005;
+      const offX = 0.30 * Math.sin(bedAngle);
+      const offZ = 0.30 * Math.cos(bedAngle);
+
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.order = 'YXZ';
+        characterBodyRef.current.rotation.set(-Math.PI / 2, bedAngle, 0);
+        characterBodyRef.current.position.set(offX, 0.08, offZ);
+      }
+      if (torsoRef.current) {
+        torsoRef.current.position.set(0, 0, breathe);
+        torsoRef.current.rotation.set(0, 0, 0);
+        torsoRef.current.scale.set(1, 1, 1 + breathe * 0.8);
+      }
+      if (leftLegRef.current) leftLegRef.current.rotation.set(0, 0, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(0, 0, 0);
+      if (leftArmRef.current) leftArmRef.current.rotation.set(-0.15, 0, -0.15);
+      if (rightArmRef.current) rightArmRef.current.rotation.set(-0.15, 0, 0.15);
+    } else if (action === 'sit') {
+      const sitAngle = curJob?.targetAngle !== undefined ? curJob.targetAngle : facingAngle.current;
+      facingAngle.current = sitAngle;
+
+      const warmOsc = Math.sin(t * 2.0) * 0.03;
+      const breathe = Math.sin(t * 2.5) * 0.005;
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.order = 'XYZ';
+        characterBodyRef.current.rotation.set(0, sitAngle, 0);
+        characterBodyRef.current.position.set(0, -0.07, 0);
+      }
+      if (torsoRef.current) {
+        torsoRef.current.position.set(0, breathe, 0);
+        torsoRef.current.rotation.set(0.12, 0, 0);
+        torsoRef.current.scale.set(1, 1, 1);
+      }
+      if (leftLegRef.current) leftLegRef.current.rotation.set(-1.25, 0.12, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(-1.25, -0.12, 0);
+      if (leftArmRef.current) leftArmRef.current.rotation.set(-0.85 + warmOsc, 0.25, -0.1);
+      if (rightArmRef.current) rightArmRef.current.rotation.set(-0.85 + warmOsc, -0.25, 0.1);
+    } else {
+      if (characterBodyRef.current) {
+        characterBodyRef.current.rotation.order = 'XYZ';
+        characterBodyRef.current.rotation.set(0, facingAngle.current, 0);
+        characterBodyRef.current.position.set(0, 0, 0);
+      }
+      if (torsoRef.current) {
+        if (zoom >= 24) {
+          const breathe = Math.sin(t * 2.8) * 0.006;
+          torsoRef.current.position.set(0, breathe, 0);
+          torsoRef.current.rotation.set(0, 0, 0);
+          torsoRef.current.scale.set(1 + breathe * 0.3, 1 + breathe * 0.5, 1 + breathe * 0.3);
+        } else {
+          torsoRef.current.position.set(0, 0, 0);
+          torsoRef.current.rotation.set(0, 0, 0);
+          torsoRef.current.scale.set(1, 1, 1);
+        }
+      }
+      if (leftLegRef.current) leftLegRef.current.rotation.set(0, 0, 0);
+      if (rightLegRef.current) rightLegRef.current.rotation.set(0, 0, 0);
+      if (leftArmRef.current) leftArmRef.current.rotation.set(0, 0, 0);
+      if (rightArmRef.current) rightArmRef.current.rotation.set(0, 0, 0);
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      <mesh ref={shadowDiscRef} position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={SHARED_GEOS.shadowDisc} material={groundShadowMaterial} renderOrder={GROUND_SHADOW_RENDER_ORDER} raycast={() => null} />
+
+      <group ref={characterBodyRef} scale={[0.8, 0.8, 0.8]} raycast={() => null}>
+        <group ref={leftLegRef} position={[-0.1, 0.16, 0]}>
+          <mesh material={app.trousersMat} geometry={SHARED_GEOS.leg} />
+          <mesh material={app.bootsMat} position={[0, -0.1, 0.02]} geometry={SHARED_GEOS.boot} />
+        </group>
+
+        <group ref={rightLegRef} position={[0.1, 0.16, 0]}>
+          <mesh material={app.trousersMat} geometry={SHARED_GEOS.leg} />
+          <mesh material={app.bootsMat} position={[0, -0.1, 0.02]} geometry={SHARED_GEOS.boot} />
+        </group>
+
+        <group ref={torsoRef}>
+          <mesh material={app.tunicMat} position={[0, 0.44, 0]} geometry={SHARED_GEOS.torso} />
+
+          {app.gender === 'female' && isPeasant && (
+            <mesh material={app.tunicMat} position={[0, 0.24, 0]} geometry={SHARED_GEOS.femaleSkirt} />
+          )}
+
+          <mesh material={app.bootsMat} position={[0, 0.28, 0]} geometry={SHARED_GEOS.belt} />
+
+          <group position={[0, 0.72, 0]}>
+            <mesh
+              ref={headMeshRef}
+              material={multiHeadMats}
+              geometry={SHARED_GEOS.head}
+            />
+          </group>
+
+          <group ref={detailsRef}>
+            <mesh material={staticMats.beltBuckle} position={[0, 0.28, 0.12]} geometry={SHARED_GEOS.beltBuckle} />
+
+            {app.apronType === 'leather_apron' && app.apronMat && (
+              <group position={[0, 0.42, 0.115]}>
+                <mesh material={app.apronMat} geometry={SHARED_GEOS.apronLeather} />
+              </group>
+            )}
+
+            {app.apronType === 'linen_apron' && app.apronMat && (
+              <group position={[0, 0.40, 0.115]}>
+                <mesh material={app.apronMat} geometry={SHARED_GEOS.apronLinen} />
+              </group>
+            )}
+
+            {app.apronType === 'vest' && app.apronMat && (
+              <mesh material={app.apronMat} position={[0, 0.44, 0]} geometry={SHARED_GEOS.apronVest} />
+            )}
+
+          {isLord && (
+            <group position={[0, 0.72, 0]}>
+              <mesh material={app.hairMat} position={[0, 0.115, -0.02]} geometry={SHARED_GEOS.hairTop} />
+              <mesh material={app.hairMat} position={[0, 0.02, -0.10]} geometry={SHARED_GEOS.hairBackShort} />
+              <mesh material={app.hairMat} position={[-0.105, 0.03, -0.01]} geometry={SHARED_GEOS.hairSide} />
+              <mesh material={app.hairMat} position={[0.105, 0.03, -0.01]} geometry={SHARED_GEOS.hairSide} />
+              <group position={[0, 0.14, 0]}>
+                <mesh material={staticMats.crownGold} geometry={SHARED_GEOS.crownCylinder} />
+                <mesh material={staticMats.rubyGem} position={[0, 0.05, 0.13]} geometry={SHARED_GEOS.rubyGem} />
+              </group>
+            </group>
+          )}
+
+          {isLady && (
+            <group position={[0, 0.72, 0]}>
+              <mesh material={app.hairMat} position={[0, 0.115, -0.02]} geometry={SHARED_GEOS.hairTop} />
+              <mesh material={app.hairMat} position={[0, 0.01, -0.105]} geometry={SHARED_GEOS.hairBackMed} />
+              <mesh material={app.hairMat} position={[0, 0.02, -0.13]} geometry={SHARED_GEOS.ladyHairBun} />
+              <mesh material={staticMats.goldTrim} position={[0, 0.04, -0.13]} geometry={SHARED_GEOS.goldTrimPin} />
+            </group>
+          )}
+
+          {isKnight && (
+            <group position={[0, 0.75, 0]}>
+              <mesh material={staticMats.knightHelm} geometry={SHARED_GEOS.knightHelm} />
+              <mesh material={staticMats.ironSteel} position={[0, -0.02, 0.135]} geometry={SHARED_GEOS.knightVisor} />
+            </group>
+          )}
+
+          {app.headwearType === 'helmet' && !isKnight && (
+            <group position={[0, 0.74, 0]}>
+              <mesh material={staticMats.darkIron} geometry={SHARED_GEOS.banditHelm} />
+              <mesh material={staticMats.darkIron} position={[0, -0.05, 0]} geometry={SHARED_GEOS.banditBrim} />
+              <mesh material={staticMats.ironSteel} position={[0, -0.02, 0.14]} geometry={SHARED_GEOS.banditNasal} />
+            </group>
+          )}
+
+          {app.headwearType === 'straw_hat' && app.hatMat && (
+            <group position={[0, 0.72, 0]}>
+              <mesh material={app.hairMat} position={[0, 0.02, -0.10]} geometry={SHARED_GEOS.hairBackShort} />
+              <group position={[0, 0.12, 0]}>
+                <mesh material={app.hatMat} geometry={SHARED_GEOS.strawBrim} />
+                <mesh material={app.hatMat} position={[0, 0.07, 0]} geometry={SHARED_GEOS.strawCone} />
+              </group>
+            </group>
+          )}
+
+          {app.headwearType === 'hood' && app.hatMat && (
+            <group position={[0, 0.77, -0.04]}>
+              <mesh material={app.hatMat} geometry={SHARED_GEOS.hoodBox} />
+              <mesh material={app.hatMat} position={[0, -0.08, -0.08]} geometry={SHARED_GEOS.hoodCone} />
+            </group>
+          )}
+
+          {app.headwearType === 'cap' && app.hatMat && (
+            <group position={[0, 0.72, 0]}>
+              <mesh material={app.hairMat} position={[0, 0.02, -0.10]} geometry={SHARED_GEOS.hairBackShort} />
+              <group position={[0, 0.12, 0]}>
+                <mesh material={app.hatMat} geometry={SHARED_GEOS.capCylinder} />
+                <mesh material={app.hatMat} position={[0, -0.02, 0.12]} geometry={SHARED_GEOS.capVisor} />
+              </group>
+            </group>
+          )}
+
+          {app.headwearType === 'headscarf' && app.hatMat && (
+            <group position={[0, 0.80, -0.04]}>
+              <mesh material={app.hatMat} geometry={SHARED_GEOS.headscarfBox} />
+              <mesh material={app.hatMat} position={[0, -0.06, -0.10]} geometry={SHARED_GEOS.headscarfKnot} />
+            </group>
+          )}
+
+          {app.headwearType === 'wimple' && app.hatMat && (
+            <group position={[0, 0.76, -0.04]}>
+              <mesh material={app.hatMat} geometry={SHARED_GEOS.wimpleBox} />
+            </group>
+          )}
+
+          {app.headwearType === 'bun' && (
+            <group position={[0, 0.72, 0]}>
+              <mesh material={app.hairMat} position={[0, 0.115, -0.02]} geometry={SHARED_GEOS.hairTop} />
+              <mesh material={app.hairMat} position={[0, 0.02, -0.105]} geometry={SHARED_GEOS.hairBackMed} />
+              <mesh material={app.hairMat} position={[0, 0.04, -0.13]} geometry={SHARED_GEOS.ladyHairBun} />
+            </group>
+          )}
+
+          {app.headwearType === 'braids' && (
+            <group position={[0, 0.72, 0]}>
+              <mesh material={app.hairMat} position={[0, 0.115, -0.02]} geometry={SHARED_GEOS.hairTop} />
+              <mesh material={app.hairMat} position={[0, 0.02, -0.105]} geometry={SHARED_GEOS.hairBackMed} />
+              <mesh material={app.hairMat} position={[-0.105, -0.08, 0.06]} geometry={SHARED_GEOS.braidCylinder} />
+              <mesh material={app.hairMat} position={[0.105, -0.08, 0.06]} geometry={SHARED_GEOS.braidCylinder} />
+            </group>
+          )}
+
+          {app.headwearType === 'none' && !isKnight && !isLord && !isLady && (
+            <group position={[0, 0.72, 0]}>
+              {app.hairStyle % 3 === 0 ? (
+                <group>
+                  <mesh material={app.hairMat} position={[0, 0.115, -0.02]} geometry={SHARED_GEOS.hairTop} />
+                  <mesh material={app.hairMat} position={[0, 0.02, -0.10]} geometry={SHARED_GEOS.hairBackShort} />
+                  <mesh material={app.hairMat} position={[-0.105, 0.03, -0.01]} geometry={SHARED_GEOS.hairSide} />
+                  <mesh material={app.hairMat} position={[0.105, 0.03, -0.01]} geometry={SHARED_GEOS.hairSide} />
+                </group>
+              ) : app.hairStyle % 3 === 1 ? (
+                <group>
+                  <mesh material={app.hairMat} position={[0, 0.115, -0.02]} geometry={SHARED_GEOS.hairTop} />
+                  <mesh material={app.hairMat} position={[0, -0.01, -0.10]} geometry={SHARED_GEOS.hairBackLong} />
+                  <mesh material={app.hairMat} position={[-0.108, -0.01, 0]} geometry={SHARED_GEOS.hairSideLong} />
+                  <mesh material={app.hairMat} position={[0.108, -0.01, 0]} geometry={SHARED_GEOS.hairSideLong} />
+                </group>
+              ) : (
+                <group>
+                  <mesh material={app.hairMat} position={[0, 0.02, -0.10]}>
+                    <boxGeometry args={[0.225, 0.13, 0.035]} />
+                  </mesh>
+                  <mesh material={app.hairMat} position={[-0.105, 0.02, -0.02]}>
+                    <boxGeometry args={[0.025, 0.11, 0.14]} />
+                  </mesh>
+                  <mesh material={app.hairMat} position={[0.105, 0.02, -0.02]}>
+                    <boxGeometry args={[0.025, 0.11, 0.14]} />
+                  </mesh>
+                </group>
+              )}
+            </group>
+          )}
+          </group>
+
+          <group ref={twoHandedRigRef} position={[0, 0.46, 0]} visible={false}>
+            <group position={[0.02, -0.04, 0.20]} rotation={[-0.28, 0, 0.12]}>
+              <mesh material={staticMats.woodHandle} geometry={SHARED_GEOS.twoHandedHandle} />
+              <mesh material={app.bootsMat} position={[0, 0.06, 0]} geometry={SHARED_GEOS.twoHandedGrip} />
+              <mesh material={app.bootsMat} position={[0, -0.12, 0]} geometry={SHARED_GEOS.twoHandedGrip} />
+              <group position={[0, 0.24, 0.04]}>
+                <mesh material={staticMats.ironSteel} geometry={SHARED_GEOS.twoHandedBlade} />
+                <mesh material={staticMats.ironSteel} position={[0, 0, 0.06]} geometry={SHARED_GEOS.twoHandedSpike} />
+              </group>
+            </group>
+
+            <group position={[0.17, 0.08, 0]} rotation={[-0.55, -0.22, 0.35]}>
+              <mesh material={app.tunicMat} position={[0, -0.10, 0]} geometry={SHARED_GEOS.armSleeveUpper} />
+              <mesh material={app.skinMat} position={[-0.01, -0.21, 0.02]} geometry={SHARED_GEOS.armHandUpper} />
+            </group>
+
+            <group position={[-0.17, 0.08, 0]} rotation={[-0.72, 0.38, -0.35]}>
+              <mesh material={app.tunicMat} position={[0, -0.10, 0]} geometry={SHARED_GEOS.armSleeveUpper} />
+              <mesh material={app.skinMat} position={[0.02, -0.21, 0.02]} geometry={SHARED_GEOS.armHandUpper} />
+            </group>
+          </group>
+
+          <group ref={standardArmsRef}>
+            <group ref={leftArmRef} position={[-0.22, 0.52, 0]}>
+              <mesh material={app.tunicMat} position={[0, -0.06, 0]} geometry={SHARED_GEOS.armSleeveStandard} />
+              <mesh material={app.skinMat} position={[0, -0.18, 0]} geometry={SHARED_GEOS.armHandStandard} />
+              {(isKnight || isBandit || (unit.isLevy && unit.militiaWeapon !== 'bow' && unit.militiaWeapon !== 'pike')) && app.shieldMat && (
+                <mesh material={app.shieldMat} position={[-0.08, -0.12, 0.08]} rotation={[0, 0.3, 0]}>
+                  <boxGeometry args={[0.04, 0.38, 0.26]} />
+                </mesh>
+              )}
+            </group>
+
+            <group ref={rightArmRef} position={[0.22, 0.52, 0]}>
+              <mesh material={app.tunicMat} position={[0, -0.06, 0]} geometry={SHARED_GEOS.armSleeveStandard} />
+              <mesh material={app.skinMat} position={[0, -0.18, 0]} geometry={SHARED_GEOS.armHandStandard} />
+
+              <group ref={hammerRef} position={[0, -0.2, 0.12]} rotation={[-Math.PI / 5, 0, 0]} visible={false}>
+                <mesh material={staticMats.woodHandle} geometry={SHARED_GEOS.hammerHandle} />
+                <mesh material={staticMats.ironSteel} position={[0, 0.14, 0]} geometry={SHARED_GEOS.hammerHead} />
+              </group>
+
+              <group ref={pickaxeRef} position={[0, -0.22, 0.12]} rotation={[-Math.PI / 5, 0, 0]} visible={false}>
+                <mesh material={staticMats.woodHandle} geometry={SHARED_GEOS.pickaxeHandle} />
+                <mesh material={staticMats.ironSteel} position={[0, 0.15, 0]} geometry={SHARED_GEOS.pickaxeHead} />
+              </group>
+
+              <group ref={spearRef} position={[0, 0.22, 0.12]} rotation={[-Math.PI / 16, 0, 0]} scale={unit.militiaWeapon === 'pike' ? [1, 1.45, 1] : [1, 1, 1]} visible={false}>
+                <mesh material={staticMats.woodHandle} geometry={SHARED_GEOS.spearShaft} />
+                <mesh material={staticMats.ironSteel} position={[0, 0.78, 0]} geometry={SHARED_GEOS.spearTip} />
+                <mesh material={staticMats.darkIron} position={[0, 0.65, 0]} geometry={SHARED_GEOS.spearCrossguard} />
+              </group>
+
+              <group ref={bowRef} position={[0.08, -0.12, 0.16]} rotation={[0, 0, -Math.PI / 2]} visible={false}>
+                <mesh material={staticMats.woodHandle} geometry={SHARED_GEOS.bowLimb} />
+                <mesh material={staticMats.ironSteel} geometry={SHARED_GEOS.bowString} position={[0, 0.28, 0]} />
+              </group>
+
+              <group ref={swordRef} position={[0, -0.22, 0.15]} rotation={[-Math.PI / 4, 0, 0]} visible={false}>
+                <mesh material={staticMats.ironSteel} geometry={SHARED_GEOS.swordBlade} />
+                <mesh material={staticMats.goldTrim} position={[0, -0.18, 0]} geometry={SHARED_GEOS.swordGuard} />
+              </group>
+
+              {isLord && (
+                <group ref={scepterRef} position={[0, -0.2, 0.1]} rotation={[-0.3, 0, 0]} visible={false}>
+                  <mesh material={staticMats.goldTrim} geometry={SHARED_GEOS.scepterHandle} />
+                  <mesh material={staticMats.rubyGem} position={[0, 0.18, 0]} geometry={SHARED_GEOS.scepterHead} />
+                </group>
+              )}
+            </group>
+          </group>
+
+          {Boolean(companions & 1) && <MuleCompanion unit={unit} isGamePaused={isGamePaused} />}
+          {Boolean(companions & 2) && <HorseCartCompanion unit={unit} isGamePaused={isGamePaused} />}
+        </group>
+      </group>
+
+      <mesh
+        position={[0, 0.65, 0]}
+        onClick={(e) => {
+          if (!groupRef.current?.visible) return;
+          e.stopPropagation();
+          onSelect();
+        }}
+        onContextMenu={(e) => {
+          if (!groupRef.current?.visible) return;
+          if (useGameStore.getState().selectedMilitiaSquadId) {
+            e.stopPropagation();
+            e.nativeEvent?.preventDefault?.();
+            useGameStore.getState().setSelectedMilitiaSquadId(null);
+            if (useGameStore.getState().activeMenuTab === 'military') {
+              useGameStore.getState().setActiveMenuTab(null);
+            }
+            useGameStore.getState().setHoveredTile(null);
+            audioManager.playUIPanelClose();
+          }
+        }}
+        geometry={SHARED_GEOS.unitCollider}
+        material={SHARED_STATIC_MATS.invisibleMat}
+      />
+
+      {isSelected && (
+        <mesh position={[0, 0.008, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={SHARED_GEOS.selectionRing} material={SHARED_STATIC_MATS.selectionRingMat} />
+      )}
+    </group>
+  );
+}
+
+const COMPANION_GEOS = {
+  muleBody: new THREE.BoxGeometry(0.32, 0.36, 0.65),
+  muleHarness: new THREE.BoxGeometry(0.34, 0.22, 0.28),
+  muleNeck: new THREE.BoxGeometry(0.18, 0.32, 0.22),
+  muleHead: new THREE.BoxGeometry(0.19, 0.2, 0.28),
+  muleMuzzle: new THREE.BoxGeometry(0.15, 0.14, 0.12),
+  muleEar: new THREE.BoxGeometry(0.04, 0.24, 0.08),
+  muleLeg: new THREE.BoxGeometry(0.09, 0.36, 0.09),
+  muleHoof: new THREE.BoxGeometry(0.1, 0.06, 0.1),
+  muleRein: new THREE.CylinderGeometry(0.01, 0.01, 0.6, 4),
+  haulLog: new THREE.CylinderGeometry(0.16, 0.18, 1.4, 8),
+  logStrap: new THREE.CylinderGeometry(0.01, 0.01, 0.65, 4),
+  muleCargo: new THREE.BoxGeometry(0.18, 0.22, 0.26),
+  horseBody: new THREE.BoxGeometry(0.36, 0.44, 0.85),
+  horseHarness: new THREE.BoxGeometry(0.38, 0.3, 0.36),
+  horseNeck: new THREE.BoxGeometry(0.22, 0.42, 0.28),
+  horseMane: new THREE.BoxGeometry(0.06, 0.36, 0.12),
+  horseHead: new THREE.BoxGeometry(0.22, 0.24, 0.36),
+  horseMuzzle: new THREE.BoxGeometry(0.18, 0.16, 0.16),
+  horseEar: new THREE.BoxGeometry(0.04, 0.18, 0.08),
+  horseLeg: new THREE.BoxGeometry(0.10, 0.44, 0.10),
+  horseHoof: new THREE.BoxGeometry(0.11, 0.07, 0.11),
+  cartShaft: new THREE.BoxGeometry(0.04, 0.04, 0.9),
+  cartFloor: new THREE.BoxGeometry(0.82, 0.05, 0.95),
+  cartSide: new THREE.BoxGeometry(0.04, 0.28, 0.95),
+  cartBack: new THREE.BoxGeometry(0.82, 0.28, 0.04),
+  cartWheelRim: new THREE.CylinderGeometry(0.28, 0.28, 0.04, 12),
+  cartWheel: new THREE.CylinderGeometry(0.26, 0.26, 0.05, 8),
+  cartCrate: new THREE.BoxGeometry(0.32, 0.32, 0.34),
+  cartBox: new THREE.BoxGeometry(0.30, 0.28, 0.32),
+  largeSack: new THREE.SphereGeometry(0.18, 8, 8),
+  smallSack: new THREE.SphereGeometry(0.15, 8, 8),
+};
+
+function MuleCompanion({
+  unit,
+  isGamePaused,
+}: {
+  unit: GameEntity;
+  isGamePaused: boolean;
+}) {
+  const rootRef = useRef<THREE.Group>(null);
+  const legFLRef = useRef<THREE.Group>(null);
+  const legFRRef = useRef<THREE.Group>(null);
+  const legBLRef = useRef<THREE.Group>(null);
+  const legBRRef = useRef<THREE.Group>(null);
+  const headRef = useRef<THREE.Group>(null);
+  const logRef = useRef<THREE.Group>(null);
+  const materialsRef = useRef<THREE.Group>(null);
+
+  const prevUnitPos = useRef<[number, number]>([unit.position?.[0] || 0, unit.position?.[2] || 0]);
+  const localOffsetX = useRef<number>(-0.55);
+  const localOffsetZ = useRef<number>(-0.1);
+  const transitionPosition = useRef(new THREE.Vector3());
+  const hitchPosition = useRef(new THREE.Vector3());
+  const companionPosition = useRef(new THREE.Vector3());
+  const transitionDirection = useRef(new THREE.Vector3());
+  const activeTransition = useRef<GameEntity['muleTransition']>(undefined);
+
+  useFrame(({ clock }, delta) => {
+    if (!rootRef.current) return;
+    const isWorkingOnBuilding = unit.currentJob?.type === 'work_at_building' || unit.currentJob?.type === 'harvest_wheat';
+    const isVisible = Boolean(unit.hasMule || unit.muleTransition) && !isWorkingOnBuilding;
+    rootRef.current.visible = isVisible;
+    if (!isVisible || !companionParentVisible(rootRef.current)) {
+      prevUnitPos.current[0] = unit.position?.[0] || 0;
+      prevUnitPos.current[1] = unit.position?.[2] || 0;
+      return;
+    }
+
+    const uX = unit.position?.[0] || 0;
+    const uZ = unit.position?.[2] || 0;
+    const distMoved = Math.hypot(uX - prevUnitPos.current[0], uZ - prevUnitPos.current[1]);
+    prevUnitPos.current = [uX, uZ];
+
+    const t = clock.getElapsedTime();
+    let isMoving = !isGamePaused && Boolean(unit.path && unit.path.length > 0) && distMoved > 0.0005;
+
+    if (unit.muleTransition === 'taking' || unit.muleTransition === 'returning') {
+      const p = Math.max(0, Math.min(1, unit.muleTransitionProgress || 0));
+      let hitch: GameEntity | undefined = undefined;
+      if (unit.assignedMuleHutId) {
+        for (const building of buildingEntities) {
+          if (building.id === unit.assignedMuleHutId) {
+            hitch = building;
+            break;
+          }
+        }
+      }
+
+      if (hitch?.position && rootRef.current.parent) {
+        hitchPosition.current.set(hitch.position[0], unit.position?.[1] || hitch.position[1], hitch.position[2] + 0.42);
+        companionPosition.current.set(-0.55, 0, -0.1);
+        rootRef.current.parent.localToWorld(companionPosition.current);
+
+        const from = unit.muleTransition === 'taking' ? hitchPosition.current : companionPosition.current;
+        const to = unit.muleTransition === 'taking' ? companionPosition.current : hitchPosition.current;
+        transitionPosition.current.lerpVectors(from, to, p);
+        rootRef.current.parent.worldToLocal(transitionPosition.current);
+
+        if (activeTransition.current !== unit.muleTransition) {
+          localOffsetX.current = transitionPosition.current.x;
+          localOffsetZ.current = transitionPosition.current.z;
+          activeTransition.current = unit.muleTransition;
+        } else {
+          const smoothRate = Math.min(1, delta * 18);
+          localOffsetX.current += (transitionPosition.current.x - localOffsetX.current) * smoothRate;
+          localOffsetZ.current += (transitionPosition.current.z - localOffsetZ.current) * smoothRate;
+        }
+
+        transitionDirection.current.subVectors(to, from);
+        if (transitionDirection.current.lengthSq() > 0.0001) {
+          const directionWorldAngle = Math.atan2(transitionDirection.current.x, transitionDirection.current.z);
+          const parentWorldAngle = rootRef.current.parent.getWorldDirection(transitionDirection.current);
+          const parentAngle = Math.atan2(parentWorldAngle.x, parentWorldAngle.z);
+          rootRef.current.rotation.y = directionWorldAngle - parentAngle;
+        }
+      }
+      isMoving = !isGamePaused && p > 0.01 && p < 0.99;
+    } else {
+      activeTransition.current = undefined;
+      const targetX = -0.55;
+      const targetZ = isMoving ? -0.15 : -0.05;
+      const lerpRate = Math.min(1.0, delta * (isMoving ? 5.5 : 3.5));
+      localOffsetX.current += (targetX - localOffsetX.current) * lerpRate;
+      localOffsetZ.current += (targetZ - localOffsetZ.current) * lerpRate;
+      rootRef.current.rotation.y += (0 - rootRef.current.rotation.y) * Math.min(1, delta * 8);
+    }
+
+    rootRef.current.position.set(localOffsetX.current, 0, localOffsetZ.current);
+
+    const swing = isMoving ? Math.sin(t * 8.0) * 0.45 : Math.sin(t * 1.5) * 0.03;
+    const bob = isMoving ? Math.sin(t * 16.0) * 0.03 : Math.sin(t * 1.5) * 0.02;
+
+    if (legFLRef.current) legFLRef.current.rotation.x = swing;
+    if (legFRRef.current) legFRRef.current.rotation.x = -swing;
+    if (legBLRef.current) legBLRef.current.rotation.x = -swing;
+    if (legBRRef.current) legBRRef.current.rotation.x = swing;
+    if (headRef.current) headRef.current.position.y = 0.3 + bob;
+
+    const isHaulingLog = Boolean(unit.isHaulingLog);
+    if (logRef.current) {
+      logRef.current.visible = isHaulingLog;
+    }
+    if (materialsRef.current) {
+      const hasMats = Boolean(unit.inventory && Object.values(unit.inventory).some((amt) => (amt || 0) > 0));
+      materialsRef.current.visible = !isHaulingLog && hasMats;
+    }
+  });
+
+  return (
+    <group ref={rootRef} name="mule-companion" position={[-0.55, 0, -0.1]} visible={false}>
+      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[0.9, 1.45, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} material={groundShadowMaterial} renderOrder={GROUND_SHADOW_RENDER_ORDER} raycast={() => null} />
+
+      <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0.42, 0]} geometry={COMPANION_GEOS.muleBody} />
+
+      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0, 0.44, 0.02]} geometry={COMPANION_GEOS.muleHarness} />
+
+      <group position={[0, 0.48, 0.28]}>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0.16, 0.08]} rotation={[-0.4, 0, 0]} geometry={COMPANION_GEOS.muleNeck} />
+        <group ref={headRef} position={[0, 0.3, 0.15]}>
+          <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0.08]} geometry={COMPANION_GEOS.muleHead} />
+          <mesh material={SHARED_STATIC_MATS.muleMuzzle} position={[0, -0.04, 0.24]} geometry={COMPANION_GEOS.muleMuzzle} />
+          <mesh material={SHARED_STATIC_MATS.muleCoat} position={[-0.08, 0.16, -0.02]} rotation={[0, 0, -0.25]} geometry={COMPANION_GEOS.muleEar} />
+          <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0.08, 0.16, -0.02]} rotation={[0, 0, 0.25]} geometry={COMPANION_GEOS.muleEar} />
+        </group>
+      </group>
+
+      <group ref={legFLRef} position={[-0.12, 0.18, 0.22]}>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.muleLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]} geometry={COMPANION_GEOS.muleHoof} />
+      </group>
+      <group ref={legFRRef} position={[0.12, 0.18, 0.22]}>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.muleLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]} geometry={COMPANION_GEOS.muleHoof} />
+      </group>
+      <group ref={legBLRef} position={[-0.12, 0.18, -0.22]}>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.muleLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]} geometry={COMPANION_GEOS.muleHoof} />
+      </group>
+      <group ref={legBRRef} position={[0.12, 0.18, -0.22]}>
+        <mesh material={SHARED_STATIC_MATS.muleCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.muleLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.16, 0]} geometry={COMPANION_GEOS.muleHoof} />
+      </group>
+
+      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0.26, 0.5, 0.28]} rotation={[0, 0.7, 0]} geometry={COMPANION_GEOS.muleRein} />
+
+      <group ref={logRef} position={[0, 0.12, -1.05]} visible={false}>
+        <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[Math.PI / 2, 0, 0]} geometry={COMPANION_GEOS.haulLog} />
+        <mesh material={SHARED_STATIC_MATS.muleHarness} position={[-0.08, 0.14, 0.5]} rotation={[-0.45, 0, 0]} geometry={COMPANION_GEOS.logStrap} />
+        <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0.08, 0.14, 0.5]} rotation={[-0.45, 0, 0]} geometry={COMPANION_GEOS.logStrap} />
+      </group>
+
+      <group ref={materialsRef} position={[0, 0.46, 0]} visible={false}>
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[-0.22, 0.06, 0]} geometry={COMPANION_GEOS.muleCargo} />
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[0.22, 0.06, 0]} geometry={COMPANION_GEOS.muleCargo} />
+      </group>
+    </group>
+  );
+}
+
+function HorseCartCompanion({
+  unit,
+  isGamePaused,
+}: {
+  unit: GameEntity;
+  isGamePaused: boolean;
+}) {
+  const rootRef = useRef<THREE.Group>(null);
+  const horseHeadRef = useRef<THREE.Group>(null);
+  const horseLegFLRef = useRef<THREE.Group>(null);
+  const horseLegFRRef = useRef<THREE.Group>(null);
+  const horseLegBLRef = useRef<THREE.Group>(null);
+  const horseLegBRRef = useRef<THREE.Group>(null);
+  const cartWheelLRef = useRef<THREE.Group>(null);
+  const cartWheelRRef = useRef<THREE.Group>(null);
+
+  const prevUnitPos = useRef<[number, number]>([unit.position?.[0] || 0, unit.position?.[2] || 0]);
+  const localOffsetX = useRef<number>(-0.65);
+  const localOffsetZ = useRef<number>(-0.45);
+  const wheelAngle = useRef<number>(0);
+
+  useFrame(({ clock }, delta) => {
+    if (!rootRef.current) return;
+    const isVisible = Boolean(unit.hasHorseCart || unit.isMerchant);
+    rootRef.current.visible = isVisible;
+    if (!isVisible || !companionParentVisible(rootRef.current)) {
+      prevUnitPos.current[0] = unit.position?.[0] || 0;
+      prevUnitPos.current[1] = unit.position?.[2] || 0;
+      return;
+    }
+
+    const uX = unit.position?.[0] || 0;
+    const uZ = unit.position?.[2] || 0;
+    const distMoved = Math.hypot(uX - prevUnitPos.current[0], uZ - prevUnitPos.current[1]);
+    prevUnitPos.current = [uX, uZ];
+
+    const t = clock.getElapsedTime();
+    const isMoving = !isGamePaused && Boolean(unit.path && unit.path.length > 0) && distMoved > 0.0005;
+
+    const targetX = -0.65;
+    const targetZ = isMoving ? -0.55 : -0.35;
+    const lerpRate = Math.min(1.0, delta * (isMoving ? 5.5 : 3.5));
+    localOffsetX.current += (targetX - localOffsetX.current) * lerpRate;
+    localOffsetZ.current += (targetZ - localOffsetZ.current) * lerpRate;
+    rootRef.current.position.set(localOffsetX.current, 0, localOffsetZ.current);
+
+    const swing = isMoving ? Math.sin(t * 7.5) * 0.48 : Math.sin(t * 1.5) * 0.03;
+    const bob = isMoving ? Math.sin(t * 15.0) * 0.035 : Math.sin(t * 1.5) * 0.02;
+
+    if (horseLegFLRef.current) horseLegFLRef.current.rotation.x = swing;
+    if (horseLegFRRef.current) horseLegFRRef.current.rotation.x = -swing;
+    if (horseLegBLRef.current) horseLegBLRef.current.rotation.x = -swing;
+    if (horseLegBRRef.current) horseLegBRRef.current.rotation.x = swing;
+    if (horseHeadRef.current) horseHeadRef.current.position.y = 0.42 + bob;
+
+    if (isMoving) {
+      wheelAngle.current -= distMoved * 7.0;
+      if (cartWheelLRef.current) cartWheelLRef.current.rotation.x = wheelAngle.current;
+      if (cartWheelRRef.current) cartWheelRRef.current.rotation.x = wheelAngle.current;
+    }
+  });
+
+  return (
+    <group ref={rootRef} name="horse-cart-companion" position={[-0.65, 0, -0.45]} visible={false}>
+      <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.1, 1.8, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} material={groundShadowMaterial} renderOrder={GROUND_SHADOW_RENDER_ORDER} raycast={() => null} />
+
+      <mesh position={[0, 0.015, -1.05]} rotation={[-Math.PI / 2, 0, 0]} scale={[1.4, 1.6, 1.0]} geometry={SHARED_GEOS.muleShadowDisc} material={groundShadowMaterial} renderOrder={GROUND_SHADOW_RENDER_ORDER} raycast={() => null} />
+
+      <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0.52, 0]} geometry={COMPANION_GEOS.horseBody} />
+
+      <mesh material={SHARED_STATIC_MATS.muleHarness} position={[0, 0.54, 0.02]} geometry={COMPANION_GEOS.horseHarness} />
+
+      <group position={[0, 0.60, 0.38]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0.22, 0.12]} rotation={[-0.45, 0, 0]} geometry={COMPANION_GEOS.horseNeck} />
+        <mesh material={SHARED_STATIC_MATS.darkIron} position={[0, 0.32, 0.02]} rotation={[-0.45, 0, 0]} geometry={COMPANION_GEOS.horseMane} />
+        <group ref={horseHeadRef} position={[0, 0.42, 0.22]}>
+          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0.12]} geometry={COMPANION_GEOS.horseHead} />
+          <mesh material={SHARED_STATIC_MATS.muleMuzzle} position={[0, -0.06, 0.32]} geometry={COMPANION_GEOS.horseMuzzle} />
+          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[-0.09, 0.18, 0]} rotation={[0, 0, -0.2]} geometry={COMPANION_GEOS.horseEar} />
+          <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0.09, 0.18, 0]} rotation={[0, 0, 0.2]} geometry={COMPANION_GEOS.horseEar} />
+        </group>
+      </group>
+
+      <group ref={horseLegFLRef} position={[-0.14, 0.22, 0.28]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.horseLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]} geometry={COMPANION_GEOS.horseHoof} />
+      </group>
+      <group ref={horseLegFRRef} position={[0.14, 0.22, 0.28]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.horseLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]} geometry={COMPANION_GEOS.horseHoof} />
+      </group>
+      <group ref={horseLegBLRef} position={[-0.14, 0.22, -0.28]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.horseLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]} geometry={COMPANION_GEOS.horseHoof} />
+      </group>
+      <group ref={horseLegBRRef} position={[0.14, 0.22, -0.28]}>
+        <mesh material={SHARED_STATIC_MATS.horseCoat} position={[0, 0, 0]} geometry={COMPANION_GEOS.horseLeg} />
+        <mesh material={SHARED_STATIC_MATS.muleHoof} position={[0, -0.20, 0]} geometry={COMPANION_GEOS.horseHoof} />
+      </group>
+
+      <mesh material={SHARED_STATIC_MATS.timberDark} position={[-0.24, 0.38, -0.55]} rotation={[0.08, 0, 0]} geometry={COMPANION_GEOS.cartShaft} />
+      <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.24, 0.38, -0.55]} rotation={[0.08, 0, 0]} geometry={COMPANION_GEOS.cartShaft} />
+
+      <group position={[0, 0.24, -1.05]}>
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[0, 0.16, 0]} geometry={COMPANION_GEOS.cartFloor} />
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[-0.40, 0.32, 0]} geometry={COMPANION_GEOS.cartSide} />
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.40, 0.32, 0]} geometry={COMPANION_GEOS.cartSide} />
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0, 0.32, -0.46]} geometry={COMPANION_GEOS.cartBack} />
+
+        <group ref={cartWheelLRef} position={[-0.45, 0.08, 0]}>
+          <mesh material={SHARED_STATIC_MATS.darkIron} rotation={[0, 0, Math.PI / 2]} geometry={COMPANION_GEOS.cartWheelRim} />
+          <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[0, 0, Math.PI / 2]} geometry={COMPANION_GEOS.cartWheel} />
+        </group>
+        <group ref={cartWheelRRef} position={[0.45, 0.08, 0]}>
+          <mesh material={SHARED_STATIC_MATS.darkIron} rotation={[0, 0, Math.PI / 2]} geometry={COMPANION_GEOS.cartWheelRim} />
+          <mesh material={SHARED_STATIC_MATS.timberDark} rotation={[0, 0, Math.PI / 2]} geometry={COMPANION_GEOS.cartWheel} />
+        </group>
+
+        <mesh material={SHARED_STATIC_MATS.woodHandle} position={[-0.18, 0.35, -0.15]} geometry={COMPANION_GEOS.cartCrate} />
+        <mesh material={SHARED_STATIC_MATS.timberDark} position={[0.18, 0.32, -0.15]} geometry={COMPANION_GEOS.cartBox} />
+        <mesh material={SHARED_STATIC_MATS.clothSack} position={[0, 0.34, 0.24]} rotation={[0, 0.3, 0]} geometry={COMPANION_GEOS.largeSack} />
+        <mesh material={SHARED_STATIC_MATS.clothSack} position={[-0.16, 0.44, 0.16]} rotation={[0, -0.4, 0]} geometry={COMPANION_GEOS.smallSack} />
+      </group>
+    </group>
+  );
+}
+
+const Unit3DMemo = memo(Unit3D, (prev, next) => {
+  return (
+    prev.unit === next.unit &&
+    prev.isSelected === next.isSelected &&
+    prev.isGamePaused === next.isGamePaused &&
+    prev.previewAnimation === next.previewAnimation &&
+    prev.unit.characterClass === next.unit.characterClass &&
+    prev.unit.hasMule === next.unit.hasMule &&
+    prev.unit.hasHorseCart === next.unit.hasHorseCart &&
+    prev.unit.isMerchant === next.unit.isMerchant &&
+    prev.unit.isLevy === next.unit.isLevy &&
+    prev.unit.militiaWeapon === next.unit.militiaWeapon &&
+    prev.unit.militiaSquadId === next.unit.militiaSquadId &&
+    prev.grid === next.grid &&
+    prev.onModelCommit === next.onModelCommit
+  );
+});

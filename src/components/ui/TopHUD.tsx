@@ -5,39 +5,69 @@ import { useSettlementMetrics } from '../../hooks/useSettlementMetrics';
 import { useTownCenterFocus } from '../../hooks/useTownCenterFocus';
 import { HeraldicShield, RulerPortrait } from './PlayerHeraldry';
 import type { ResourceInventory } from '../../types/game';
-import { RESOURCE_UI } from './resourcePresentation';
-import { IlluminatedIcon, type IlluminatedIconKind } from './IlluminatedIcons';
-import { ResourceGroupIcon, type ResourceGroupKind } from './ResourceGroupIcon';
+import { RESOURCE_UI, getResourceName } from './resourcePresentation';
+import { IlluminatedIcon, type IlluminatedIconKind } from './icons';
+import { ResourceGroupIcon, type ResourceGroupKind } from './icons';
+import type { TranslationDictionary } from '../../i18n';
 import {
   GoldIcon, InfluenceIcon,
-} from './MedievalIcons';
+} from './icons';
 
 type DetailRow = { label: string; value: string | number; icon?: IlluminatedIconKind };
 type DetailSection = { title: string; rows: DetailRow[] };
 
-const RESOURCE_GROUPS: { icon: ResourceGroupKind; uk: string; en: string; sections: { uk: string; en: string; keys: (keyof ResourceInventory)[] }[] }[] = [
-  { icon: 'construction', uk: 'Будівельні матеріали', en: 'Construction', sections: [
-    { uk: 'Деревина', en: 'Woodworks', keys: ['wood', 'planks'] },
-    { uk: 'Камінь', en: 'Stoneworks', keys: ['stone', 'cut_stone'] },
-    { uk: 'Глина та цегла', en: 'Clay and bricks', keys: ['clay', 'clay_bricks'] },
-  ] },
-  { icon: 'food', uk: 'Їжа та напої', en: 'Food and drink', sections: [
-    { uk: 'Готові продукти', en: 'Prepared goods', keys: ['bread', 'ale'] },
-    { uk: 'Тваринні продукти', en: 'Animal produce', keys: ['meat', 'fish', 'eggs'] },
-    { uk: 'Зібране та приправи', en: 'Foraged and seasoning', keys: ['berries', 'vegetables', 'salt'] },
-  ] },
-  { icon: 'farm', uk: 'Врожай і млин', en: 'Crops and milling', sections: [
-    { uk: 'Зерно', en: 'Grain', keys: ['wheat'] },
-    { uk: 'Помел', en: 'Milling', keys: ['flour'] },
-  ] },
-  { icon: 'materials', uk: 'Сировина', en: 'Raw materials', sections: [
-    { uk: 'Руда й паливо', en: 'Ore and fuel', keys: ['iron_ore', 'coal', 'iron'] },
-    { uk: 'Шкури', en: 'Hides', keys: ['hides'] },
-  ] },
-  { icon: 'goods', uk: 'Ремісничі вироби', en: 'Crafted goods', sections: [
-    { uk: 'Одяг', en: 'Clothing', keys: ['clothes'] },
-    { uk: 'Спорядження', en: 'Equipment', keys: ['weapons'] },
-  ] },
+interface ResourceGroupDef {
+  icon: ResourceGroupKind;
+  titleKey: keyof TranslationDictionary['hud']['resourceGroups'];
+  sections: {
+    titleKey: keyof TranslationDictionary['hud']['resourceGroups'];
+    keys: (keyof ResourceInventory)[];
+  }[];
+}
+
+const RESOURCE_GROUPS_CONFIG: ResourceGroupDef[] = [
+  {
+    icon: 'construction',
+    titleKey: 'construction',
+    sections: [
+      { titleKey: 'woodworks', keys: ['wood', 'planks'] },
+      { titleKey: 'stoneworks', keys: ['stone', 'cut_stone'] },
+      { titleKey: 'clayAndBricks', keys: ['clay', 'clay_bricks'] },
+    ],
+  },
+  {
+    icon: 'food',
+    titleKey: 'food',
+    sections: [
+      { titleKey: 'prepared', keys: ['bread', 'ale'] },
+      { titleKey: 'animal', keys: ['meat', 'fish', 'eggs'] },
+      { titleKey: 'foraged', keys: ['berries', 'vegetables', 'salt'] },
+    ],
+  },
+  {
+    icon: 'farm',
+    titleKey: 'farm',
+    sections: [
+      { titleKey: 'grain', keys: ['wheat'] },
+      { titleKey: 'milling', keys: ['flour'] },
+    ],
+  },
+  {
+    icon: 'materials',
+    titleKey: 'materials',
+    sections: [
+      { titleKey: 'oreAndFuel', keys: ['iron_ore', 'coal', 'iron'] },
+      { titleKey: 'hides', keys: ['hides'] },
+    ],
+  },
+  {
+    icon: 'goods',
+    titleKey: 'goods',
+    sections: [
+      { titleKey: 'clothing', keys: ['clothes'] },
+      { titleKey: 'equipment', keys: ['weapons'] },
+    ],
+  },
 ];
 
 function HudMetric({ icon, value, title, rows, sections, note, alignRight, onClick }: {
@@ -69,7 +99,6 @@ function HudMetric({ icon, value, title, rows, sections, note, alignRight, onCli
 
 export const TopHUD: React.FC = React.memo(() => {
   const { dict, language } = useTranslation();
-  const isUkr = language === 'uk';
   const { focusTownCenter } = useTownCenterFocus();
   const resources = useGameStore((s) => s.resources);
   const influence = useGameStore((s) => s.influence);
@@ -89,13 +118,13 @@ export const TopHUD: React.FC = React.memo(() => {
     setIsEditingName(false);
   }, [tempName, setSettlementName]);
   const resourceRows = (keys: (keyof ResourceInventory)[]) =>
-    keys.map((key) => ({ label: isUkr ? RESOURCE_UI[key].uk : RESOURCE_UI[key].en, value: resources[key] || 0, icon: RESOURCE_UI[key].icon }));
-  const resourceMetric = (group: typeof RESOURCE_GROUPS[number]) => {
+    keys.map((key) => ({ label: getResourceName(key, language), value: resources[key] || 0, icon: RESOURCE_UI[key].icon }));
+  const resourceMetric = (group: typeof RESOURCE_GROUPS_CONFIG[number]) => {
     const keys = group.sections.flatMap((section) => section.keys);
     const total = keys.reduce((sum, key) => sum + (resources[key] || 0), 0);
     return <HudMetric key={group.icon} icon={<ResourceGroupIcon kind={group.icon} />} value={total.toLocaleString()}
-      title={isUkr ? group.uk : group.en} rows={[]}
-      sections={group.sections.map((section) => ({ title: isUkr ? section.uk : section.en, rows: resourceRows(section.keys) }))} alignRight />;
+      title={dict.hud.resourceGroups[group.titleKey]} rows={[]}
+      sections={group.sections.map((section) => ({ title: dict.hud.resourceGroups[section.titleKey], rows: resourceRows(section.keys) }))} alignRight />;
   };
 
   return (
@@ -104,23 +133,23 @@ export const TopHUD: React.FC = React.memo(() => {
         <div className="manor-spear-inner backdrop-blur-xl flex items-center text-slate-200">
           <div className="hud-metric-group">
             <HudMetric icon={<IlluminatedIcon kind="peasants" />} value={`${freePeasants.length}/${allCharacters.length}`}
-              title={isUkr ? 'Працівники' : 'Workers'}
-              rows={[{ label: isUkr ? 'Вільні' : 'Unassigned', value: freePeasants.length }, { label: isUkr ? 'Працюють' : 'Assigned', value: employedPeasants.length }, { label: isUkr ? 'Усього мешканців' : 'Total population', value: allCharacters.length }]}
-              note={isUkr ? 'Вільні селяни будують споруди й перевозять матеріали.' : 'Unassigned peasants construct buildings and move materials.'} onClick={toggleLordsBar} />
+              title={dict.hud.workers}
+              rows={[{ label: dict.hud.unassigned, value: freePeasants.length }, { label: dict.hud.assigned, value: employedPeasants.length }, { label: dict.hud.totalPopulation, value: allCharacters.length }]}
+              note={dict.hud.workersNote} onClick={toggleLordsBar} />
             <HudMetric icon={<IlluminatedIcon kind="town" />} value={`${housingStats.occupied}/${housingStats.capacity}`}
-              title={isUkr ? 'Житло' : 'Housing'}
-              rows={[{ label: isUkr ? 'Мешканці' : 'Residents', value: housingStats.occupied }, { label: isUkr ? 'Місця' : 'Places', value: housingStats.capacity }, { label: isUkr ? 'Вільні місця' : 'Free places', value: Math.max(0, housingStats.capacity - housingStats.occupied) }]}
+              title={dict.hud.housing}
+              rows={[{ label: dict.hud.residents, value: housingStats.occupied }, { label: dict.hud.places, value: housingStats.capacity }, { label: dict.hud.freePlaces, value: Math.max(0, housingStats.capacity - housingStats.occupied) }]}
               onClick={toggleLordsBar} />
             <HudMetric icon={<IlluminatedIcon kind="approval" />} value={`${approvalRating}%`}
-              title={isUkr ? 'Схвалення' : 'Approval'}
-              rows={[{ label: isUkr ? 'Середній настрій' : 'Average mood', value: `${approvalRating}%` }]}
-              note={isUkr ? 'Схвалення впливає на прибуття нових поселенців.' : 'Approval affects immigration.'} />
+              title={dict.hud.approval}
+              rows={[{ label: dict.hud.averageMood, value: `${approvalRating}%` }]}
+              note={dict.hud.approvalNote} />
             <HudMetric icon={<IlluminatedIcon kind="ox" />} value={`${muleStats.available}/${muleStats.total}`}
-              title={isUkr ? 'Мули' : 'Mules'}
-              rows={[{ label: isUkr ? 'Доступні' : 'Available', value: muleStats.available }, { label: isUkr ? 'У роботі' : 'Working', value: muleStats.inUse }, { label: isUkr ? 'Усього' : 'Total', value: muleStats.total }]} />
+              title={dict.hud.mules}
+              rows={[{ label: dict.hud.available, value: muleStats.available }, { label: dict.hud.working, value: muleStats.inUse }, { label: dict.hud.total, value: muleStats.total }]} />
             <HudMetric icon={<IlluminatedIcon kind="storage" />} value={`${storageUsage.current}/${storageUsage.max}`}
-              title={isUkr ? 'Місткість складів' : 'Storage capacity'}
-              rows={[{ label: isUkr ? 'Зайнято' : 'Used', value: storageUsage.current }, { label: isUkr ? 'Місткість' : 'Capacity', value: storageUsage.max }]} />
+              title={dict.hud.storageCapacity}
+              rows={[{ label: dict.hud.used, value: storageUsage.current }, { label: dict.hud.capacity, value: storageUsage.max }]} />
           </div>
 
           <div className="manor-settlement-slot flex items-stretch justify-center shrink-0 mx-1 self-stretch">
@@ -133,7 +162,7 @@ export const TopHUD: React.FC = React.memo(() => {
           </div>
 
           <div className="hud-metric-group">
-            {RESOURCE_GROUPS.map(resourceMetric)}
+            {RESOURCE_GROUPS_CONFIG.map(resourceMetric)}
           </div>
         </div>
       </div>
@@ -145,8 +174,8 @@ export const TopHUD: React.FC = React.memo(() => {
           </div>
         </div>
         <div className="realm-player-card-details grid grid-cols-2 gap-x-3 gap-y-1 pl-5 min-w-0 text-[11px] text-[#cbbb99]">
-          <span className="flex items-center gap-1" title={`${isUkr ? 'Вплив' : 'Influence'}: ${influence}`}><InfluenceIcon className="w-3.5 h-3.5" />{influence.toLocaleString(isUkr ? 'uk-UA' : 'en-US')}</span>
-          <span className="flex items-center gap-1" title={`${isUkr ? 'Монети' : 'Coins'}: ${resources.gold}`}><GoldIcon className="w-3.5 h-3.5" />{resources.gold.toLocaleString(isUkr ? 'uk-UA' : 'en-US')}</span>
+          <span className="flex items-center gap-1" title={`${dict.hud.influence}: ${influence}`}><InfluenceIcon className="w-3.5 h-3.5" />{influence.toLocaleString(language === 'uk' ? 'uk-UA' : 'en-US')}</span>
+          <span className="flex items-center gap-1" title={`${dict.hud.coins}: ${resources.gold}`}><GoldIcon className="w-3.5 h-3.5" />{resources.gold.toLocaleString(language === 'uk' ? 'uk-UA' : 'en-US')}</span>
         </div>
       </div>
     </header>

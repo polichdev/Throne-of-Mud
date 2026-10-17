@@ -4,12 +4,11 @@ import type { GameEntity } from '../../../engine/ecs/world';
 import { BUILDING_BLUEPRINTS } from '../../../engine/buildings/blueprints';
 import { useGameStore } from '../../../store/useGameStore';
 import { useTranslation } from '../../../i18n';
-import { CrossCloseIcon, PeasantsIcon, TownCenterIcon } from '../MedievalIcons';
-import { IlluminatedIcon } from '../IlluminatedIcons';
+import { CrossCloseIcon, PeasantsIcon, TownCenterIcon } from '../icons';
+import { IlluminatedIcon } from '../icons';
 import { BuildingInspectorIllustration } from './BuildingInspectorIllustration';
-import { HouseTierIcon } from '../MedievalIcons';
+import { HouseTierIcon } from '../icons';
 import { BackyardExtensionIcon } from './BackyardExtensionIcon';
-import { RESOURCE_UI } from '../resourcePresentation';
 import { BACKYARD_EXTENSIONS_CONFIG } from '../../../constants/housing';
 import type { BackyardExtensionType, ResourceInventory } from '../../../types/game';
 import { canUpgradeHouse, toggleBuildingDemolition } from './buildingInspectorActions';
@@ -23,8 +22,7 @@ export function BuildingInspectorWindow({ entity, regionName, isForeign, freePea
   entity: GameEntity; regionName?: string; isForeign: boolean; freePeasantsCount: number;
   children: (tab: BuildingInspectorTab) => ReactNode;
 }) {
-  const { dict, language } = useTranslation();
-  const uk = language === 'uk';
+  const { dict } = useTranslation();
   const blueprint = entity.buildingType ? BUILDING_BLUEPRINTS[entity.buildingType] : undefined;
   const housing = blueprint?.category === 'housing';
   const [tab, setTab] = useState<BuildingInspectorTab>(housing ? 'residential' : 'operations');
@@ -48,11 +46,11 @@ export function BuildingInspectorWindow({ entity, regionName, isForeign, freePea
   const workers = entity.assignedWorkers ?? [];
   const slots = entity.workerSlots ?? blueprint?.workSlots ?? 0;
   const tabs: { id: BuildingInspectorTab; title: string }[] = [
-    ...(housing ? [{ id: 'residential' as const, title: uk ? 'Житло' : 'Residential' }] : []),
-    ...(!housing ? [{ id: 'operations' as const, title: uk ? 'Робота' : 'Operations' }] : []),
-    { id: 'general', title: uk ? 'Загальне' : 'General' },
-    { id: 'people', title: uk ? 'Люди' : 'People' },
-    ...(!isForeign ? [{ id: 'advanced' as const, title: uk ? 'Додатково' : 'Advanced' }] : []),
+    ...(housing ? [{ id: 'residential' as const, title: dict.inspector.tabResidential }] : []),
+    ...(!housing ? [{ id: 'operations' as const, title: dict.inspector.tabOperations }] : []),
+    { id: 'general', title: dict.inspector.tabGeneral },
+    { id: 'people', title: dict.inspector.tabPeople },
+    ...(!isForeign ? [{ id: 'advanced' as const, title: dict.inspector.tabAdvanced }] : []),
   ];
 
   useEffect(() => {
@@ -112,40 +110,40 @@ export function BuildingInspectorWindow({ entity, regionName, isForeign, freePea
         {!isForeign && <button type="button" className="building-inspector-demolish" title={entity.isDemolishing ? dict.inspector.cancelDemolish : dict.inspector.demolishBuilding}
           aria-label={entity.isDemolishing ? dict.inspector.cancelDemolish : dict.inspector.demolishBuilding}
           onClick={() => toggleBuildingDemolition(entity)}><IlluminatedIcon kind="demolish" size={16} /></button>}
-        <button type="button" aria-label={pinned ? (uk ? 'Слідувати за будівлею' : 'Follow building') : (uk ? 'Закріпити вікно' : 'Pin window')}
-          title={pinned ? (uk ? 'Слідувати за будівлею' : 'Follow building') : (uk ? 'Закріпити вікно' : 'Pin window')} aria-pressed={pinned} onClick={togglePin}>
+        <button type="button" aria-label={pinned ? dict.inspector.followBuilding : dict.inspector.pinWindow}
+          title={pinned ? dict.inspector.followBuilding : dict.inspector.pinWindow} aria-pressed={pinned} onClick={togglePin}>
           <IlluminatedIcon kind={pinned ? 'unpin' : 'pin'} size={15} />
         </button>
-        <button type="button" disabled={pinned} title={pinned ? (uk ? 'Спочатку відкріпіть вікно' : 'Unpin the window first') : dict.common.close}
-          aria-label={uk ? 'Закрити вікно будівлі' : 'Close building window'} onClick={() => close(null)}><CrossCloseIcon size={16} /></button>
+        <button type="button" disabled={pinned} title={pinned ? dict.inspector.unpinFirst : dict.common.close}
+          aria-label={dict.inspector.closeBuildingWindow} onClick={() => close(null)}><CrossCloseIcon size={16} /></button>
       </header>
       {entity.buildingType && <div className={`building-inspector-art-wrap ${hasYard && !isForeign ? 'has-extension' : ''} ${hasHouseUpgrade && !isForeign ? 'has-upgrade-control' : ''}`}>
         <BuildingInspectorIllustration type={entity.buildingType} tier={entity.houseTier ?? 1} showSeal={!isForeign} />
         {hasHouseUpgrade && !isForeign && <button type="button"
           className={`building-inspector-seal building-inspector-upgrade-seal ${canUpgrade ? 'is-ready' : ''}`}
           disabled={!canUpgrade}
-          title={canUpgrade ? (uk ? 'Покращити садибу' : 'Upgrade homestead') : (uk ? 'Виконайте вимоги для покращення' : 'Meet upgrade requirements')}
-          aria-label={uk ? 'Покращити садибу' : 'Upgrade homestead'}
+          title={canUpgrade ? dict.inspector.upgradeHomestead : dict.inspector.meetUpgradeRequirements}
+          aria-label={dict.inspector.upgradeHomestead}
           onClick={() => { if (upgradeHouseTier(entity.id)) setExtensionOpen(false); }}>
           <HouseTierIcon size={26} />
         </button>}
         {hasYard && !isForeign && <div className="building-inspector-extension-control">
           <button type="button" className="building-inspector-extension-trigger" aria-expanded={extensionOpen}
-            aria-label={uk ? 'Присадибне господарство' : 'Backyard extension'} onClick={() => setExtensionOpen(!extensionOpen)}>
-            <BackyardExtensionIcon kind={currentExtension.type} size={22} /><span>{entity.backyardExtension && entity.backyardExtension !== 'none' ? (uk ? currentExtension.nameUk : currentExtension.nameEn) : (uk ? 'Обрати господарство' : 'Choose extension')}</span><IlluminatedIcon kind="chevron" size={15} />
+            aria-label={dict.inspector.backyardExtensionLabel} onClick={() => setExtensionOpen(!extensionOpen)}>
+            <BackyardExtensionIcon kind={currentExtension.type} size={22} /><span>{entity.backyardExtension && entity.backyardExtension !== 'none' ? dict.housing.extensions[currentExtension.type]?.name : dict.inspector.chooseExtension}</span><IlluminatedIcon kind="chevron" size={15} />
           </button>
           {extensionOpen && <div className="building-inspector-extension-menu">
             {(Object.keys(BACKYARD_EXTENSIONS_CONFIG) as BackyardExtensionType[]).map(key => {
               const config = BACKYARD_EXTENSIONS_CONFIG[key];
               const enabled = !isForeign && entity.isCompleted && !entity.pendingHouseTier && !entity.pendingBackyardExtension &&
                 (entity.houseTier || 1) >= config.requiredTier && Object.entries(config.cost).every(([res, amount]) => (resources[res as keyof ResourceInventory] || 0) >= (amount || 0));
-              const name = uk ? config.nameUk : config.nameEn;
-              const cost = Object.entries(config.cost).map(([res, amount]) => `${amount} ${uk ? RESOURCE_UI[res as keyof ResourceInventory].uk : RESOURCE_UI[res as keyof ResourceInventory].en}`).join(', ');
+              const name = dict.housing.extensions[key]?.name || key;
+              const cost = Object.entries(config.cost).map(([res, amount]) => `${amount} ${dict.resources[res as keyof ResourceInventory] || res}`).join(', ');
               return <button type="button" key={key} disabled={!enabled || entity.backyardExtension === key}
                 className={entity.backyardExtension === key ? 'selected' : ''}
                 aria-label={name}
                 aria-pressed={entity.backyardExtension === key}
-                data-game-tooltip={`${name}. ${uk ? config.descriptionUk : config.descriptionEn} · ${uk ? 'Рівень' : 'Tier'} ${config.requiredTier} · ${uk ? 'Вартість' : 'Cost'}: ${cost || (uk ? 'безкоштовно' : 'free')}`}
+                data-game-tooltip={`${name}. ${dict.housing.extensions[key]?.description || ''} · ${dict.inspector.tierLabel} ${config.requiredTier} · ${dict.buildings.cost}: ${cost || dict.roads.cost}`}
                 onClick={() => { if (setBackyardExtension(entity.id, key)) setExtensionOpen(false); }}>
                 <BackyardExtensionIcon kind={key} size={42} />
               </button>;
@@ -153,7 +151,7 @@ export function BuildingInspectorWindow({ entity, regionName, isForeign, freePea
           </div>}
         </div>}
       </div>}
-      <nav className="building-inspector-tabs" role="tablist" aria-label={uk ? 'Інформація про будівлю' : 'Building information'}>
+      <nav className="building-inspector-tabs" role="tablist" aria-label={dict.inspector.buildingInfo}>
         {tabs.map((item, index) => <button key={item.id} type="button" role="tab" id={`${contentId}-${item.id}`} aria-selected={tab === item.id}
           aria-controls={contentId} tabIndex={tab === item.id ? 0 : -1} onClick={() => { setTab(item.id); setExtensionOpen(false); }} onKeyDown={event => {
             const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
@@ -175,7 +173,7 @@ export function BuildingInspectorWindow({ entity, regionName, isForeign, freePea
         </div>}
         {children(tab)}
       </div>
-      <footer className="building-inspector-footer"><span>{entity.name}</span><span>{entity.buildingType === 'peasant_house' ? `${uk ? 'Рівень' : 'Tier'} ${entity.houseTier || 1}` : blueprint?.category ? (uk ? 'Поселення' : 'Settlement') : ''}</span></footer>
+      <footer className="building-inspector-footer"><span>{entity.name}</span><span>{entity.buildingType === 'peasant_house' ? `${dict.inspector.tierLabel} ${entity.houseTier || 1}` : blueprint?.category ? dict.inspector.settlementCategory : ''}</span></footer>
     </aside>
   );
 }

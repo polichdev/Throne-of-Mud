@@ -19,8 +19,8 @@ import {
   CrestBadgeIcon,
   MedievalCheckIcon,
   MedievalAlertIcon,
-} from '../MedievalIcons';
-import { IlluminatedIcon } from '../IlluminatedIcons';
+} from '../icons';
+import { IlluminatedIcon } from '../icons';
 import { toggleBuildingDemolition } from './buildingInspectorActions';
 import { useGameStore } from '../../../store/useGameStore';
 import { useTranslation } from '../../../i18n';
@@ -49,7 +49,7 @@ export function BuildingInspectorSection({
   freePeasantsCount,
   lords,
 }: BuildingInspectorSectionProps) {
-  const { dict, language } = useTranslation();
+  const { dict } = useTranslation();
   const resources = useGameStore((s) => s.resources);
   const houseFloorView = useGameStore((s) => s.houseFloorView);
   const setHouseFloorView = useGameStore((s) => s.setHouseFloorView);
@@ -82,9 +82,9 @@ export function BuildingInspectorSection({
   return (
     <div className="building-inspector-content flex flex-col gap-3">
       {(tab === 'residential' || tab === 'operations') && <div className="building-inspector-condition">
-        <div><span>{dict.inspector.status}</span><strong>{entity.isDemolishing ? dict.inspector.demolishingStatus : entity.pendingHouseTier || entity.pendingBackyardExtension ? (language === 'uk' ? 'Покращення' : 'Upgrading') : entity.isCompleted ? dict.buildings.statusCompleted : dict.buildings.statusUnderConstruction}</strong></div>
+        <div><span>{dict.inspector.status}</span><strong>{entity.isDemolishing ? dict.inspector.demolishingStatus : entity.pendingHouseTier || entity.pendingBackyardExtension ? dict.inspector.upgradingStatus : entity.isCompleted ? dict.buildings.statusCompleted : dict.buildings.statusUnderConstruction}</strong></div>
         <div><span>{dict.buildings.hp}</span><strong>{entity.buildingHealth} / {entity.maxBuildingHealth}</strong></div>
-        {(entity.pendingHouseTier || entity.pendingBackyardExtension) && <div><span>{language === 'uk' ? 'Робота' : 'Work'}</span><strong>{Math.round(entity.constructionProgress || 0)}%</strong></div>}
+        {(entity.pendingHouseTier || entity.pendingBackyardExtension) && <div><span>{dict.inspector.workProgress}</span><strong>{Math.round(entity.constructionProgress || 0)}%</strong></div>}
       </div>}
 
       {blueprint && tab === 'general' && (
@@ -95,7 +95,7 @@ export function BuildingInspectorSection({
 
       {tab === 'residential' && bType === 'peasant_house' && (entity.houseTier || 1) >= 2 && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-800/60 bg-slate-950/70 p-2">
-          <span className="text-xs text-amber-200 mr-auto">{language === 'uk' ? 'Огляд поверху' : 'View floor'}</span>
+          <span className="text-xs text-amber-200 mr-auto">{dict.inspector.viewFloor}</span>
           {([1, 2] as const).map((floor) => (
             <button
               key={floor}
@@ -103,7 +103,7 @@ export function BuildingInspectorSection({
               onClick={() => setHouseFloorView(floor)}
               className={`rounded px-2.5 py-1 text-xs font-semibold border ${houseFloorView === floor ? 'bg-amber-800 border-amber-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-300 hover:bg-slate-700'}`}
             >
-              {language === 'uk' ? `${floor} поверх` : `Floor ${floor}`}
+              {dict.inspector.floorNumber(floor)}
             </button>
           ))}
         </div>
@@ -118,14 +118,12 @@ export function BuildingInspectorSection({
                 {dict.inspector.foreignTerritory}
               </div>
               <div className="text-[11px] text-slate-300">
-                {dict.inspector.foreignOwner}: <span className="font-semibold text-amber-300">{ownerLordName || (language === 'uk' ? 'Сусідній правитель' : 'Neighboring Lord')}</span>
+                {dict.inspector.foreignOwner}: <span className="font-semibold text-amber-300">{ownerLordName || dict.inspector.neighborLord}</span>
               </div>
             </div>
           </div>
           <div className="text-[11px] text-slate-400 bg-black/40 p-2 rounded-lg border border-amber-900/40 leading-snug">
-            {language === 'uk'
-              ? `Ця споруда розташована в регіоні ${ownerRegionName || 'Сусідні землі'}. Ви не маєте юрисдикції наймати тут робітників або змінювати платню.`
-              : `This structure is located in ${ownerRegionName || 'neighboring fief'}. You have no jurisdiction to appoint workers or adjust wages here.`}
+            {dict.inspector.foreignJurisdictionWarning(ownerRegionName || dict.strategicMap.neighborFief)}
           </div>
         </div>
       )}
@@ -157,10 +155,10 @@ export function BuildingInspectorSection({
               <div className="bg-slate-900/90 p-2.5 rounded-lg border border-amber-900/40 flex flex-col gap-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-amber-300">
-                    {language === 'uk' ? `Вимоги для рівня ${nextTier}` : `Requirements for tier ${nextTier}`}
+                    {dict.inspector.requirementsForTier(nextTier!)}
                   </span>
                   <span className="text-[10px] text-slate-400 font-mono">
-                    +{nextTierConfig.capacity - tierConfig.capacity} {language === 'uk' ? 'місць' : 'beds'}
+                    +{nextTierConfig.capacity - tierConfig.capacity} {dict.inspector.bedsUnit}
                   </span>
                 </div>
 
@@ -168,15 +166,15 @@ export function BuildingInspectorSection({
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1">
                       {hasEnoughFood ? <MedievalCheckIcon className="w-3.5 h-3.5 text-emerald-400" /> : <MedievalAlertIcon className="w-3.5 h-3.5 text-rose-400" />}
-                      {language === 'uk' ? 'Різноманіття їжі:' : 'Food Diversity:'}
+                      {dict.inspector.foodDiversity}
                     </span>
                     <span className={hasEnoughFood ? 'text-emerald-300 font-mono' : 'text-rose-400 font-mono'}>
-                      {availableFoodsCount} / {nextTierConfig.upgradeMinFoodTypes} {language === 'uk' ? 'видів' : 'types'}
+                      {availableFoodsCount} / {nextTierConfig.upgradeMinFoodTypes} {dict.inspector.typesUnit}
                     </span>
                   </div>
                   <div className="building-inspector-foods">
                     {FOOD_RESOURCE_KEYS.map(key => <span key={key} className={(resources[key] || 0) > 0 ? 'available' : ''}>
-                      <i />{({ bread: language === 'uk' ? 'Хліб' : 'Bread', vegetables: language === 'uk' ? 'Овочі' : 'Vegetables', eggs: language === 'uk' ? 'Яйця' : 'Eggs', meat: language === 'uk' ? 'М’ясо' : 'Meat', fish: language === 'uk' ? 'Риба' : 'Fish', berries: language === 'uk' ? 'Ягоди' : 'Berries' } as Record<string, string>)[key]}
+                      <i />{(dict.inspector as any)[key] || key}
                     </span>)}
                   </div>
 
@@ -184,22 +182,22 @@ export function BuildingInspectorSection({
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1">
                         {hasRequiredGoods ? <MedievalCheckIcon className="w-3.5 h-3.5 text-emerald-400" /> : <MedievalAlertIcon className="w-3.5 h-3.5 text-rose-400" />}
-                        {language === 'uk' ? 'Товари розкоші (ель, одяг):' : 'Luxury Goods (ale, clothes):'}
+                        {dict.inspector.luxuryGoods}
                       </span>
                       <span className={hasRequiredGoods ? 'text-emerald-300' : 'text-rose-400 font-bold'}>
-                        {hasRequiredGoods ? (language === 'uk' ? 'Є' : 'Available') : (language === 'uk' ? 'Бракує' : 'Missing')}
+                        {hasRequiredGoods ? dict.inspector.available : dict.inspector.missing}
                       </span>
                     </div>
                   )}
 
                   <div className="flex items-center justify-between border-t border-slate-800 pt-1 mt-0.5">
-                    <span>{language === 'uk' ? 'Вартість:' : 'Cost:'}</span>
+                    <span>{dict.inspector.costLabel}</span>
                     <div className="flex items-center gap-2 font-mono">
                       {Object.entries(nextTierConfig.upgradeCost).map(([res, amt]) => {
                         const hasRes = (resources[res as keyof ResourceInventory] || 0) >= (amt || 0);
                         return (
                           <span key={res} className={hasRes ? 'text-slate-300' : 'text-rose-400 font-bold'}>
-                            {amt} {res === 'gold' ? 'зол.' : res === 'wood' ? 'дер.' : res === 'stone' ? 'кам.' : res === 'planks' ? 'дощ.' : 'кам.бл.'}
+                            {amt} {res === 'gold' ? dict.strategicMap.goldShort : res}
                           </span>
                         );
                       })}
@@ -212,7 +210,7 @@ export function BuildingInspectorSection({
             ) : (
               <div className="bg-amber-950/30 p-2.5 rounded-lg border border-amber-800/40 text-[11px] text-amber-300 flex items-center gap-2">
                 <CrestBadgeIcon className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>{language === 'uk' ? 'Садиба досягла максимального рівня шляхетного маєтку.' : 'Homestead reached maximum noble estate level.'}</span>
+                <span>{dict.inspector.maxEstateReached}</span>
               </div>
             )}
 
@@ -260,7 +258,7 @@ export function BuildingInspectorSection({
               </div>
             ) : (
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>{language === 'uk' ? 'Наявний запас:' : 'Current Stock:'}</span>
+                <span>{dict.inspector.currentStockLabel}</span>
                 <span className="font-mono font-bold text-slate-500">0 / {maxStorage}</span>
               </div>
             )}
@@ -276,24 +274,18 @@ export function BuildingInspectorSection({
 
             {entity.buildingType === 'stockpile' ? (
               <span className="text-[10px] text-slate-400 leading-tight">
-                {language === 'uk'
-                  ? `Призначені носії (до 4) обходять лісопилки, мисливців та копальні, забираючи ресурси та звозячи їх на склад.`
-                  : `Assigned haulers (up to 4) visit production buildings across the settlement, gathering resources and keeping production flowing.`}
+                {dict.inspector.stockpileHaulerDesc}
               </span>
             ) : isFull ? (
               <div className="text-[10px] text-amber-300 bg-amber-950/40 p-2 rounded-lg border border-amber-800/50 flex flex-col gap-0.5">
                 <span className="font-bold">{dict.buildings.storageFull} ({maxStorage}/{maxStorage})</span>
                 <span className="text-slate-300">
-                  {language === 'uk'
-                    ? 'Сховище заповнене. Призначте робітників на Склад ресурсів, щоб носії автоматично забрали накопичені запаси.'
-                    : 'Storage is full. Assign haulers to the Stockpile to automatically collect accumulated goods.'}
+                  {dict.inspector.storageFullAdvice}
                 </span>
               </div>
             ) : (
               <span className="text-[10px] text-slate-400 leading-tight">
-                {language === 'uk'
-                  ? `Робітники наповнюють внутрішнє сховище (до ${maxStorage} од.). Носії зі складу періодично забирають ресурси.`
-                  : `Workers fill internal storage (up to ${maxStorage} units). Stockpile haulers periodically collect accumulated goods.`}
+                {dict.inspector.workersInternalStorageDesc(maxStorage)}
               </span>
             )}
           </div>
@@ -313,10 +305,10 @@ export function BuildingInspectorSection({
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
                 <HouseTierIcon className="w-3.5 h-3.5 text-amber-400" />
-                {language === 'uk' ? 'Житловий простір' : 'Living Quarters'}
+                {dict.inspector.livingQuarters}
               </span>
               <span className="font-mono text-xs font-bold text-amber-300">
-                {sleepers.length} / {beds} {language === 'uk' ? 'ліжок' : 'beds'}
+                {sleepers.length} / {beds} {dict.inspector.bedsUnit}
               </span>
             </div>
 
@@ -324,7 +316,7 @@ export function BuildingInspectorSection({
             {sleepers.length > 0 && (
               <div className="flex flex-col gap-1 mt-1">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  {language === 'uk' ? 'Зараз відпочивають:' : 'Currently resting:'}
+                  {dict.inspector.currentlyResting}
                 </span>
                 {sleepers.map((sleeper) => (
                   <div key={sleeper.id} className="flex items-center gap-2 bg-slate-900 px-2 py-1 rounded border border-slate-800 text-xs">
@@ -346,18 +338,17 @@ export function BuildingInspectorSection({
       {tab === 'operations' && entity.isCompleted && !isForeign && bType === 'market' && (() => {
         const tradeItems: Array<{
           res: 'wood' | 'stone' | 'wheat' | 'flour' | 'bread' | 'ale';
-          nameUk: string;
-          nameEn: string;
+          name: string;
           buyPrice: number;
           sellPrice: number;
           icon: React.ReactNode;
         }> = [
-          { res: 'wood', nameUk: 'Деревина', nameEn: 'Wood', buyPrice: 3, sellPrice: 1, icon: <WoodIcon className="w-4 h-4 text-amber-500" /> },
-          { res: 'stone', nameUk: 'Камінь', nameEn: 'Stone', buyPrice: 4, sellPrice: 2, icon: <StoneIcon className="w-4 h-4 text-slate-300" /> },
-          { res: 'wheat', nameUk: 'Зерно', nameEn: 'Wheat', buyPrice: 2, sellPrice: 1, icon: <WheatIcon className="w-4 h-4 text-yellow-400" /> },
-          { res: 'flour', nameUk: 'Борошно', nameEn: 'Flour', buyPrice: 3, sellPrice: 2, icon: <FlourIcon className="w-4 h-4 text-slate-100" /> },
-          { res: 'bread', nameUk: 'Хліб', nameEn: 'Bread', buyPrice: 4, sellPrice: 2, icon: <BreadIcon className="w-4 h-4 text-amber-400" /> },
-          { res: 'ale', nameUk: 'Ель', nameEn: 'Ale', buyPrice: 5, sellPrice: 3, icon: <AleIcon className="w-4 h-4 text-amber-300" /> },
+          { res: 'wood', name: dict.common.wood, buyPrice: 3, sellPrice: 1, icon: <WoodIcon className="w-4 h-4 text-amber-500" /> },
+          { res: 'stone', name: dict.common.stone, buyPrice: 4, sellPrice: 2, icon: <StoneIcon className="w-4 h-4 text-slate-300" /> },
+          { res: 'wheat', name: (dict.hud as any).wheat || 'Wheat', buyPrice: 2, sellPrice: 1, icon: <WheatIcon className="w-4 h-4 text-yellow-400" /> },
+          { res: 'flour', name: (dict.hud as any).flour || 'Flour', buyPrice: 3, sellPrice: 2, icon: <FlourIcon className="w-4 h-4 text-slate-100" /> },
+          { res: 'bread', name: dict.hud.bread, buyPrice: 4, sellPrice: 2, icon: <BreadIcon className="w-4 h-4 text-amber-400" /> },
+          { res: 'ale', name: (dict.hud as any).ale || 'Ale', buyPrice: 5, sellPrice: 3, icon: <AleIcon className="w-4 h-4 text-amber-300" /> },
         ];
 
         const handleBuy = (item: typeof tradeItems[0], qty: number) => {
@@ -388,7 +379,7 @@ export function BuildingInspectorSection({
             <div className="flex items-center justify-between border-b border-emerald-900/60 pb-2">
               <span className="text-[12px] font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
                 <ScalesIcon className="w-4 h-4 text-emerald-400" />
-                {language === 'uk' ? 'Торгові лави ринку' : 'Market Trading Stalls'}
+                {dict.inspector.marketStalls}
               </span>
               <span className="text-[11px] font-mono font-bold text-amber-300 flex items-center gap-1">
                 <GoldIcon className="w-3.5 h-3.5 text-yellow-400" />
@@ -415,11 +406,11 @@ export function BuildingInspectorSection({
                           {item.icon}
                         </div>
                         <span className="font-semibold text-slate-200">
-                          {language === 'uk' ? item.nameUk : item.nameEn}
+                          {item.name}
                         </span>
                       </div>
                       <span className="font-mono text-slate-300">
-                        {language === 'uk' ? 'Склад:' : 'Stock:'}{' '}
+                        {dict.inspector.stockLabel}{' '}
                         <span className="font-bold text-amber-300">{stock}</span>
                       </span>
                     </div>
@@ -494,24 +485,24 @@ export function BuildingInspectorSection({
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-950/80 border border-amber-700/60 text-amber-200">
                 {caravanStatus.state === 'trading'
-                  ? (language === 'uk' ? 'Угода' : 'Deal')
+                  ? dict.inspector.deal
                   : caravanStatus.state === 'approaching'
-                  ? (language === 'uk' ? 'В дорозі' : 'En route')
-                  : (language === 'uk' ? 'Очікування' : 'Awaiting')}
+                  ? dict.inspector.enRoute
+                  : dict.inspector.awaiting}
               </span>
             </div>
 
             <div className="text-[11px] text-slate-300 bg-black/40 p-2 rounded-lg border border-slate-800 flex flex-col gap-1">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">{language === 'uk' ? 'Купець:' : 'Merchant:'}</span>
-                <span className="font-semibold text-amber-200">{caravanStatus.merchantName || 'Альбрехт'}</span>
+                <span className="text-slate-400">{dict.inspector.merchantLabel}</span>
+                <span className="font-semibold text-amber-200">{caravanStatus.merchantName || dict.inspector.defaultMerchantName}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">{language === 'uk' ? 'Графік прибуття:' : 'Schedule:'}</span>
+                <span className="text-slate-400">{dict.inspector.scheduleLabel}</span>
                 <span className="font-mono text-emerald-400 font-bold">{caravanStatus.nextArrivalHour ?? 12}:{String(caravanStatus.nextArrivalMinute ?? 0).padStart(2, '0')}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">{language === 'uk' ? 'Активних угод:' : 'Active rules:'}</span>
+                <span className="text-slate-400">{dict.inspector.activeRulesLabel}</span>
                 <span className="font-mono text-amber-300 font-bold">{activeRules.length}</span>
               </div>
             </div>
@@ -535,7 +526,7 @@ export function BuildingInspectorSection({
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
               <GoatIcon className="w-3.5 h-3.5 text-amber-400" />
-              {language === 'uk' ? 'Робочі мули' : 'Pack Mules'}
+              {dict.inspector.packMules}
             </span>
             <span className="font-mono text-xs font-bold text-amber-300">
               {entity.mulesCount ?? 1} / {entity.maxMules ?? 3}
@@ -565,9 +556,9 @@ export function BuildingInspectorSection({
                   <span className="text-[9px] font-semibold">
                     {isPresent
                       ? isWorking
-                        ? (language === 'uk' ? 'У рейсі' : 'Hauling')
-                        : (language === 'uk' ? 'Вільний' : 'Available')
-                      : (language === 'uk' ? 'Порожньо' : 'Empty')}
+                        ? dict.inspector.haulingStatus
+                        : dict.inspector.availableStatus
+                      : dict.inspector.emptyStatus}
                   </span>
                 </div>
               );
@@ -596,7 +587,7 @@ export function BuildingInspectorSection({
                   : 'bg-slate-800/40 text-slate-500 border-slate-750 cursor-not-allowed'
               }`}
             >
-              {language === 'uk' ? 'Купити мула (50' : 'Buy Mule (50'}
+              {dict.inspector.buyMule}
               <GoldIcon className="w-3.5 h-3.5 text-amber-400" />
               {')'}
             </button>
@@ -658,7 +649,7 @@ export function BuildingInspectorSection({
                 }`}
               >
                 <IlluminatedIcon kind="plus" className="w-3.5 h-3.5" />
-                {dict.inspector.assignWorker} ({freePeasantsCount} {language === 'uk' ? 'вільних' : 'idle'})
+                {dict.inspector.assignWorker} ({freePeasantsCount} {dict.inspector.idleWorkers})
               </button>
             )}
           </div>
@@ -683,14 +674,14 @@ export function BuildingInspectorSection({
             <option value="">{dict.buildings.noLordAssigned}</option>
             {lords.map((lord) => (
               <option key={lord.id} value={lord.id}>
-                {lord.name} (+{Math.min(100, 50 + (lord.skills?.intellect || 5) * 5)}% {language === 'uk' ? 'виробництво' : 'production'})
+                {lord.name} (+{Math.min(100, 50 + (lord.skills?.intellect || 5) * 5)}% {dict.inspector.productionLabel})
               </option>
             ))}
           </select>
 
           {entity.assignedLordId && (
             <div className="text-[10px] text-emerald-400 bg-emerald-950/30 p-1.5 rounded border border-emerald-900/40">
-              {language === 'uk' ? 'Лорд наглядає за виробництвом: швидкість збільшено!' : 'Lord is supervising production: output boosted!'}
+              {dict.inspector.productionSupervised}
             </div>
           )}
         </div>
@@ -731,7 +722,7 @@ export function BuildingInspectorSection({
               </button>
             </div>
             <span className="text-[10px] text-slate-400">
-              {language === 'uk' ? 'Мотивація робітників' : 'Worker incentive'}
+              {dict.inspector.workerIncentive}
             </span>
           </div>
         </div>

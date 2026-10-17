@@ -12,7 +12,7 @@ import {
   WheatIcon,
   HammerIcon,
   SlumberMoonIcon,
-} from './MedievalIcons';
+} from './icons';
 
 export const LordsBar: React.FC = React.memo(() => {
   const { dict } = useTranslation();
@@ -77,7 +77,7 @@ export const LordsBar: React.FC = React.memo(() => {
               statusText = dict.lordsBar.restingStatus;
               isSleeping = true;
             } else if (lord.currentJob?.type === 'sit_by_fire') {
-              statusText = 'Біля вогнища';
+              statusText = dict.lordsBar.byCampfire;
             } else if (lord.currentJob?.type === 'wander') {
               statusText = dict.lordsBar.inspectingStatus;
             }

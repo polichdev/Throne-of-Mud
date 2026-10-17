@@ -11,11 +11,11 @@ import {
   WeatherStormIcon,
   WeatherSnowIcon,
   CompassIcon,
-} from '../MedievalIcons';
+} from '../icons';
 import { Pause, SlidersHorizontal } from 'lucide-react';
 
 export const TimeControlsWidget: React.FC = React.memo(() => {
-  const { dict, language } = useTranslation();
+  const { dict } = useTranslation();
 
   const isPaused = useGameStore((s) => s.time.isPaused);
   const speedMultiplier = useGameStore((s) => s.time.speedMultiplier);
@@ -76,7 +76,7 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
         <button type="button"
           onClick={() => setIsWeatherDebugOpen(true)}
           className="ui-tip-anchor flex items-center gap-1.5 cursor-pointer hover:bg-slate-800/80 px-1.5 py-0.5 rounded-lg transition"
-          data-ui-tip={`${currentWeatherInfo.label}${nextWeather ? ` • ${language === 'uk' ? 'Далі' : 'Next'}: ${weatherIcons[nextWeather]?.label || nextWeather}` : ''}`}
+          data-ui-tip={`${currentWeatherInfo.label}${nextWeather ? ` • ${dict.timeControls.nextWeatherLabel}: ${weatherIcons[nextWeather]?.label || nextWeather}` : ''}`}
           aria-label={currentWeatherInfo.label}
         >
           <CurrentWeatherIcon className={`w-3.5 h-3.5 ${currentWeatherInfo.color} drop-shadow`} />
@@ -96,8 +96,8 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
         <button
           onClick={() => setIsWeatherDebugOpen(true)}
           className="ui-tip-anchor p-1 rounded-lg text-amber-400 hover:text-amber-200 hover:bg-amber-950/70 transition border border-transparent hover:border-amber-600/50 ml-0.5 cursor-pointer"
-          data-ui-tip={language === 'uk' ? 'Пори року та погода (F2)' : 'Seasons & Weather (F2)'}
-          aria-label={language === 'uk' ? 'Пори року та погода' : 'Seasons and Weather'}
+          data-ui-tip={dict.timeControls.seasonsWeatherTip}
+          aria-label={dict.timeControls.seasonsWeatherLabel}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
         </button>
@@ -111,8 +111,8 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
               ? 'bg-amber-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          data-ui-tip={language === 'uk' ? 'Пауза (Пробіл)' : 'Pause (Space)'}
-          aria-label={language === 'uk' ? 'Пауза' : 'Pause'}
+          data-ui-tip={dict.timeControls.pauseTip}
+          aria-label={dict.timeControls.pauseLabel}
           aria-pressed={isPaused}
         >
           <Pause className="w-3.5 h-3.5" />
@@ -125,8 +125,8 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
               ? 'bg-amber-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          data-ui-tip={language === 'uk' ? '1× Звичайна швидкість' : '1× Normal Speed'}
-          aria-label={language === 'uk' ? 'Звичайна швидкість' : 'Normal speed'}
+          data-ui-tip={dict.timeControls.speed1Tip}
+          aria-label={dict.timeControls.speed1Label}
           aria-pressed={!isPaused && speedMultiplier === 1}
         >
           1x
@@ -139,8 +139,8 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
               ? 'bg-amber-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          data-ui-tip={language === 'uk' ? '2× Прискорена' : '2× Fast Speed'}
-          aria-label={language === 'uk' ? 'Подвійна швидкість' : 'Double speed'}
+          data-ui-tip={dict.timeControls.speed2Tip}
+          aria-label={dict.timeControls.speed2Label}
           aria-pressed={!isPaused && speedMultiplier === 2}
         >
           2x
@@ -153,8 +153,8 @@ export const TimeControlsWidget: React.FC = React.memo(() => {
               ? 'bg-amber-600 text-white shadow'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
-          data-ui-tip={language === 'uk' ? '5× Максимальна' : '5× Maximum Speed'}
-          aria-label={language === 'uk' ? 'П’ятикратна швидкість' : 'Fivefold speed'}
+          data-ui-tip={dict.timeControls.speed5Tip}
+          aria-label={dict.timeControls.speed5Label}
           aria-pressed={!isPaused && speedMultiplier === 5}
         >
           5x
