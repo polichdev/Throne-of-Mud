@@ -35,7 +35,7 @@ registerHooks({
 });
 
 const { createRoot, extend, advance } = await import('@react-three/fiber');
-const { UnitsRenderer } = await import('../src/components/canvas/UnitsRenderer.tsx');
+const { UnitsRenderer } = await import('../src/components/canvas/units/UnitsRenderer.tsx');
 const { AnimatedMeshBatches } = await import('../src/components/canvas/units/AnimatedMeshBatches.ts');
 const { BuildingMeshBatches } = await import('../src/components/canvas/buildings/BuildingMeshBatches.ts');
 const { registerColorBatchMaterial } = await import('../src/components/canvas/performance/colorBatchMaterials.ts');

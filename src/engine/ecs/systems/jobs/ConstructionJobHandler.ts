@@ -15,6 +15,11 @@ import { BOT_IMMIGRANT_INITIAL_STATS } from '../../../../constants/world';
 import { translations } from '../../../../i18n';
 
 export class ConstructionJobHandler {
+  private static getTranslations() {
+    const lang = useGameStore.getState().language;
+    return translations[lang] || translations.uk || translations.en;
+  }
+
   public static handleConstructionProgress(
     unit: GameEntity,
     job: Job,
@@ -31,15 +36,17 @@ export class ConstructionJobHandler {
       unit.isHaulingLog = false;
     }
 
+    const dict = ConstructionJobHandler.getTranslations();
+
     if (job.type === 'build_structure' && currentTick % CONSTRUCTION_SPEECH_INTERVAL === 0) {
       unit.speechBubble = {
-        text: translations[useGameStore.getState().language].chronicle.buildingStructureSpeech,
+        text: dict.chronicle.buildingStructureSpeech,
         expiresAtTick: currentTick + CONSTRUCTION_SPEECH_DURATION_TICKS,
         type: 'work',
       };
     } else if (job.type === 'demolish_structure' && currentTick % CONSTRUCTION_SPEECH_INTERVAL === 0) {
       unit.speechBubble = {
-        text: translations[useGameStore.getState().language].chronicle.demolishingStructureSpeech,
+        text: dict.chronicle.demolishingStructureSpeech,
         expiresAtTick: currentTick + CONSTRUCTION_SPEECH_DURATION_TICKS,
         type: 'work',
       };
@@ -153,13 +160,15 @@ export class ConstructionJobHandler {
         bEnt.deliveredMaterials = undefined;
         incrementBuildingVersion();
 
+        const dict = ConstructionJobHandler.getTranslations();
+
         if (isPlayerUnit) {
-          const dict = translations[useGameStore.getState().language].chronicle;
+          const chronicleDict = dict.chronicle;
           addChronicleEvent({
-            title: upgradedTier || upgradedYard ? dict.upgradeCompletedTitle : dict.constructionCompletedTitle,
+            title: upgradedTier || upgradedYard ? chronicleDict.upgradeCompletedTitle : chronicleDict.constructionCompletedTitle,
             description: upgradedTier || upgradedYard
-              ? dict.manorUpgradedDesc(bEnt.name || '')
-              : dict.buildingConstructedDesc(bEnt.name || ''),
+              ? chronicleDict.manorUpgradedDesc(bEnt.name || '')
+              : chronicleDict.buildingConstructedDesc(bEnt.name || ''),
             type: 'success',
           });
         } else if (bEnt.factionId && bEnt.factionId.startsWith('bot-')) {
@@ -169,8 +178,8 @@ export class ConstructionJobHandler {
               const newPId = `unit-${bEnt.factionId}-immigrant-${Date.now() % 1000}`;
               world.add({
                 id: newPId,
-                name: `${translations[useGameStore.getState().language].menu.peasantWalker} (${reg.lordName})`,
-                title: translations[useGameStore.getState().language].menu.peasantWalker,
+                name: `${dict.menu.peasantWalker} (${reg.lordName})`,
+                title: dict.menu.peasantWalker,
                 characterClass: 'peasant',
                 avatarColor: reg.heraldryColor,
                 isCharacter: true,
@@ -200,7 +209,7 @@ export class ConstructionJobHandler {
         }
 
         unit.speechBubble = {
-          text: translations[useGameStore.getState().language].chronicle.buildingCompletedSpeech,
+          text: dict.chronicle.buildingCompletedSpeech,
           expiresAtTick: currentTick + CONSTRUCTION_SPEECH_DURATION_TICKS,
           type: 'work',
         };
@@ -282,9 +291,9 @@ export class ConstructionJobHandler {
       useGameStore.getState().setSelectedEntityId(null);
     }
 
+    const dict = ConstructionJobHandler.getTranslations();
+
     if (isPlayerUnit) {
-      const lang = useGameStore.getState().language;
-      const dict = translations[lang];
       const refundsText = [
         refundWood + storedWood > 0 ? `+${refundWood + storedWood} ${dict.resources.wood.toLowerCase()}` : '',
         refundStone > 0 ? `+${refundStone} ${dict.resources.stone.toLowerCase()}` : '',
@@ -302,7 +311,7 @@ export class ConstructionJobHandler {
     }
 
     unit.speechBubble = {
-      text: translations[useGameStore.getState().language].chronicle.dismantleCompletedSpeech,
+      text: dict.chronicle.dismantleCompletedSpeech,
       expiresAtTick: currentTick + CONSTRUCTION_SPEECH_DURATION_TICKS,
       type: 'work',
     };

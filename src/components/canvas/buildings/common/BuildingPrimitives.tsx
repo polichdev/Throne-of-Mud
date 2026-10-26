@@ -321,7 +321,7 @@ export function MedievalWindow({
 
     let fGeo: THREE.BufferGeometry | null = null;
     if (hasFlowerBox) {
-      const leaves = new THREE.BoxGeometry(width * 0.9, 0.06, 0.12).translate(0, -height / 2 - 0.12 + 0.06, 0.18);
+      const leaves = new THREE.BoxGeometry(width * 0.9, 0.06, 0.12).translate(0, -height / 2 - 0.12 + 0.06, 0.18).toNonIndexed();
       const f1 = new THREE.DodecahedronGeometry(0.04, 0).translate(-width * 0.25, -height / 2 - 0.12 + 0.11, 0.18);
       const f2 = new THREE.DodecahedronGeometry(0.04, 0).translate(width * 0.25, -height / 2 - 0.12 + 0.11, 0.18);
       const f3 = new THREE.DodecahedronGeometry(0.04, 0).translate(0, -height / 2 - 0.12 + 0.12, 0.18);

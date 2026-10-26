@@ -1,4 +1,5 @@
 import { DEFAULT_CAMERA_ZOOM } from '../../constants/camera';
+import { FOLIAGE_PAGING } from '../../constants/rendering';
 import { useMemo, useLayoutEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -1016,7 +1017,7 @@ function populateBucketFoliage(
 
   useFrame(() => {
     const curZoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
-    const curShowGrass = curZoom >= 11;
+    const curShowGrass = curZoom >= FOLIAGE_PAGING.grassZoomThreshold;
 
     const camTarget = (window as any).__lastCameraTarget as [number, number] | undefined;
     const camX = camTarget ? camTarget[0] : grid.width / 2;
@@ -1026,7 +1027,7 @@ function populateBucketFoliage(
     const curSeason = time?.season || 'Spring';
     const isWinterSeason = curSeason === 'Winter';
 
-    const halfSpan = Math.max(54, Math.min(80, Math.ceil((1800 / curZoom) + 14)));
+    const halfSpan = Math.max(FOLIAGE_PAGING.minSpan, Math.min(FOLIAGE_PAGING.maxSpan, Math.ceil((FOLIAGE_PAGING.zoomScale / curZoom) + FOLIAGE_PAGING.spanMargin)));
     const minX = Math.max(0, camX - halfSpan);
     const maxX = Math.min(grid.width, camX + halfSpan);
     const minZ = Math.max(0, camZ - halfSpan);
@@ -1037,11 +1038,12 @@ function populateBucketFoliage(
     const minBz = Math.max(0, Math.floor(minZ / BUCKET_SIZE));
     const maxBz = Math.min(rows - 1, Math.floor(maxZ / BUCKET_SIZE));
 
+    const hysteresis = FOLIAGE_PAGING.bucketHysteresis;
     const boundsChanged =
-      minBx !== lastUpdateRef.current.minBx ||
-      maxBx !== lastUpdateRef.current.maxBx ||
-      minBz !== lastUpdateRef.current.minBz ||
-      maxBz !== lastUpdateRef.current.maxBz;
+      Math.abs(minBx - lastUpdateRef.current.minBx) >= hysteresis ||
+      Math.abs(maxBx - lastUpdateRef.current.maxBx) >= hysteresis ||
+      Math.abs(minBz - lastUpdateRef.current.minBz) >= hysteresis ||
+      Math.abs(maxBz - lastUpdateRef.current.maxBz) >= hysteresis;
 
     const seasonChanged = curSeason !== lastUpdateRef.current.season;
     const grassToggled = curShowGrass !== lastUpdateRef.current.showGrass;

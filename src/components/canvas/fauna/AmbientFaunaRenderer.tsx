@@ -1,4 +1,5 @@
 import { DEFAULT_CAMERA_ZOOM } from '../../../constants/camera';
+import { FAUNA_LOD } from '../../../constants/rendering';
 import { memo, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -229,7 +230,7 @@ function BirdFlockGroup({ flock, grid }: { flock: BirdFlock; grid: GridMap }) {
     const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
     if (camTarget) {
       const distSq = (fx - camTarget[0]) ** 2 + (fz - camTarget[1]) ** 2;
-      const maxDist = Math.max(30, (900 / zoom) + 12);
+      const maxDist = Math.max(FAUNA_LOD.flockMinDistance, (FAUNA_LOD.flockZoomScale / zoom) + FAUNA_LOD.flockMargin);
       if (distSq > maxDist * maxDist) {
         groupRef.current.visible = false;
         return;
@@ -317,7 +318,7 @@ function DeerHerdMember({ deer, grid }: { deer: DeerAnimal; grid: GridMap }) {
     const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
     if (camTarget) {
       const distSq = (deer.x - camTarget[0]) ** 2 + (deer.z - camTarget[1]) ** 2;
-      const maxDist = Math.max(26, (900 / zoom) + 8);
+      const maxDist = Math.max(FAUNA_LOD.minDistance, Math.min(FAUNA_LOD.maxDistance, (FAUNA_LOD.zoomScale / zoom) + FAUNA_LOD.margin));
       const isVis = distSq < maxDist * maxDist;
       rootRef.current.visible = isVis;
       if (!isVis) return;
@@ -448,7 +449,7 @@ function HareAnimalMember({ hare, grid }: { hare: HareAnimal; grid: GridMap }) {
     const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
     if (camTarget) {
       const distSq = (hare.x - camTarget[0]) ** 2 + (hare.z - camTarget[1]) ** 2;
-      const maxDist = Math.max(26, (900 / zoom) + 8);
+      const maxDist = Math.max(FAUNA_LOD.minDistance, Math.min(FAUNA_LOD.maxDistance, (FAUNA_LOD.zoomScale / zoom) + FAUNA_LOD.margin));
       const isVis = distSq < maxDist * maxDist;
       rootRef.current.visible = isVis;
       if (!isVis) return;
@@ -571,7 +572,7 @@ function FoxAnimalMember({ fox, grid }: { fox: FoxAnimal; grid: GridMap }) {
     const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
     if (camTarget) {
       const distSq = (fox.x - camTarget[0]) ** 2 + (fox.z - camTarget[1]) ** 2;
-      const maxDist = Math.max(26, (900 / zoom) + 8);
+      const maxDist = Math.max(FAUNA_LOD.minDistance, Math.min(FAUNA_LOD.maxDistance, (FAUNA_LOD.zoomScale / zoom) + FAUNA_LOD.margin));
       const isVis = distSq < maxDist * maxDist;
       rootRef.current.visible = isVis;
       if (!isVis) return;
@@ -689,7 +690,7 @@ function BoarAnimalMember({ boar, grid }: { boar: BoarAnimal; grid: GridMap }) {
     const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
     if (camTarget) {
       const distSq = (boar.x - camTarget[0]) ** 2 + (boar.z - camTarget[1]) ** 2;
-      const maxDist = Math.max(26, (900 / zoom) + 8);
+      const maxDist = Math.max(FAUNA_LOD.minDistance, Math.min(FAUNA_LOD.maxDistance, (FAUNA_LOD.zoomScale / zoom) + FAUNA_LOD.margin));
       const isVis = distSq < maxDist * maxDist;
       rootRef.current.visible = isVis;
       if (!isVis) return;

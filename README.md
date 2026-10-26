@@ -37,7 +37,7 @@ The current game includes a 384×384 world with six regions, 33 building bluepri
 
 ### State Management & Architecture
 - **Zustand v5 (Slice Pattern)**: Game state is divided into `timeSlice`, `settlementSlice`, `diplomacySlice`, `uiSlice`, and `audioSlice`.
-- **Project Modules**: React UI and 3D renderers live in `src/components/`, simulation and pathfinding in `src/engine/`, state in `src/store/`, translations in `src/i18n/`, and save handling in `src/services/storage/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the architecture guide.
+- **Project Modules**: React UI and 3D renderers live in `src/components/`, simulation and pathfinding in `src/engine/`, state in `src/store/`, translations in `src/i18n/`, and save handling in `src/services/storage/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/STRUCTURE.md](docs/STRUCTURE.md) for the architecture and module layout guides.
 
 ### UI, Audio & Storage
 - **React 19, Tailwind CSS v4 & Lucide React**: Medieval HUD, building and character inspectors, parchment menus, custom icons, and asset folders for buildings, militia, portraits, cursors, textures, and branding under `public/assets/ui/`.
@@ -45,6 +45,28 @@ The current game includes a 384×384 world with six regions, 33 building bluepri
 - **Ukrainian and English (`src/i18n/`)**: Interface translations, with localized speech bubbles and diplomatic letters.
 - **IndexedDB (`saveManager.ts`)**: Manual and automatic local saves of the world, entities, resources, and progress; language and audio preferences use `localStorage`.
 - **Vite 8, Oxlint & Electron 44**: Browser development and production builds, linting, and Windows desktop packaging through electron-builder.
+
+---
+
+## Documentation & Architecture Specifications
+
+Throne of Mud is backed by a modular engineering documentation suite:
+
+### Core Architecture
+- **[System Architecture](docs/ARCHITECTURE.md)**: 5-tier decoupled architecture, layer boundaries, and dataflow diagrams.
+- **[Repository Structure](docs/STRUCTURE.md)**: Complete project directory tree, responsibilities, and boundary invariants.
+- **[Simulation Tick Lifecycle](docs/SIMULATION_TICK.md)**: Fixed-timestep game loop, system dispatch order, interval staggering, and spiral-of-death protections.
+- **[Performance Budget & Invariants](docs/PERFORMANCE_BUDGET.md)**: Hardware targets, frame budgets ($\le 16.6\text{ ms}$), draw call ceilings ($\le 65$), and zero-allocation hot loop rules.
+- **[Failures & Resilience](docs/FAILURES_AND_RECOVERY.md)**: WebGL context loss recovery, IndexedDB transaction rollbacks, and stuck-agent failovers.
+- **[Save Format Specification](docs/SAVE_FORMAT.md)**: IndexedDB schema, entity dehydration, and backward-compatible migrations.
+
+### Subsystem Guides
+- **[ECS Core Architecture](docs/systems/ECS_CORE.md)**: Miniplex v2 archetype queries, component taxonomy, and lifecycle helpers.
+- **[3D Render Pipeline & Shaders](docs/systems/RENDER_PIPELINE.md)**: Multi-texture terrain splatting, instanced building multi-draw, and dynamic weather shaders.
+- **[A* Pathfinding Engine](docs/systems/PATHFINDING.md)**: Flat typed array buffers, monotonic run IDs, and dynamic perimeter door routing.
+- **[Economy, Jobs & Logistics](docs/systems/ECONOMY_AND_JOBS.md)**: 33 building blueprints, supply chains, mule hauling, and Royal Highway trade.
+- **[Autonomous Rival Lords & AI](docs/systems/BOT_AI.md)**: Decision cycles for 4 autonomous lords, road paving, and bandit raiding logic.
+- **[Web Audio & Spatial Sound](docs/systems/AUDIO_ENGINE.md)**: Web Audio API bus routing, 3D listener orientation, and dynamic area soundscapes.
 
 ---
 
@@ -161,6 +183,15 @@ For the desktop version, run `npm run electron:dev` during development or `npm r
 # Run ultra-fast Oxlint check
 npm run lint
 ```
+
+---
+
+## Community & Project Standards
+
+- **[Contributing Guide](CONTRIBUTING.md)**: Development setup, coding standards, performance assertions, and pull request workflow.
+- **[Changelog](CHANGELOG.md)**: Version history, features, performance optimizations, and bug fixes following Keep a Changelog.
+- **[Security Policy](SECURITY.md)**: Threat model, IndexedDB/Electron attack surfaces, and vulnerability reporting.
+- **[Code of Conduct](CODE_OF_CONDUCT.md)**: Contributor Covenant standard.
 
 ---
 

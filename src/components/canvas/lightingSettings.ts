@@ -121,7 +121,7 @@ export function createLightingColors() {
 }
 
 export const LIGHTING = {
-  shadowRecenterDistance: 10,
+  shadowRecenterDistance: 24,
   initialTarget: [24, 24] as [number, number],
   sunOffset: [18, 36, 20] as [number, number, number],
   ambientIntensity: 0.48,

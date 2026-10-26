@@ -3,10 +3,12 @@ import { cacheBatchedDrawList } from '../performance/batchedDrawCache';
 import { isGroundShadow } from '../performance/groundShadows';
 import { getColorBatchMaterial } from '../performance/colorBatchMaterials';
 
+const IDENTITY_MAT = new THREE.Matrix4();
+
 interface Part { source: THREE.Mesh; geometry: THREE.BufferGeometry; material: THREE.Material; color?: THREE.Color; }
 interface Binding { source: THREE.Mesh; id: number; initialized: boolean; enabled: boolean | null; color?: THREE.Color; }
 interface Batch { mesh: THREE.BatchedMesh; geometries: string; bindings: Binding[]; visibleCount: number; }
-interface Source { mesh: THREE.Mesh; bindings: { batch: Batch; binding: Binding }[]; world: THREE.Matrix4; initialized: boolean; safe: boolean; }
+interface Source { mesh: THREE.Mesh; bindings: { batch: Batch; binding: Binding }[]; world: THREE.Matrix4; initialized: boolean; safe: boolean; direct: boolean; }
 interface Branch { root: THREE.Object3D; sources: Source[]; visible: boolean | null; }
 
 export class BuildingMeshBatches {
@@ -85,6 +87,7 @@ export class BuildingMeshBatches {
         mesh.renderOrder = source.renderOrder; mesh.layers.mask = this.originalLayers.get(source) ?? source.layers.mask;
         mesh.frustumCulled = false;
         mesh.perObjectFrustumCulled = source.frustumCulled;
+        mesh.sortObjects = Boolean(parts[0].material.transparent);
         mesh.raycast = () => {};
         const ids = new Map(geometries.map(geo => [geo, mesh.addGeometry(geo)]));
         batch = { mesh, geometries: signature, bindings: [], visibleCount: 0 };
@@ -116,10 +119,12 @@ export class BuildingMeshBatches {
         if (binding.enabled) batch.visibleCount++;
         let source = sources.get(binding.source);
         if (!source) {
-          source = this.sources.get(binding.source) ?? { mesh: binding.source, bindings: [], world: new THREE.Matrix4(), initialized: false, safe: true };
-          source.bindings = []; sources.set(binding.source, source);
           let branchRoot: THREE.Object3D = binding.source;
           while (branchRoot.parent && branchRoot.parent !== root) branchRoot = branchRoot.parent;
+          const direct = binding.source.parent === branchRoot;
+          source = this.sources.get(binding.source) ?? { mesh: binding.source, bindings: [], world: new THREE.Matrix4(), initialized: false, safe: true, direct };
+          source.direct = direct;
+          source.bindings = []; sources.set(binding.source, source);
           let branch = branches.get(branchRoot);
           if (!branch) { branch = { root: branchRoot, sources: [], visible: null }; branches.set(branchRoot, branch); }
           branch.sources.push(source);
@@ -140,19 +145,24 @@ export class BuildingMeshBatches {
     const moved = !this.groupWorld.equals(this.group.matrixWorld);
     if (moved) this.inverse.copy(this.group.matrixWorld).invert();
     this.groupWorld.copy(this.group.matrixWorld);
+    const isIdentity = IDENTITY_MAT.equals(this.group.matrixWorld);
     for (const branch of this.branches) {
       const branchVisible = branch.root.parent === root && branch.root.visible;
       if (!branchVisible && branch.visible === false) continue;
       branch.visible = branchVisible;
+      if (branchVisible) this.visibility.set(branch.root, { epoch: this.epoch, visible: true });
       for (const source of branch.sources) {
-        const visible = branchVisible && this.visibleWithinRoot(source.mesh);
+        const visible = branchVisible && (source.direct ? source.mesh.visible : this.visibleWithinRoot(source.mesh));
         const changed = visible && (!source.initialized || !source.world.equals(source.mesh.matrixWorld));
         if (changed) {
           source.world.copy(source.mesh.matrixWorld); source.initialized = true;
           source.safe = batchableTransform(source.world);
         }
         const enabled = visible && source.safe;
-        if (visible) source.mesh.layers.mask = source.safe ? 0 : this.originalLayers.get(source.mesh)!;
+        if (visible) {
+          const targetMask = source.safe ? 0 : this.originalLayers.get(source.mesh)!;
+          if (source.mesh.layers.mask !== targetMask) source.mesh.layers.mask = targetMask;
+        }
         let transformed = false;
         for (const { batch, binding } of source.bindings) {
           if (binding.enabled !== enabled) {
@@ -162,7 +172,11 @@ export class BuildingMeshBatches {
           }
           if (!enabled) continue;
           if (!binding.initialized || changed || moved) {
-            if (!transformed) { this.local.multiplyMatrices(this.inverse, source.world); transformed = true; }
+            if (!transformed) {
+              if (isIdentity) this.local.copy(source.world);
+              else this.local.multiplyMatrices(this.inverse, source.world);
+              transformed = true;
+            }
             batch.mesh.setMatrixAt(binding.id, this.local); binding.initialized = true;
           }
         }
@@ -194,8 +208,11 @@ export class BuildingMeshBatches {
 }
 
 function batchableTransform(matrix: THREE.Matrix4) {
-  if (matrix.determinant() <= 0) return false;
   const m = matrix.elements;
+  const det = m[0] * (m[5] * m[10] - m[9] * m[6]) -
+              m[1] * (m[4] * m[10] - m[8] * m[6]) +
+              m[2] * (m[4] * m[9] - m[8] * m[5]);
+  if (det <= 0) return false;
   const xx = m[0] ** 2 + m[1] ** 2 + m[2] ** 2, yy = m[4] ** 2 + m[5] ** 2 + m[6] ** 2, zz = m[8] ** 2 + m[9] ** 2 + m[10] ** 2;
   const xy = m[0] * m[4] + m[1] * m[5] + m[2] * m[6], xz = m[0] * m[8] + m[1] * m[9] + m[2] * m[10], yz = m[4] * m[8] + m[5] * m[9] + m[6] * m[10];
   return xy * xy < xx * yy * 1e-10 && xz * xz < xx * zz * 1e-10 && yz * yz < yy * zz * 1e-10;

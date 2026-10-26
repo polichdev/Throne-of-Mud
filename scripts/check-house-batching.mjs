@@ -34,7 +34,7 @@ registerHooks({
     } else if (filename.endsWith('/buildings/models/index.ts')) {
       const rendererSource = fs.readFileSync(path.join(root, 'src/components/canvas/BuildingsRenderer.tsx'), 'utf8');
       const names = rendererSource.match(/import \{([^}]+)\} from '\.\/buildings\/models';/)[1].split(',').map(name => name.trim()).filter(Boolean);
-      source = "export { PeasantHouseModel } from './PeasantHouseModel.tsx';\n" + names.filter(name => name !== 'PeasantHouseModel').map(name => `export const ${name} = () => null;`).join('\n');
+      source = "export { PeasantHouseModel } from './housing/PeasantHouseModel.tsx';\n" + names.filter(name => name !== 'PeasantHouseModel').map(name => `export const ${name} = () => null;`).join('\n');
     } else if (filename.endsWith('/buildings/InstancedWallsRenderer.tsx')) {
       source = 'export const InstancedWallsRenderer = () => null;';
     } else if (/\.(ts|tsx)$/.test(filename) && filename.startsWith(root.replaceAll('\\', '/'))) {
@@ -53,7 +53,7 @@ registerHooks({
   },
 });
 
-const house = await import('../src/components/canvas/buildings/models/PeasantHouseModel.tsx');
+const house = await import('../src/components/canvas/buildings/models/housing/PeasantHouseModel.tsx');
 const { mergeStaticMeshParts } = await import('../src/components/canvas/buildings/staticMeshParts.ts');
 const { makeHouseBatches, getHouseWorldMatrix, HouseBatchCache } = await import('../src/components/canvas/buildings/InstancedHousesRenderer.tsx');
 const { SHARED_BUILDING_MATS } = await import('../src/components/canvas/buildings/buildingMaterials.ts');
