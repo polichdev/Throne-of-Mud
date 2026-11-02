@@ -54,10 +54,17 @@ registerHooks({
 });
 
 const house = await import('../src/components/canvas/buildings/models/housing/PeasantHouseModel.tsx');
+const { getBackyardAnimalPose } = await import('../src/components/canvas/buildings/models/housing/BackyardExtensionModel.tsx');
 const { mergeStaticMeshParts } = await import('../src/components/canvas/buildings/staticMeshParts.ts');
 const { makeHouseBatches, getHouseWorldMatrix, HouseBatchCache } = await import('../src/components/canvas/buildings/InstancedHousesRenderer.tsx');
 const { SHARED_BUILDING_MATS } = await import('../src/components/canvas/buildings/buildingMaterials.ts');
 const yards = ['none', 'vegetable_garden', 'chicken_coop', 'goat_shed', 'artisan_bowyer', 'artisan_shields', 'artisan_brewery'];
+const reusableAnimalPose = { x: 0, z: 0, angle: 0, stride: 0, bob: 0, peck: 0 };
+for (const time of [0, 3, 11, 16, 23.4]) {
+  const expected = getBackyardAnimalPose(1, time);
+  assert.strictEqual(getBackyardAnimalPose(1, time, reusableAnimalPose), reusableAnimalPose);
+  assert.deepEqual(reusableAnimalPose, expected, 'Reused animal animation state preserves poses');
+}
 
 function rawExpand(type, props) {
   if (type === house.HouseFacade) return React.createElement(React.Fragment, null,
@@ -435,6 +442,39 @@ const { HouseMultiDrawBatches } = await import('../src/components/canvas/buildin
 const staticHouses = new HouseMultiDrawBatches();
 staticHouses.sync(batches, false); staticHouses.update(undefined, 38);
 assert.equal(staticHouses.group.children.length, 20, '100 houses share material draws across four spatial chunks');
+assert.ok(staticHouses.group.children.every(mesh => mesh.sortObjects === mesh.material.transparent), 'Only transparent house batches need instance depth sorting');
+const dayHouseBuffers = staticHouses.group.children.map(mesh => [mesh.uuid, mesh._matricesTexture, mesh._indirectTexture, mesh.material]);
+staticHouses.setNight(true);
+assert.ok(staticHouses.group.children.some((mesh, i) => mesh.material !== dayHouseBuffers[i][3]), 'Night switches window materials');
+staticHouses.group.children.forEach((mesh, i) => {
+  assert.equal(mesh.uuid, dayHouseBuffers[i][0], 'Night preserves the batch');
+  assert.strictEqual(mesh._matricesTexture, dayHouseBuffers[i][1], 'Night preserves matrix buffers');
+  assert.strictEqual(mesh._indirectTexture, dayHouseBuffers[i][2], 'Night preserves draw-list buffers');
+});
+staticHouses.setNight(false);
+assert.ok(staticHouses.group.children.every((mesh, i) => mesh.material === dayHouseBuffers[i][3]), 'Day restores original materials');
+if (process.env.PROFILE_HOUSES === '1') {
+  const profileScene = new THREE.Scene(); profileScene.add(staticHouses.group);
+  const camera = new THREE.OrthographicCamera(-80, 80, 80, -80, .1, 500);
+  camera.position.set(50, 100, 50); camera.lookAt(25, 0, 25); camera.updateMatrixWorld();
+  profileScene.updateMatrixWorld();
+  const meshes = staticHouses.group.children;
+  const measure = sorted => {
+    for (const mesh of meshes) mesh.sortObjects = sorted;
+    let elapsed = 0;
+    for (let i = 0; i < 100; i++) {
+      camera.position.x = 50 + i * .01; camera.updateMatrixWorld();
+      const start = performance.now();
+      for (const mesh of meshes) mesh.onBeforeRender(renderer, profileScene, camera, mesh.geometry, mesh.material, null);
+      elapsed += performance.now() - start;
+    }
+    return elapsed / 100;
+  };
+  const sorted = measure(true), unsorted = measure(false);
+  console.log(JSON.stringify({ houseDrawListMs: { sorted, unsorted }, houses: 100,
+    excludes: 'GPU, WebGL submission, browser and other scene objects' }));
+  staticHouses.setNight(false);
+}
 console.log(`100-house multi-draw: ${draws} -> ${staticHouses.group.children.length} static material draws.`);
 staticHouses.dispose();
 
@@ -538,6 +578,8 @@ assert.deepEqual(reused, owned, 'Unchanged layout keeps batch buffers and skips 
 __houseTestState.time.hour = 21;
 multiScene = await drawMulti(mixed);
 worldParity(renderParts(multiScene).filter(part => part.mesh.isBatchedMesh), houseReference(mixed), 'Night windows preserve all house geometry');
+const nightBuffers = []; multiScene.traverse(mesh => { if (mesh.isBatchedMesh) nightBuffers.push([mesh.uuid, mesh._matricesTexture.version]); });
+assert.deepEqual(nightBuffers, owned, 'Day-to-night changes keep all batch objects and matrix uploads');
 window.__lastCameraTarget = [65, 5];
 multiScene = await drawMulti(mixed);
 worldParity(renderParts(multiScene).filter(part => part.mesh.isBatchedMesh), houseReference(mixed), 'Camera return restores exact spatial chunks');
@@ -551,6 +593,24 @@ clickable.__r3f.handlers.onPointerDown({ button: 0, instanceId: multiHits[0].ins
 assert.equal(selected, 'multi-replacement');
 multiScene = await drawMulti([]);
 assert.equal(renderParts(multiScene).length, 0, 'Removing all houses clears owned batches');
+const effectHouses = Array.from({ length: 100 }, (_, i) => ({ id: `effects-${i}`, houseTier: 1,
+  backyardExtension: 'none', position: [i % 10, 0, Math.floor(i / 10)] }));
+window.__lastCameraTarget = [0, 0];
+await drawMulti(effectHouses.slice(0, 2));
+const twoHouseSubscribers = multiState.getState().internal.subscribers.length;
+multiScene = await drawMulti(effectHouses);
+assert.equal(multiState.getState().internal.subscribers.length, twoHouseSubscribers,
+  'One shared visibility callback handles 100 house effects without adding per-house callbacks');
+const effectGroups = [];
+multiScene.traverse(object => { if (object.name === 'house-effects') effectGroups.push(object); });
+assert.equal(effectGroups.length, 100);
+assert.ok(effectGroups.every(group => group.visible), 'Nearby house effects are visible');
+window.__lastCameraTarget = [1000, 1000];
+await React.act(async () => { advance(++multiFrame, false, multiState.getState()); });
+assert.ok(effectGroups.every(group => !group.visible), 'Distant house effects are hidden together');
+window.__lastCameraTarget = [0, 0];
+await React.act(async () => { advance(++multiFrame, false, multiState.getState()); });
+assert.ok(effectGroups.every(group => group.visible), 'Effects reappear when the camera returns');
 await React.act(async () => { multiRoot.unmount(); });
 console.log('House multi-draw: geometry/UV/normals/shadows, night, culling, buffer reuse, collider and StrictMode cleanup passed.');
 

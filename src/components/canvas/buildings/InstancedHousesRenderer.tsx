@@ -146,31 +146,37 @@ function HouseMultiDrawRenderer({ batches, isNight, onSelect }: { batches: House
   useLayoutEffect(() => {
     const root = ref.current;
     if (!root) return;
-    meshes.sync(batches, isNight);
+    meshes.sync(batches, false);
     meshes.update((window as any).__lastCameraTarget, (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM);
     root.add(meshes.group);
     return () => { root.remove(meshes.group); meshes.dispose(); };
-  }, [meshes, batches, isNight]);
+  }, [meshes, batches]);
+  useLayoutEffect(() => { meshes.setNight(isNight); }, [meshes, isNight, batches]);
   useFrame(() => meshes.update((window as any).__lastCameraTarget, (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM));
   return <group ref={ref} dispose={null}>
     {batches.filter(batch => batch.kind === 'house').map(batch => <HouseColliderChunk key={batch.key} batch={batch} onSelect={onSelect} />)}
   </group>;
 }
 
-function HouseEffects({ building }: { building: GameEntity }) {
-  const ref = useRef<THREE.Group>(null);
-  const matrix = getHouseWorldMatrix(building);
+function HouseEffects({ buildings }: { buildings: GameEntity[] }) {
+  const groups = useRef(new Map<string, THREE.Group>());
   useFrame(() => {
-    if (!ref.current) return;
     const target = (window as any).__lastCameraTarget;
     if (!target) return;
     const zoom = (window as any).__lastCameraZoom || DEFAULT_CAMERA_ZOOM;
     const distance = getBuildingVisibilityDistance(zoom);
-    ref.current.visible = (matrix.elements[12] - target[0]) ** 2 + (matrix.elements[14] - target[1]) ** 2 < distance ** 2;
+    const distanceSquared = distance * distance;
+    for (const group of groups.current.values()) {
+      const matrix = group.matrix.elements;
+      group.visible = (matrix[12] - target[0]) ** 2 + (matrix[14] - target[1]) ** 2 < distanceSquared;
+    }
   });
-  return <group ref={ref} matrix={matrix} matrixAutoUpdate={false}>
+  return <>{buildings.map(building => <group key={building.id} name="house-effects" ref={group => {
+    if (group) groups.current.set(building.id, group);
+    else groups.current.delete(building.id);
+  }} matrix={getHouseWorldMatrix(building)} matrixAutoUpdate={false}>
     <PeasantHouseEffects buildingId={building.id} tier={building.houseTier || 1} backyard={building.backyardExtension || 'none'} />
-  </group>;
+  </group>)}</>;
 }
 
 export function InstancedHousesRenderer({ buildings, onSelect }: { buildings: GameEntity[]; onSelect: (id: string) => void }) {
@@ -182,6 +188,6 @@ export function InstancedHousesRenderer({ buildings, onSelect }: { buildings: Ga
   return <group>
     {multiDraw ? <HouseMultiDrawRenderer batches={batches} isNight={isNight} onSelect={onSelect} />
       : batches.map(batch => <HouseBatchMeshes key={batch.key} batch={batch} isNight={isNight} onSelect={onSelect} />)}
-    {buildings.map(building => <HouseEffects key={building.id} building={building} />)}
+    <HouseEffects buildings={buildings} />
   </group>;
 }

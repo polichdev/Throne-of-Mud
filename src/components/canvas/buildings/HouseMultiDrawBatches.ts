@@ -22,6 +22,7 @@ export class HouseMultiDrawBatches {
   readonly group = new THREE.Group();
   private chunks: Chunk[] = [];
   private visibleCounts = new Map<THREE.BatchedMesh, number>();
+  private materialBindings: { mesh: THREE.BatchedMesh; original: THREE.Material }[] = [];
 
   sync(batches: HouseBatch[], isNight: boolean) {
     this.dispose();
@@ -30,7 +31,7 @@ export class HouseMultiDrawBatches {
       const chunk: Chunk = { matrices: batch.buildings.map(getHouseWorldMatrix), bindings: [], visible: null };
       this.chunks.push(chunk);
       for (const part of batch.parts) {
-        const material = getPeasantHouseExteriorMaterial(part.material, isNight);
+        const material = part.material;
         const schema = Object.entries(part.geometry.attributes).sort(([a], [b]) => a.localeCompare(b))
           .map(([name, attr]) => `${name}:${attr.itemSize}:${attr.normalized}:${attr.array.constructor.name}`).join(',');
         const key = `${material.uuid}:${part.castShadow}:${part.receiveShadow}:${schema}`;
@@ -52,6 +53,8 @@ export class HouseMultiDrawBatches {
         prepared.reduce((total, geometry) => total + geometry.attributes.position.count, 0),
         prepared.reduce((total, geometry) => total + geometry.index!.count, 0), parts[0].material);
       mesh.castShadow = parts[0].castShadow; mesh.receiveShadow = parts[0].receiveShadow;
+      mesh.sortObjects = Boolean(parts[0].material.transparent);
+      this.materialBindings.push({ mesh, original: parts[0].material });
       mesh.frustumCulled = false; mesh.raycast = () => {};
       const ids = new Map(originals.map((geometry, i) => [geometry, mesh.addGeometry(prepared[i])]));
       for (const part of parts) for (const matrix of part.chunk.matrices) {
@@ -59,8 +62,17 @@ export class HouseMultiDrawBatches {
         mesh.setMatrixAt(id, matrix); part.chunk.bindings.push({ mesh, id });
       }
       prepared.forEach(geometry => geometry.dispose());
-      cacheBatchedDrawList(mesh);
+      cacheBatchedDrawList(mesh, 1);
       this.visibleCounts.set(mesh, 0); this.group.add(mesh);
+    }
+    this.setNight(isNight);
+  }
+
+  setNight(isNight: boolean) {
+    for (const { mesh, original } of this.materialBindings) {
+      const material = getPeasantHouseExteriorMaterial(original, isNight);
+      if (mesh.material !== material) mesh.material = material;
+      mesh.sortObjects = material.transparent;
     }
   }
 
@@ -81,6 +93,6 @@ export class HouseMultiDrawBatches {
 
   dispose() {
     for (const mesh of this.visibleCounts.keys()) mesh.dispose();
-    this.group.clear(); this.visibleCounts.clear(); this.chunks = [];
+    this.group.clear(); this.visibleCounts.clear(); this.chunks = []; this.materialBindings = [];
   }
 }
