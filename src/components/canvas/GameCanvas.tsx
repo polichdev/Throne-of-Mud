@@ -37,6 +37,7 @@ import {
 
 interface Props {
   grid: GridMap;
+  showPerformanceMetrics: boolean;
 }
 
 function GameLoopSync({ grid }: { grid: GridMap }) {
@@ -49,7 +50,7 @@ function GameLoopSync({ grid }: { grid: GridMap }) {
   return null;
 }
 
-export function GameCanvas({ grid }: Props) {
+export function GameCanvas({ grid, showPerformanceMetrics }: Props) {
   const [worldInteractive, setWorldInteractive] = useState(false);
   const playerSpawnPoint = useGameStore((state) => state.playerSpawnPoint);
   const cameraFocusTarget = useGameStore((state) => state.cameraFocusTarget);
@@ -126,7 +127,7 @@ export function GameCanvas({ grid }: Props) {
           <AmbientFaunaRenderer grid={grid} />
           <StablePointLights />
           <SpatialAudioListener />
-          <RendererMetrics />
+          {showPerformanceMetrics && <RendererMetrics />}
         </Suspense>
       </Canvas>
     </div>

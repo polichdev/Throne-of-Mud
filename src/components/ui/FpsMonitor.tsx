@@ -32,6 +32,8 @@ export const FpsMonitor: React.FC = React.memo(() => {
     cpuSubmissionMs: null as number | null,
     cpuPreparationMs: null as number | null,
     sampledDrawCalls: 0,
+    sampledDrawKinds: null as { batched: number; instanced: number; other: number } | null,
+    sampledShadowCalls: null as number | null,
     cpuFramePeakMs: null as number | null,
     cpuRenderPeakMs: null as number | null,
     simulationPeakMs: null as number | null,
@@ -48,6 +50,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
     activePointLights: 0,
     pointLightSlots: 0,
     registeredPointLights: 0,
+    multiDrawSupported: null as boolean | null,
   });
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -77,6 +80,8 @@ export const FpsMonitor: React.FC = React.memo(() => {
       cpuSubmissionMs: null,
       cpuPreparationMs: null,
       sampledDrawCalls: 0,
+      sampledDrawKinds: null,
+      sampledShadowCalls: null,
       cpuFramePeakMs: null,
       cpuRenderPeakMs: null,
       simulationPeakMs: null,
@@ -93,6 +98,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
       activePointLights: 0,
       pointLightSlots: 0,
       registeredPointLights: 0,
+      multiDrawSupported: null,
     });
   }, []);
 
@@ -156,7 +162,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
           const minFps = Math.round(1000 / (maxFt || 16.6));
           const renderMetrics = (window as any).__renderMetrics as { calls?: number; triangles?: number; geometries?: number; textures?: number; programs?: number; cpuFrameMs?: number; cpuRenderMs?: number; cpuMatrixMs?: number; cpuBatchMs?: number; cpuRenderOtherMs?: number; cpuSubmissionMs?: number | null; cpuPreparationMs?: number | null; sampledDrawCalls?: number; cpuFramePeakMs?: number; cpuRenderPeakMs?: number; simulationPeakMs?: number; shadowRefreshes?: number; gpuMs?: number | null; gpuSupported?: boolean } | undefined;
           const simulationMs = Number(((window as any).__simulationMs || 0).toFixed(1));
-          const lifecycle = (window as any).__renderMetrics as { frameSubscribers?: number; renderTasks?: number; sceneObjects?: number; activePointLights?: number; pointLightSlots?: number; registeredPointLights?: number } | undefined;
+          const lifecycle = (window as any).__renderMetrics as { frameSubscribers?: number; renderTasks?: number; sceneObjects?: number; activePointLights?: number; pointLightSlots?: number; registeredPointLights?: number; multiDrawSupported?: boolean; sampledDrawKinds?: { batched: number; instanced: number; other: number } | null; sampledShadowCalls?: number | null } | undefined;
           const memory = (performance as any).memory;
           const heapMb = memory?.usedJSHeapSize ? Math.round(memory.usedJSHeapSize / (1024 * 1024)) : 0;
 
@@ -177,6 +183,8 @@ export const FpsMonitor: React.FC = React.memo(() => {
             cpuSubmissionMs: renderMetrics?.cpuSubmissionMs ?? null,
             cpuPreparationMs: renderMetrics?.cpuPreparationMs ?? null,
             sampledDrawCalls: renderMetrics?.sampledDrawCalls ?? 0,
+            sampledDrawKinds: lifecycle?.sampledDrawKinds ?? null,
+            sampledShadowCalls: lifecycle?.sampledShadowCalls ?? null,
             cpuFramePeakMs: renderMetrics?.cpuFramePeakMs ?? null,
             cpuRenderPeakMs: renderMetrics?.cpuRenderPeakMs ?? null,
             simulationPeakMs: renderMetrics?.simulationPeakMs ?? null,
@@ -193,6 +201,7 @@ export const FpsMonitor: React.FC = React.memo(() => {
             activePointLights: lifecycle?.activePointLights ?? 0,
             pointLightSlots: lifecycle?.pointLightSlots ?? 0,
             registeredPointLights: lifecycle?.registeredPointLights ?? 0,
+            multiDrawSupported: lifecycle?.multiDrawSupported ?? null,
           });
 
           const canvas = canvasRef.current;
@@ -487,6 +496,12 @@ export const FpsMonitor: React.FC = React.memo(() => {
             <div title={m.frameSubscribersTip}>{m.frameTasks}: {stats.frameSubscribers}/{stats.renderTasks}</div>
             <div title={m.sceneObjectsTip}>{m.sceneObjects}: {stats.sceneObjects}</div>
             <div title={m.lightsTip(stats.registeredPointLights)}>{m.lights}: {stats.activePointLights}/{stats.pointLightSlots}</div>
+          </div>
+          <div className="text-center text-[9px] font-mono text-stone-300" title="WEBGL_multi_draw">
+            Multi-draw: {stats.multiDrawSupported === null ? '—' : stats.multiDrawSupported ? 'ON' : 'OFF'}
+          </div>
+          <div className="text-center text-[9px] font-mono text-stone-300" title="Sampled renderBufferDirect calls: batched / instanced / other; includes shadow passes">
+            Draw B/I/O: {stats.sampledDrawKinds ? `${stats.sampledDrawKinds.batched}/${stats.sampledDrawKinds.instanced}/${stats.sampledDrawKinds.other}` : '—'} · Shadow: {stats.sampledShadowCalls ?? '—'}
           </div>
 
           <div className="flex flex-col gap-1">

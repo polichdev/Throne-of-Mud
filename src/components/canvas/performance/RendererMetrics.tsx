@@ -15,7 +15,7 @@ export function RendererMetrics() {
     let frame = 0, frameStarted = 0, cpuRenderMs = 0, lastPublish = 0;
     let rendered = false;
     let measuring = false, cpuMatrixMs = 0, cpuBatchMs = 0;
-    let submissionSample: { cpuMs: number; preparationMs: number; calls: number; timestamp: number } | null = null;
+    let submissionSample: { cpuMs: number; preparationMs: number; calls: number; timestamp: number; kinds: { batched: number; instanced: number; other: number }; shadowCalls: number; shadowCpuMs: number } | null = null;
     const originalMatrices = trackedScene.updateMatrixWorld;
     const measuredMatrices: typeof originalMatrices = function (this: THREE.Scene, force) {
       if (!measuring) return originalMatrices.call(this, force);
@@ -25,6 +25,7 @@ export function RendererMetrics() {
     };
     trackedScene.updateMatrixWorld = measuredMatrices;
     let gpuMs: number | null = null;
+    let sceneObjects = 0, lastSceneObjectSample = -Infinity;
     let cpuFramePeakMs = 0, cpuRenderPeakMs = 0, simulationPeakMs = 0, shadowRefreshes = 0;
     const before = addEffect(() => { frameStarted = performance.now(); cpuRenderMs = 0; cpuMatrixMs = 0; cpuBatchMs = 0; rendered = false; });
     const measuredRender: typeof gl.render = function (scene, camera) {
@@ -34,7 +35,7 @@ export function RendererMetrics() {
       if (gl.shadowMap.enabled && (gl.shadowMap.needsUpdate || gl.shadowMap.autoUpdate)) shadowRefreshes++;
       measuring = true;
       const matrixBefore = cpuMatrixMs;
-      let submission: { cpuMs: number; calls: number } | null = null;
+      let submission: { cpuMs: number; calls: number; kinds: { batched: number; instanced: number; other: number }; shadowCalls: number; shadowCpuMs: number } | null = null;
       try {
         if (frame % RENDERING.submissionSampleFrames === 0) submission = measureRenderSubmission(gl, () => originalRender.call(gl, scene, camera));
         else originalRender.call(gl, scene, camera);
@@ -56,8 +57,11 @@ export function RendererMetrics() {
       simulationPeakMs = Math.max(simulationPeakMs, (window as any).__simulationMs || 0);
       if (now - lastPublish < RENDERING.metricsPublishMs) return;
       lastPublish = now;
-      let sceneObjects = 0;
-      trackedScene.traverse(() => { sceneObjects++; });
+      if (now - lastSceneObjectSample >= RENDERING.sceneObjectSampleMs) {
+        sceneObjects = 0;
+        trackedScene.traverse(() => { sceneObjects++; });
+        lastSceneObjectSample = now;
+      }
       const lights = getScenePointLightPool(trackedScene).diagnostics;
       (window as any).__renderMetrics = {
         frameSubscribers: get().internal.subscribers.length,
@@ -66,6 +70,7 @@ export function RendererMetrics() {
         activePointLights: lights.active,
         pointLightSlots: lights.slots,
         registeredPointLights: lights.registered,
+        multiDrawSupported: gl.extensions.has('WEBGL_multi_draw'),
         calls: gl.info.render.calls,
         triangles: gl.info.render.triangles,
         geometries: gl.info.memory.geometries,
@@ -79,6 +84,9 @@ export function RendererMetrics() {
         cpuSubmissionMs: submissionSample && now - submissionSample.timestamp < RENDERING.submissionSampleMaxAgeMs ? submissionSample.cpuMs : null,
         cpuPreparationMs: submissionSample && now - submissionSample.timestamp < RENDERING.submissionSampleMaxAgeMs ? submissionSample.preparationMs : null,
         sampledDrawCalls: submissionSample?.calls ?? 0,
+        sampledDrawKinds: submissionSample && now - submissionSample.timestamp < RENDERING.submissionSampleMaxAgeMs ? submissionSample.kinds : null,
+        sampledShadowCalls: submissionSample && now - submissionSample.timestamp < RENDERING.submissionSampleMaxAgeMs ? submissionSample.shadowCalls : null,
+        sampledShadowSubmissionMs: submissionSample && now - submissionSample.timestamp < RENDERING.submissionSampleMaxAgeMs ? submissionSample.shadowCpuMs : null,
         cpuFramePeakMs,
         cpuRenderPeakMs,
         simulationPeakMs,

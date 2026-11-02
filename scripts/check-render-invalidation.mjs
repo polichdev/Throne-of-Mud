@@ -67,9 +67,18 @@ const measured = measureRenderSubmission(renderer, () => {
   clock += 10; renderer.renderBufferDirect(...argumentsPassed);
   clock += 7; renderer.renderBufferDirect(...argumentsPassed);
 }, () => clock);
-assert.deepEqual(measured, { cpuMs: 4, calls: 2 }, 'Submission probe excludes render-list work outside draw calls');
+assert.deepEqual(measured, { cpuMs: 4, calls: 2, kinds: { batched: 0, instanced: 0, other: 2 }, shadowCalls: 0, shadowCpuMs: 0 }, 'Submission probe excludes render-list work outside draw calls');
 assert.deepEqual(received, argumentsPassed, 'Original renderer receives all original arguments');
 assert.strictEqual(renderer.renderBufferDirect, originalSubmission, 'Native method is restored between samples');
+const categories = measureRenderSubmission(renderer, () => {
+  renderer.renderBufferDirect(...argumentsPassed.slice(0, 4), { isBatchedMesh: true }, null);
+  renderer.renderBufferDirect(...argumentsPassed.slice(0, 4), { isInstancedMesh: true }, null);
+  renderer.renderBufferDirect(...argumentsPassed);
+  renderer.renderBufferDirect(argumentsPassed[0], null, ...argumentsPassed.slice(2));
+}, () => clock);
+assert.deepEqual(categories.kinds, { batched: 1, instanced: 1, other: 2 }, 'Probe classifies draw submissions by object type');
+assert.equal(categories.shadowCalls, 1, 'Probe distinguishes Three shadow-pass submissions');
+assert.equal(categories.shadowCpuMs, 2, 'Probe tracks shadow submission time separately');
 assert.throws(() => measureRenderSubmission(renderer, () => { throw new Error('render failed'); }, () => clock), /render failed/);
 assert.strictEqual(renderer.renderBufferDirect, originalSubmission, 'Failed render still restores native method');
 const alternate = () => {};
