@@ -121,7 +121,7 @@ export function MedievalDoor({
 
   useFrame((_, delta) => {
     if (!rootRef.current || !leftHingeRef.current) return;
-    if (!rootRef.current.visible) return;
+    if (!isObjectEffectivelyVisible(rootRef.current)) return;
     const currentZoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
     if (currentZoom < 42) {
       if (leftHingeRef.current.rotation.y !== 0) leftHingeRef.current.rotation.y = 0;
@@ -447,15 +447,16 @@ export function ChimneySmoke({
 }) {
   const mats = SHARED_BUILDING_MATS;
   const groupRef = useRef<THREE.Group>(null);
+  const puffsRef = useRef<THREE.InstancedMesh>(null);
+  const puffTransform = useMemo(() => new THREE.Object3D(), []);
   const frameCount = useRef(0);
   const worldPos = useMemo(() => new THREE.Vector3(), []);
   const cachedPos = useRef<[number, number] | null>(null);
   const wasEnabled = useRef(false);
 
-  const materials = [mats.smokeWhite, mats.smokeWhite];
-
   useFrame(({ clock }) => {
-    if (!groupRef.current) return;
+    if (!groupRef.current || !puffsRef.current) return;
+    if (groupRef.current.parent && !isObjectEffectivelyVisible(groupRef.current.parent)) return;
     const currentZoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
     const state = useGameStore.getState();
     const hasSmoke = residentialBuildingId === undefined || residentialSmokeState.hasSleepingResident(
@@ -487,10 +488,9 @@ export function ChimneySmoke({
     if (frameCount.current % 2 !== 0) return;
 
     const t = clock.getElapsedTime();
-    const children = groupRef.current.children;
-    const count = children.length;
+    const count = 2;
     for (let i = 0; i < count; i++) {
-      const puff = children[i] as THREE.Mesh;
+      const puff = puffTransform;
       const prog = (t * 0.22 + i / count) % 1.0;
       const y = 0.02 + Math.pow(prog, 0.85) * 2.85;
 
@@ -517,17 +517,16 @@ export function ChimneySmoke({
       } else if (prog > 0.35) {
         opacity = 0.42 * Math.pow((1.0 - prog) / 0.65, 1.4);
       }
-      if (puff.material && !Array.isArray(puff.material)) {
-        (puff.material as THREE.MeshStandardMaterial).opacity = Math.max(0, opacity);
-      }
+      mats.smokeWhite.opacity = Math.max(0, opacity);
+      puff.updateMatrix();
+      puffsRef.current.setMatrixAt(i, puff.matrix);
     }
+    puffsRef.current.instanceMatrix.needsUpdate = true;
   });
 
   return (
     <group ref={groupRef} position={position} visible={false}>
-      {materials.map((mat, i) => (
-        <mesh key={`cs-${i}`} geometry={smokeClumpGeometry} material={mat} />
-      ))}
+      <instancedMesh ref={puffsRef} name="chimney-smoke" args={[smokeClumpGeometry, mats.smokeWhite, 2]} frustumCulled={false} />
     </group>
   );
 }
@@ -710,7 +709,7 @@ export function GothicPortal({
 
   useFrame((_, delta) => {
     if (!rootRef.current || !leftHingeRef.current || !rightHingeRef.current) return;
-    if (!rootRef.current.visible) return;
+    if (!isObjectEffectivelyVisible(rootRef.current)) return;
     const currentZoom = (window as any).__lastCameraZoom ?? DEFAULT_CAMERA_ZOOM;
     if (currentZoom < 26) return;
 

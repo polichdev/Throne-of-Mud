@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { SHARED_BUILDING_MATS } from '../../buildingMaterials';
+import { isObjectEffectivelyVisible } from '../../common/BuildingPrimitives';
 import { characterEntities } from '../../../../../engine/ecs/world';
 import type { GameEntity } from '../../../../../engine/ecs/world';
 
@@ -33,6 +34,7 @@ function TiedMule({
   const tailRef = useRef<THREE.Group>(null);
 
   useFrame(({ clock }) => {
+    if (!headRef.current || !isObjectEffectivelyVisible(headRef.current)) return;
     const t = clock.getElapsedTime() + headOffset;
     if (headRef.current) {
       headRef.current.rotation.x = Math.sin(t * 1.5) * 0.06 + 0.05;
@@ -58,7 +60,7 @@ function TiedMule({
           <boxGeometry args={[0.16, 0.28, 0.18]} />
         </mesh>
 
-        <group ref={headRef} position={[0, 0.26, -0.12]}>
+        <group ref={headRef} name="tied-mule-head" position={[0, 0.26, -0.12]}>
           <mesh material={MULE_MATS.muleCoat} position={[0, 0, -0.06]} castShadow>
             <boxGeometry args={[0.18, 0.18, 0.24]} />
           </mesh>
@@ -118,8 +120,10 @@ export function HitchingPostModel({
   const mule1Ref = useRef<THREE.Group>(null);
   const mule2Ref = useRef<THREE.Group>(null);
   const mule3Ref = useRef<THREE.Group>(null);
+  const rootRef = useRef<THREE.Group>(null);
 
   useFrame(() => {
+    if (!rootRef.current || !isObjectEffectivelyVisible(rootRef.current)) return;
     let inUse = 0;
     if (building) {
       for (const c of characterEntities) {
@@ -135,7 +139,7 @@ export function HitchingPostModel({
   });
 
   return (
-    <group>
+    <group ref={rootRef}>
       <mesh material={mats.richSoil} position={[0, 0.02, 0]} receiveShadow>
         <boxGeometry args={[2.8, 0.04, 1.8]} />
       </mesh>

@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SHARED_BUILDING_MATS } from '../../buildingMaterials';
+import { isObjectEffectivelyVisible } from '../../common/BuildingPrimitives';
 
 function toStandard(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   return geo.index ? geo.toNonIndexed() : geo;
@@ -136,7 +137,7 @@ function QuarryAnimatedHoist({ isWorking = true }: { isWorking?: boolean }) {
   const mats = SHARED_BUILDING_MATS;
 
   useFrame(({ clock }) => {
-    if (!hoistRef.current || !cableRef.current) return;
+    if (!hoistRef.current || !cableRef.current || !isObjectEffectivelyVisible(hoistRef.current)) return;
     const t = isWorking ? clock.getElapsedTime() : 0;
     const hoistY = 0.52 + Math.sin(t * 1.2) * 0.32;
     hoistRef.current.position.y = hoistY;
@@ -152,7 +153,7 @@ function QuarryAnimatedHoist({ isWorking = true }: { isWorking?: boolean }) {
       <mesh ref={cableRef} material={mats.clothWhite} position={[0, 1.5, 0]}>
         <cylinderGeometry args={[0.015, 0.015, 1.0, 6]} />
       </mesh>
-      <group ref={hoistRef} position={[0, 0.52, 0]}>
+      <group ref={hoistRef} name="quarry-hoist" position={[0, 0.52, 0]}>
         <mesh material={mats.clothWhite} position={[0, 0.24, 0]}>
           <boxGeometry args={[0.57, 0.03, 0.52]} />
         </mesh>

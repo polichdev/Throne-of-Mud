@@ -4,6 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SHARED_BUILDING_MATS } from '../../buildingMaterials';
+import { isObjectEffectivelyVisible } from '../../common/BuildingPrimitives';
 
 function toStandard(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   const g = geo.index ? geo.toNonIndexed() : geo;
@@ -198,7 +199,7 @@ function ClayPitAnimatedHoist({ isWorking = true }: { isWorking?: boolean }) {
   const mats = SHARED_BUILDING_MATS;
 
   useFrame(({ clock }) => {
-    if (!hoistRef.current || !cableRef.current) return;
+    if (!hoistRef.current || !cableRef.current || !isObjectEffectivelyVisible(hoistRef.current)) return;
     const t = isWorking ? clock.getElapsedTime() : 0;
     const hoistY = 0.38 + Math.sin(t * 1.2) * 0.32;
     hoistRef.current.position.y = hoistY;
@@ -214,7 +215,7 @@ function ClayPitAnimatedHoist({ isWorking = true }: { isWorking?: boolean }) {
       <mesh ref={cableRef} material={mats.clothWhite} position={[0, 1.4, 0]}>
         <cylinderGeometry args={[0.014, 0.014, 1.0, 6]} />
       </mesh>
-      <group ref={hoistRef} position={[0, 0.38, 0]}>
+      <group ref={hoistRef} name="clay-pit-hoist" position={[0, 0.38, 0]}>
         <mesh material={mats.timberDark} position={[0, 0.16, 0]}>
           <cylinderGeometry args={[0.22, 0.17, 0.30, 8, 1, true]} />
         </mesh>

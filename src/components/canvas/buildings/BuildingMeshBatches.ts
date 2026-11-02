@@ -2,13 +2,15 @@ import * as THREE from 'three';
 import { cacheBatchedDrawList } from '../performance/batchedDrawCache';
 import { isGroundShadow } from '../performance/groundShadows';
 import { getColorBatchMaterial } from '../performance/colorBatchMaterials';
+import { BatchStructureSnapshot } from './BatchStructureSnapshot';
+import { getShearedBatchMaterial } from '../performance/shearedBatchMaterial';
 
 const IDENTITY_MAT = new THREE.Matrix4();
 
-interface Part { source: THREE.Mesh; geometry: THREE.BufferGeometry; material: THREE.Material; color?: THREE.Color; }
-interface Binding { source: THREE.Mesh; id: number; initialized: boolean; enabled: boolean | null; color?: THREE.Color; }
+interface Part { source: THREE.Mesh; geometry: THREE.BufferGeometry; material: THREE.Material; allowShear: boolean; color?: THREE.Color; }
+interface Binding { source: THREE.Mesh; id: number; initialized: boolean; enabled: boolean | null; allowShear: boolean; color?: THREE.Color; }
 interface Batch { mesh: THREE.BatchedMesh; geometries: string; bindings: Binding[]; visibleCount: number; }
-interface Source { mesh: THREE.Mesh; bindings: { batch: Batch; binding: Binding }[]; world: THREE.Matrix4; initialized: boolean; safe: boolean; direct: boolean; }
+interface Source { mesh: THREE.Mesh; bindings: { batch: Batch; binding: Binding }[]; world: THREE.Matrix4; initialized: boolean; safe: boolean; direct: boolean; allowShear: boolean; }
 interface Branch { root: THREE.Object3D; sources: Source[]; visible: boolean | null; }
 
 export class BuildingMeshBatches {
@@ -24,12 +26,22 @@ export class BuildingMeshBatches {
   private inverse = new THREE.Matrix4();
   private local = new THREE.Matrix4();
   private groupWorld = new THREE.Matrix4();
+  private structure: BatchStructureSnapshot | null = null;
+
+  syncIfChanged(root: THREE.Group): boolean {
+    if (root === this.root && this.structure?.matches(root, this.originalLayers)) return false;
+    this.sync(root);
+    this.structure = new BatchStructureSnapshot(root, this.originalLayers);
+    return true;
+  }
 
   sync(root: THREE.Group) {
+    this.structure = null;
     this.restoreLayers();
     this.root = root;
     const entries = new Map<string, Part[]>();
     const usedGeometry = new Set<string>();
+    const schemas = new Map<THREE.BufferGeometry, string>();
     root.traverse(object => {
       if (!(object instanceof THREE.Mesh) || object instanceof THREE.InstancedMesh || object instanceof THREE.BatchedMesh || object instanceof THREE.SkinnedMesh) return;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
@@ -38,8 +50,17 @@ export class BuildingMeshBatches {
       if (!geometry.attributes.position || Object.keys(geometry.morphAttributes).length) return;
       const groups = Array.isArray(object.material) ? geometry.groups : [{ start: 0, count: Infinity, materialIndex: 0 }];
       if (!groups.length || groups.some(part => !materials[part.materialIndex ?? 0])) return;
-      const schema = Object.entries(geometry.attributes).sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, attr]) => `${name}:${attr.itemSize}:${attr.normalized}:${attr.array.constructor.name}`).join(',');
+      let tagged = false;
+      for (let parent: THREE.Object3D | null = object; parent && parent !== root; parent = parent.parent) {
+        if (parent.userData.allowShearedBatching === true) { tagged = true; break; }
+      }
+      const allowShear = tagged && materials.every(material => Boolean(getShearedBatchMaterial(getColorBatchMaterial(material) ?? material)));
+      let schema = schemas.get(geometry);
+      if (schema === undefined) {
+        schema = Object.entries(geometry.attributes).sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, attr]) => `${name}:${attr.itemSize}:${attr.normalized}:${attr.array.constructor.name}`).join(',');
+        schemas.set(geometry, schema);
+      }
       for (const part of groups) {
         const start = Math.max(part.start, geometry.drawRange.start);
         const end = Math.min(part.start + part.count, geometry.drawRange.start + geometry.drawRange.count, geometry.index?.count ?? geometry.attributes.position.count);
@@ -57,11 +78,12 @@ export class BuildingMeshBatches {
         }
         const originalMaterial = materials[part.materialIndex ?? 0];
         const colorMaterial = getColorBatchMaterial(originalMaterial);
-        const material = colorMaterial ?? originalMaterial;
+        const baseMaterial = colorMaterial ?? originalMaterial;
+        const material = allowShear ? getShearedBatchMaterial(baseMaterial)! : baseMaterial;
         const key = `${material.uuid}:${object.castShadow}:${object.receiveShadow}:${object.renderOrder}:${object.layers.mask}:${object.frustumCulled}:${schema}`;
         let list = entries.get(key);
         if (!list) { list = []; entries.set(key, list); }
-        list.push({ source: object, geometry: prepared, material, color: colorMaterial ? (originalMaterial as THREE.MeshStandardMaterial).color : undefined });
+        list.push({ source: object, geometry: prepared, material, allowShear, color: colorMaterial ? (originalMaterial as THREE.MeshStandardMaterial).color : undefined });
       }
     });
 
@@ -86,14 +108,14 @@ export class BuildingMeshBatches {
         mesh.castShadow = source.castShadow; mesh.receiveShadow = source.receiveShadow;
         mesh.renderOrder = source.renderOrder; mesh.layers.mask = this.originalLayers.get(source) ?? source.layers.mask;
         mesh.frustumCulled = false;
-        mesh.perObjectFrustumCulled = source.frustumCulled;
+        mesh.perObjectFrustumCulled = source.frustumCulled && !parts[0].allowShear;
         mesh.sortObjects = Boolean(parts[0].material.transparent);
         mesh.raycast = () => {};
         const ids = new Map(geometries.map(geo => [geo, mesh.addGeometry(geo)]));
         batch = { mesh, geometries: signature, bindings: [], visibleCount: 0 };
         for (const part of parts) {
           const id = mesh.addInstance(ids.get(part.geometry)!);
-          batch.bindings.push({ source: part.source, id, initialized: false, enabled: null });
+          batch.bindings.push({ source: part.source, id, initialized: false, enabled: null, allowShear: part.allowShear });
         }
         cacheBatchedDrawList(mesh);
         this.batches.set(key, batch); this.group.add(mesh);
@@ -122,8 +144,10 @@ export class BuildingMeshBatches {
           let branchRoot: THREE.Object3D = binding.source;
           while (branchRoot.parent && branchRoot.parent !== root) branchRoot = branchRoot.parent;
           const direct = binding.source.parent === branchRoot;
-          source = this.sources.get(binding.source) ?? { mesh: binding.source, bindings: [], world: new THREE.Matrix4(), initialized: false, safe: true, direct };
+          source = this.sources.get(binding.source) ?? { mesh: binding.source, bindings: [], world: new THREE.Matrix4(), initialized: false, safe: true, direct, allowShear: binding.allowShear };
           source.direct = direct;
+          if (source.allowShear !== binding.allowShear) source.initialized = false;
+          source.allowShear = binding.allowShear;
           source.bindings = []; sources.set(binding.source, source);
           let branch = branches.get(branchRoot);
           if (!branch) { branch = { root: branchRoot, sources: [], visible: null }; branches.set(branchRoot, branch); }
@@ -141,7 +165,7 @@ export class BuildingMeshBatches {
     for (let parent: THREE.Object3D | null = root; parent; parent = parent.parent) if (!parent.visible) { visible = false; break; }
     this.group.visible = visible;
     if (!root || !visible) return;
-    this.epoch++; this.visibility.set(root, { epoch: this.epoch, visible: true });
+    this.epoch++; this.markVisible(root);
     const moved = !this.groupWorld.equals(this.group.matrixWorld);
     if (moved) this.inverse.copy(this.group.matrixWorld).invert();
     this.groupWorld.copy(this.group.matrixWorld);
@@ -150,13 +174,13 @@ export class BuildingMeshBatches {
       const branchVisible = branch.root.parent === root && branch.root.visible;
       if (!branchVisible && branch.visible === false) continue;
       branch.visible = branchVisible;
-      if (branchVisible) this.visibility.set(branch.root, { epoch: this.epoch, visible: true });
+      if (branchVisible) this.markVisible(branch.root);
       for (const source of branch.sources) {
         const visible = branchVisible && (source.direct ? source.mesh.visible : this.visibleWithinRoot(source.mesh));
         const changed = visible && (!source.initialized || !source.world.equals(source.mesh.matrixWorld));
         if (changed) {
           source.world.copy(source.mesh.matrixWorld); source.initialized = true;
-          source.safe = batchableTransform(source.world);
+          source.safe = batchableTransform(source.world, source.allowShear);
         }
         const enabled = visible && source.safe;
         if (visible) {
@@ -194,9 +218,15 @@ export class BuildingMeshBatches {
     for (const geometry of this.prepared.values()) geometry.dispose();
     this.batches.clear(); this.prepared.clear(); this.sources.clear(); this.branches = [];
     this.visibility = new WeakMap(); this.group.clear(); this.root = null;
+    this.structure = null;
   }
 
   private restoreLayers() { for (const [source, layers] of this.originalLayers) source.layers.mask = layers; this.originalLayers.clear(); }
+  private markVisible(object: THREE.Object3D): void {
+    const cached = this.visibility.get(object);
+    if (cached) { cached.epoch = this.epoch; cached.visible = true; }
+    else this.visibility.set(object, { epoch: this.epoch, visible: true });
+  }
   private visibleWithinRoot(object: THREE.Object3D): boolean {
     const cached = this.visibility.get(object);
     if (cached?.epoch === this.epoch) return cached.visible;
@@ -207,12 +237,13 @@ export class BuildingMeshBatches {
   }
 }
 
-function batchableTransform(matrix: THREE.Matrix4) {
+function batchableTransform(matrix: THREE.Matrix4, allowShear = false) {
   const m = matrix.elements;
   const det = m[0] * (m[5] * m[10] - m[9] * m[6]) -
               m[1] * (m[4] * m[10] - m[8] * m[6]) +
               m[2] * (m[4] * m[9] - m[8] * m[5]);
   if (det <= 0) return false;
+  if (allowShear) return Number.isFinite(det) && det > 1e-10;
   const xx = m[0] ** 2 + m[1] ** 2 + m[2] ** 2, yy = m[4] ** 2 + m[5] ** 2 + m[6] ** 2, zz = m[8] ** 2 + m[9] ** 2 + m[10] ** 2;
   const xy = m[0] * m[4] + m[1] * m[5] + m[2] * m[6], xz = m[0] * m[8] + m[1] * m[9] + m[2] * m[10], yz = m[4] * m[8] + m[5] * m[9] + m[6] * m[10];
   return xy * xy < xx * yy * 1e-10 && xz * xz < xx * zz * 1e-10 && yz * yz < yy * zz * 1e-10;

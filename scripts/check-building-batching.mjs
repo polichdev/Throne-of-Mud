@@ -35,6 +35,7 @@ const { BuildingMeshBatches } = await import('../src/components/canvas/buildings
 const { addSceneRenderTask } = await import('../src/components/canvas/performance/sceneRenderTasks.ts');
 const { StablePointLights } = await import('../src/components/canvas/performance/StablePointLights.tsx');
 const { cacheBatchedDrawList } = await import('../src/components/canvas/performance/batchedDrawCache.ts');
+const { getColorBatchMaterial } = await import('../src/components/canvas/performance/colorBatchMaterials.ts');
 const { buildingEntities } = await import('../src/engine/ecs/world.ts');
 extend(THREE); globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.window = { __lastCameraTarget: [16, 16], __lastCameraZoom: 38 };
@@ -68,7 +69,9 @@ function parts(scene, layers) {
         if (!instance.active || !instance.visible) continue;
         const info = mesh.getGeometryRangeAt(instance.geometryIndex);
         const matrix = new THREE.Matrix4(); mesh.getMatrixAt(mesh._instanceInfo.indexOf(instance), matrix); matrix.premultiply(mesh.matrixWorld);
-        parts.push({ mesh, matrix, material: mesh.material, begin: info.indexStart, end: info.indexStart + info.indexCount });
+        const color = mesh._colorsTexture ? new THREE.Color() : undefined;
+        if (color) mesh.getColorAt(mesh._instanceInfo.indexOf(instance), color);
+        parts.push({ mesh, matrix, material: mesh.material, color, begin: info.indexStart, end: info.indexStart + info.indexCount });
       }
       return;
     }
@@ -84,9 +87,12 @@ function parts(scene, layers) {
 }
 function triangles(drawParts) {
   const buckets = new Map();
-  for (const { mesh, matrix, material, begin, end } of drawParts) {
+  for (const { mesh, matrix, material, color, begin, end } of drawParts) {
     const geo = mesh.geometry, normalMatrix = new THREE.Matrix3().getNormalMatrix(matrix);
-    const key = `${material.uuid}:${mesh.castShadow}:${mesh.receiveShadow}`;
+    const shared = getColorBatchMaterial(material);
+    const effectiveColor = color ?? (shared ? material.color : null);
+    const colorKey = effectiveColor ? `:${effectiveColor.r.toFixed(5)},${effectiveColor.g.toFixed(5)},${effectiveColor.b.toFixed(5)}` : '';
+    const key = `${shared?.uuid ?? material.uuid}${colorKey}:${mesh.castShadow}:${mesh.receiveShadow}`;
     const list = buckets.get(key) ?? []; buckets.set(key, list);
     for (let i = begin; i < end; i += 3) {
       const tri = [];
@@ -115,7 +121,32 @@ function draws(scene, layers) { return new Set(parts(scene, layers).map(part => 
 let scene = await draw(true), rig = parity(scene, '30 actual day building models');
 const before = draws(rig, false), after = draws(scene, true);
 assert.ok(after < before * 0.35, 'Multi-draw removes more than 65% of building draw submissions');
+assert.ok(after < 120, 'Compatible building colors share batches while preserving per-instance colors');
 console.log(JSON.stringify({ buildings: 30, originalDraws: before, multiDraws: after, excludes: 'houses, residents, terrain, shadow pass and DOM; requires WEBGL_multi_draw' }));
+const smokePuffs = [];
+rig.traverse(object => { if (object.name === 'chimney-smoke') smokePuffs.push(object); });
+assert.ok(smokePuffs.length > 0 && smokePuffs.every(mesh => mesh.isInstancedMesh && mesh.count === 2),
+  'Each chimney submits its two puffs in one instanced mesh');
+await draw(); await draw();
+const activeSmoke = smokePuffs.find(mesh => mesh.parent.visible && mesh.instanceMatrix.version > 0);
+assert.ok(activeSmoke, 'Visible chimney updates its instance transforms');
+const animatedDetails = ['clay-pit-hoist', 'quarry-hoist', 'tied-mule-head'].map(name => rig.getObjectByName(name));
+assert.ok(animatedDetails.every(Boolean), 'Fixture contains animated production buildings and a tied mule');
+rig.visible = false;
+await draw();
+const hiddenPoses = animatedDetails.map(object => [object.position.y, object.rotation.x, object.rotation.y]);
+const hiddenSmokeVersion = activeSmoke.instanceMatrix.version;
+for (let i = 0; i < 4; i++) await draw();
+assert.deepEqual(animatedDetails.map(object => [object.position.y, object.rotation.x, object.rotation.y]), hiddenPoses,
+  'Animations do not update behind a hidden ancestor');
+assert.equal(activeSmoke.instanceMatrix.version, hiddenSmokeVersion, 'Hidden chimneys do not upload new puff matrices');
+rig.visible = true;
+await draw();
+animatedDetails.forEach((object, i) => assert.ok(object.position.y !== hiddenPoses[i][0] ||
+  object.rotation.x !== hiddenPoses[i][1] || object.rotation.y !== hiddenPoses[i][2],
+  `${object.name} resumes after the ancestor is restored`));
+await draw();
+assert.ok(activeSmoke.instanceMatrix.version > hiddenSmokeVersion, 'Visible chimney resumes updating puff matrices');
 const ids = scene.children.find(group => !group.__r3f).children.map(mesh => mesh.uuid);
 scene = await draw(true); parity(scene, 'Unchanged model commit');
 assert.deepEqual(scene.children.find(group => !group.__r3f).children.map(mesh => mesh.uuid), ids, 'Unchanged commits retain batches');
@@ -139,6 +170,36 @@ scene = await update({ buildingVersion: 3, selectedEntityId: null, time: { ...__
 rig = parity(scene, '100 actual building models');
 console.log(JSON.stringify({ buildings: 100, originalDraws: draws(rig, false), multiDraws: draws(scene, true), excludes: 'residents, terrain, shadows and DOM' }));
 if (process.env.PROFILE_BATCHES === '1') {
+  const clonedRig = rig.clone(true), profileBatches = new BuildingMeshBatches();
+  clonedRig.updateWorldMatrix(true, true);
+  let started = performance.now(); profileBatches.sync(clonedRig);
+  const initialSync = performance.now() - started;
+  const syncTimes = [], updateTimes = [];
+  for (let i = 0; i < 20; i++) {
+    started = performance.now(); profileBatches.sync(clonedRig); syncTimes.push(performance.now() - started);
+    started = performance.now(); profileBatches.update(); updateTimes.push(performance.now() - started);
+  }
+  console.log(JSON.stringify({ buildingBatchCpuMs: { initialSync, repeatedSyncAverage: syncTimes.reduce((a, b) => a + b, 0) / syncTimes.length,
+    updateAverage: updateTimes.reduce((a, b) => a + b, 0) / updateTimes.length }, buildings: 100,
+    excludes: 'WebGL, GPU, React and real-time simulation' }));
+  profileBatches.syncIfChanged(clonedRig);
+  const unchangedTimes = [];
+  for (let i = 0; i < 20; i++) {
+    started = performance.now(); assert.equal(profileBatches.syncIfChanged(clonedRig), false);
+    unchangedTimes.push(performance.now() - started);
+  }
+  console.log(JSON.stringify({ unchangedStructureCheckMs: unchangedTimes.reduce((a, b) => a + b, 0) / unchangedTimes.length, buildings: 100 }));
+  profileBatches.dispose();
+  const drawParts = parts(scene, true);
+  const ordinary = new Map();
+  for (const { mesh, material } of drawParts) {
+    if (mesh.isBatchedMesh || mesh.isInstancedMesh) continue;
+    const key = `${material.type}:${material.transparent ? 'transparent' : 'opaque'}:${material.map ? 'textured' : 'solid'}`;
+    let meshes = ordinary.get(key);
+    if (!meshes) { meshes = new Set(); ordinary.set(key, meshes); }
+    meshes.add(mesh.uuid);
+  }
+  console.log(JSON.stringify({ ordinaryDrawsByMaterial: Object.fromEntries([...ordinary].map(([key, meshes]) => [key, meshes.size])) }));
   const meshList = scene.children.find(group => !group.__r3f).children.filter(mesh => mesh.isBatchedMesh);
   const view = new THREE.OrthographicCamera(-60, 60, 60, -60, .1, 300);
   view.position.set(16, 100, 16); view.lookAt(16, 0, 16); view.updateMatrixWorld();
@@ -151,10 +212,66 @@ if (process.env.PROFILE_BATCHES === '1') {
   console.log(JSON.stringify({ headlessDrawListPreparationMs: { original: measure(false), cached: measure(true) }, buildings: 100,
     excludes: 'WebGL draw submission, GPU, simulation, React, browser layout; frozen model poses and camera' }));
 }
+buildingEntities.clear();
+for (let i = 0; i < 20; i++) buildingEntities.add({ id: `yard-profile-${i}`, buildingType: 'peasant_house',
+  isCompleted: true, constructionProgress: 100, houseTier: 2, backyardExtension: i % 2 ? 'goat_shed' : 'chicken_coop',
+  position: [3 + i % 5 * 5, .05, 3 + Math.floor(i / 5) * 5], buildingWidth: 4, buildingHeight: 3 });
+scene = await update({ buildingVersion: 4 });
+let animalMeshes = 0, unbatchedAnimalMeshes = 0, animalCount = 0;
+const animalRigs = [];
+scene.traverse(object => { if (object.name !== 'yard-animal') return; animalCount++; animalRigs.push(object);
+  object.traverse(child => { if (child.isMesh && child.material.visible) { animalMeshes++; if (child.layers.mask & 1) unbatchedAnimalMeshes++; } }); });
+assert.equal(animalCount, 60);
+assert.equal(animalMeshes, 630);
+assert.equal(unbatchedAnimalMeshes, 0, 'Sheared backyard animals remain in batches');
+const batchedYardDraws = draws(scene, true);
+animalRigs.forEach(rig => { rig.userData.allowShearedBatching = false; });
+scene = await draw(true);
+const fallbackYardDraws = draws(scene, true);
+assert.ok(fallbackYardDraws > batchedYardDraws + 200, 'Batching sheared animals eliminates hundreds of synthetic draw submissions');
+animalRigs.forEach(rig => { rig.userData.allowShearedBatching = true; });
+scene = await draw(true);
+assert.equal(draws(scene, true), batchedYardDraws, 'Returning to sheared batching restores draw count');
+console.log(JSON.stringify({ yardProfile: { houses: 20, animalCount, animalMeshes, unbatchedAnimalMeshes, fallbackYardDraws, batchedYardDraws,
+  excludes: 'terrain, residents, GPU, shadows and browser' } }));
 await React.act(async () => sceneRoot.unmount()); clearBuildingFrameStates();
 
 const fixture = new THREE.Group(), testScene = new THREE.Scene(); testScene.add(fixture);
 const mat = new THREE.MeshStandardMaterial(), geometry = new THREE.BoxGeometry(); geometry.setDrawRange(6, 24);
+const snapshotRoot = new THREE.Group(), snapshotGeo = new THREE.BoxGeometry();
+const snapshotMat = new THREE.MeshStandardMaterial({ color: 'red' });
+const snapshotA = new THREE.Mesh(snapshotGeo, snapshotMat), snapshotB = new THREE.Mesh(snapshotGeo, snapshotMat);
+snapshotRoot.add(snapshotA, snapshotB); snapshotRoot.updateMatrixWorld();
+const snapshotBatch = new BuildingMeshBatches();
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true);
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), false, 'Unchanged tree skips full sync');
+snapshotA.position.x = 2; snapshotRoot.updateMatrixWorld();
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), false, 'Transforms are handled by frame updates without rebuilding');
+snapshotBatch.update();
+snapshotMat.color.set('blue'); assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Material color changes resync');
+snapshotMat.transparent = true; assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Transparency changes resync');
+snapshotMat.transparent = false; assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true);
+snapshotA.castShadow = true; assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Shadow changes resync');
+snapshotGeo.setDrawRange(0, 6); assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Geometry draw range changes resync');
+snapshotGeo.setAttribute('custom', new THREE.Float32BufferAttribute(new Float32Array(snapshotGeo.attributes.position.count), 1));
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Geometry attribute additions resync');
+snapshotGeo.deleteAttribute('custom'); assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true);
+snapshotA.material = [snapshotMat]; assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Single-to-array material changes resync');
+snapshotA.material = snapshotMat; assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true);
+snapshotRoot.userData.allowShearedBatching = true;
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Changing shear batching tag resyncs');
+delete snapshotRoot.userData.allowShearedBatching;
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true);
+const snapshotLight = new THREE.PointLight(); snapshotRoot.add(snapshotLight);
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Adding a point light resyncs');
+snapshotLight.intensity = 2;
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), false, 'Light intensity is copied by the light pool without a rebuild');
+snapshotLight.castShadow = true;
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Changing light shadow mode resyncs light ownership');
+const snapshotGroup = new THREE.Group(); snapshotRoot.add(snapshotGroup); snapshotGroup.add(snapshotB);
+assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Reparenting resyncs visibility branches');
+snapshotRoot.remove(snapshotGroup); assert.equal(snapshotBatch.syncIfChanged(snapshotRoot), true, 'Removal resyncs');
+snapshotBatch.dispose(); snapshotGeo.dispose(); snapshotMat.dispose();
 const a = new THREE.Mesh(geometry, mat), b = new THREE.Mesh(new THREE.SphereGeometry(.4, 8, 6).toNonIndexed(), mat);
 fixture.add(a, b); const batches = new BuildingMeshBatches(); testScene.add(batches.group);
 testScene.updateMatrixWorld(); batches.sync(fixture); batches.update();
@@ -178,6 +295,42 @@ for (let i = 0; i < 20; i++) {
   assert.equal(batches.group.children[0], batch, 'Returning to a safe pose reuses the same GPU buffers');
   assert.equal(b.layers.mask, 0); assert.equal(batch.getVisibleAt(1), true);
 }
+const shearedRoot = new THREE.Group(), shearedRig = new THREE.Group(), shearedBatch = new BuildingMeshBatches();
+const shearedMaterial = new THREE.MeshStandardMaterial({ color: '#aa6633' });
+shearedRoot.scale.set(1.15, 1, 1.65); shearedRoot.add(shearedRig);
+shearedRig.userData.allowShearedBatching = true; shearedRig.rotation.y = 0.7;
+const shearedSource = new THREE.Mesh(geometry, shearedMaterial), shearedOther = new THREE.Mesh(geometry, shearedMaterial);
+shearedRig.add(shearedSource, shearedOther); shearedRoot.updateMatrixWorld();
+shearedBatch.sync(shearedRoot); shearedBatch.update();
+assert.equal(shearedSource.layers.mask, 0, 'Tagged sheared geometry stays batched');
+const shearedMesh = shearedBatch.group.children[0];
+assert.equal(shearedMesh.perObjectFrustumCulled, false, 'Sheared instance bounds cannot be incorrectly culled');
+const shearedMatrix = new THREE.Matrix4(); shearedMesh.getMatrixAt(0, shearedMatrix);
+assert.ok(shearedMatrix.elements.every((value, i) => Math.abs(value - shearedSource.matrixWorld.elements[i]) < 1e-6), 'Batched world transform matches the original');
+const normal = new THREE.Vector3(.3, .7, .2).normalize();
+const expectedNormal = normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(shearedSource.matrixWorld)).normalize();
+const actualNormal = normal.clone().applyMatrix3(new THREE.Matrix3().setFromMatrix4(shearedMatrix).invert().transpose()).normalize();
+assert.ok(expectedNormal.distanceTo(actualNormal) < 1e-6, 'Inverse-transpose preserves normals for sheared geometry');
+const shader = { vertexShader: '#include <defaultnormal_vertex>', fragmentShader: '' };
+shearedMesh.material.onBeforeCompile(shader, {});
+assert.ok(shader.vertexShader.includes('normalCofactor') && !shader.vertexShader.includes('inverse( bm )'), 'Sheared batch shader uses cofactors without matrix inversion');
+for (let i = 1; i <= 50; i++) {
+  const transform = new THREE.Matrix4().makeScale(.4 + i / 17, 1 + i / 30, 1.9 - i / 70)
+    .multiply(new THREE.Matrix4().makeRotationY(i * .13))
+    .multiply(new THREE.Matrix4().makeRotationX(i * .07));
+  const e = transform.elements;
+  const x = new THREE.Vector3(e[0], e[1], e[2]), y = new THREE.Vector3(e[4], e[5], e[6]), z = new THREE.Vector3(e[8], e[9], e[10]);
+  const cofactor = new THREE.Matrix3().set(...new THREE.Vector3().crossVectors(y, z).toArray(),
+    ...new THREE.Vector3().crossVectors(z, x).toArray(), ...new THREE.Vector3().crossVectors(x, y).toArray()).transpose();
+  const expected = normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(transform)).normalize();
+  const actual = normal.clone().applyMatrix3(cofactor).normalize();
+  assert.ok(expected.distanceTo(actual) < 1e-10, `Cofactor normal matches inverse-transpose for transform ${i}`);
+}
+shearedRig.scale.x = -1; shearedRoot.updateMatrixWorld(); shearedBatch.update();
+assert.equal(shearedSource.layers.mask, 1, 'Reflected transforms retain ordinary rendering');
+shearedRig.scale.x = 0; shearedRoot.updateMatrixWorld(); shearedBatch.update();
+assert.equal(shearedSource.layers.mask, 1, 'Singular transforms retain ordinary rendering');
+shearedBatch.dispose(); shearedMaterial.dispose();
 const camera = new THREE.OrthographicCamera(-2, 2, 2, -2, .1, 20); camera.position.z = 5; camera.updateMatrixWorld();
 batch.onBeforeRender(renderer, testScene, camera, batch.geometry, batch.material); assert.equal(batch._multiDrawCount, 2, 'Three generates both visible multi-draw commands');
 const drawVersion = batch._indirectTexture.version;
@@ -209,7 +362,6 @@ assert.equal(batch._multiDrawCount, 0, 'Removal invalidates cached commands with
 let geometryDisposed = false, materialDisposed = false; geometry.addEventListener('dispose', () => geometryDisposed = true); mat.addEventListener('dispose', () => materialDisposed = true);
 batches.dispose(); assert.equal(a.layers.mask, 1); assert.equal(b.layers.mask, 1); assert.equal(geometryDisposed, false); assert.equal(materialDisposed, false);
 
-// Compare native Three draw lists throughout animation, culling, sorting and shadows.
 const box = new THREE.BoxGeometry(.2, .2, .2);
 function makeLookupBatch(cached) {
   const mesh = new THREE.BatchedMesh(8, box.attributes.position.count, box.index.count, mat);
@@ -261,6 +413,44 @@ console.log(JSON.stringify({ animatedFrames: 90, nativeLookupUploadRequests: 90,
   checks: 'Native Three commands, animation matrices, moving camera, sort reversal, visibility, zoom, shadows, external invalidation and resize fallback; no GPU/FPS measurement' }));
 nativeLookup.dispose(); cachedLookup.dispose(); box.dispose();
 
+{
+  const geo = new THREE.BoxGeometry(.2, .2, .2);
+  const make = padded => {
+    const m = new THREE.BatchedMesh(80, geo.attributes.position.count, geo.index.count, mat);
+    const id = m.addGeometry(geo);
+    for (let i = 0; i < 80; i++) {
+      const instance = m.addInstance(id);
+      m.setMatrixAt(instance, new THREE.Matrix4().makeTranslation((i % 10) - 4.5, Math.floor(i / 10) - 3.5, (i % 3) * .1));
+    }
+    m.sortObjects = false;
+    if (padded) {
+      const prepare = m.onBeforeRender;
+      m.prepareCount = 0;
+      m.onBeforeRender = function (...args) { this.prepareCount++; return prepare.apply(this, args); };
+      cacheBatchedDrawList(m, 1);
+    }
+    return m;
+  };
+  const native = make(false), cached = make(true);
+  const cam = new THREE.OrthographicCamera(-2, 2, 2, -2, .1, 20);
+  cam.position.z = 5;
+  for (let i = 0; i < 200; i++) {
+    cam.position.x = Math.sin(i / 23) * 2;
+    cam.position.y = Math.cos(i / 31);
+    cam.zoom = i < 100 ? 1 : 1.3;
+    cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+    for (const m of [native, cached]) m.onBeforeRender(renderer, testScene, cam, m.geometry, mat);
+    const included = new Set(cached._indirectTexture.image.data.slice(0, cached._multiDrawCount));
+    for (const id of native._indirectTexture.image.data.slice(0, native._multiDrawCount)) {
+      assert.ok(included.has(id), `Padded house culling must retain visible instance ${id} at frame ${i}`);
+    }
+  }
+  assert.ok(cached.prepareCount < 100, `Camera motion should reuse padded draw lists, got ${cached.prepareCount} rebuilds`);
+  console.log(JSON.stringify({ movingCameraFrames: 200, paddedDrawListRebuilds: cached.prepareCount,
+    checks: 'All native visible instances retained; CPU-only fixture, no FPS measurement' }));
+  native.dispose(); cached.dispose(); geo.dispose();
+}
+
 const hiddenRoot = new THREE.Group(), hiddenBatches = new BuildingMeshBatches();
 const branches = [], details = [];
 for (let i = 0; i < 100; i++) {
@@ -268,6 +458,11 @@ for (let i = 0; i < 100; i++) {
   for (let j = 0; j < 12; j++) { const mesh = new THREE.Mesh(geometry, mat); branch.add(mesh); details.push(mesh); }
 }
 hiddenRoot.updateMatrixWorld(); hiddenBatches.sync(hiddenRoot); hiddenBatches.update();
+const rootVisibilityEntry = hiddenBatches.visibility.get(hiddenRoot);
+const branchVisibilityEntry = hiddenBatches.visibility.get(branches[0]);
+hiddenBatches.update();
+assert.strictEqual(hiddenBatches.visibility.get(hiddenRoot), rootVisibilityEntry, 'Visible root reuses its visibility record');
+assert.strictEqual(hiddenBatches.visibility.get(branches[0]), branchVisibilityEntry, 'Visible branch reuses its visibility record');
 for (const branch of branches) branch.visible = false;
 hiddenBatches.update();
 let detailReads = 0;

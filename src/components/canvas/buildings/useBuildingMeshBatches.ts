@@ -21,9 +21,8 @@ export function useBuildingMeshBatches(rootRef: RefObject<Group | null>) {
         batches.dispose(); removeScenePointLights(scene, batches); dirty.current = false;
       }
       if (dirty.current && rootRef.current) {
-        rootRef.current.updateWorldMatrix(true, true);
-        if (supported) batches.sync(rootRef.current);
-        syncScenePointLights(scene, batches, rootRef.current);
+        const changed = !supported || batches.syncIfChanged(rootRef.current);
+        if (changed) syncScenePointLights(scene, batches, rootRef.current);
         dirty.current = false;
       }
       if (supported) batches.update();

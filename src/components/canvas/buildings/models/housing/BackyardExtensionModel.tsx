@@ -1,9 +1,11 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { SHARED_BUILDING_MATS } from '../../buildingMaterials';
 import { isObjectEffectivelyVisible } from '../../common/BuildingPrimitives';
+import { optimizePointLightMaterial } from '../../../performance/pointLightRange';
+import { registerColorBatchMaterial } from '../../../performance/colorBatchMaterials';
 import { useGameStore } from '../../../../../store/useGameStore';
 import type { BackyardExtensionType } from '../../../../../types/game';
 
@@ -19,6 +21,12 @@ const mats = {
   goatCream: new THREE.MeshStandardMaterial({ color: '#cbbca0', roughness: 1 }),
   goatBrown: new THREE.MeshStandardMaterial({ color: '#92765b', roughness: 1 }),
 };
+for (const material of Object.values(mats)) {
+  if (material instanceof THREE.MeshStandardMaterial) {
+    optimizePointLightMaterial(material);
+    registerColorBatchMaterial(material);
+  }
+}
 type Mat = keyof typeof mats;
 type Part = { geometry: THREE.BufferGeometry; material: THREE.Material };
 
@@ -273,42 +281,48 @@ function animalBody(kind: 'chicken' | 'goat', index: number) {
   return b.finish();
 }
 const ANIMAL_BODIES = { chicken: [0, 1, 2].map(i => animalBody('chicken', i)), goat: [0, 1, 2].map(i => animalBody('goat', i)) };
+const SHEARED_BATCH_RIG = { allowShearedBatching: true };
 
-export function getBackyardAnimalPose(index: number, time: number) {
+interface AnimalPose { x: number; z: number; angle: number; stride: number; bob: number; peck: number }
+
+export function getBackyardAnimalPose(index: number, time: number, target: AnimalPose = { x: 0, z: 0, angle: 0, stride: 0, bob: 0, peck: 0 }): AnimalPose {
   const phase = time * 0.32 + index * 2.1;
   const activity = time % 16;
   const walking = activity < 11;
   const pathPhase = (Math.floor(time / 16) * 11 + Math.min(activity, 11)) * 0.32 + index * 2.1;
-  return {
-    x: 0.08 + index * 0.60 + Math.sin(pathPhase) * 0.06,
-    z: -1.45 + Math.cos(pathPhase) * 0.20,
-    angle: Math.atan2(Math.cos(pathPhase) * 0.06, -Math.sin(pathPhase) * 0.20),
-    stride: walking ? Math.sin(phase * 18) * 0.32 : 0,
-    bob: walking ? Math.abs(Math.sin(phase * 18)) * 0.012 : 0,
-    peck: walking ? 0 : Math.max(0, Math.sin(phase * 9)) * 0.24,
-  };
+  target.x = 0.08 + index * 0.60 + Math.sin(pathPhase) * 0.06;
+  target.z = -1.45 + Math.cos(pathPhase) * 0.20;
+  target.angle = Math.atan2(Math.cos(pathPhase) * 0.06, -Math.sin(pathPhase) * 0.20);
+  target.stride = walking ? Math.sin(phase * 18) * 0.32 : 0;
+  target.bob = walking ? Math.abs(Math.sin(phase * 18)) * 0.012 : 0;
+  target.peck = walking ? 0 : Math.max(0, Math.sin(phase * 9)) * 0.24;
+  return target;
 }
 
 function YardAnimal({ kind, index }: { kind: 'chicken' | 'goat'; index: number }) {
   const root = useRef<THREE.Group>(null), body = useRef<THREE.Group>(null);
   const legs = useRef<(THREE.Group | null)[]>([]), elapsed = useRef(index * 1.7);
-  const initial = getBackyardAnimalPose(index, elapsed.current);
+  const initial = useMemo(() => getBackyardAnimalPose(index, index * 1.7), [index]);
+  const pose = useMemo(() => ({ ...initial }), [initial]);
   useFrame((_, delta) => {
     if (!root.current || !isObjectEffectivelyVisible(root.current)) return;
     const time = useGameStore.getState().time;
     if (time.isPaused || time.speedMultiplier === 0) return;
     elapsed.current += Math.min(delta, 0.10) * Math.min(time.speedMultiplier, 3);
-    const pose = getBackyardAnimalPose(index, elapsed.current);
-    root.current.position.set(pose.x, pose.bob, pose.z);
-    root.current.rotation.y = pose.angle;
-    if (body.current) body.current.rotation.x = pose.peck;
-    legs.current.forEach((leg, i) => { if (leg) leg.rotation.x = pose.stride * (i % 2 === 0 ? 1 : -1); });
+    const next = getBackyardAnimalPose(index, elapsed.current, pose);
+    root.current.position.set(next.x, next.bob, next.z);
+    root.current.rotation.y = next.angle;
+    if (body.current) body.current.rotation.x = next.peck;
+    for (let i = 0; i < legs.current.length; i++) {
+      const leg = legs.current[i];
+      if (leg) leg.rotation.x = next.stride * (i % 2 === 0 ? 1 : -1);
+    }
   });
   const legPositions: Vec[] = kind === 'chicken' ? [[-0.035, 0.08, 0], [0.035, 0.08, 0]] :
     [[-0.07, 0.17, -0.12], [0.07, 0.17, -0.12], [-0.07, 0.17, 0.12], [0.07, 0.17, 0.12]];
   const legLength = kind === 'chicken' ? 0.065 : 0.16;
   return (
-    <group ref={root} position={[initial.x, 0, initial.z]} rotation={[0, initial.angle, 0]} scale={[1, 1, 0.70]}>
+    <group ref={root} name="yard-animal" userData={SHEARED_BATCH_RIG} position={[initial.x, 0, initial.z]} rotation={[0, initial.angle, 0]} scale={[1, 1, 0.70]}>
       <group ref={body}>
         {ANIMAL_BODIES[kind][index].map((part, i) => <mesh key={i} {...part} castShadow receiveShadow />)}
       </group>
