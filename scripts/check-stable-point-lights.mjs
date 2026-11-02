@@ -27,7 +27,7 @@ const scene = new THREE.Scene(), root = new THREE.Group(), owner = {}, secondOwn
 scene.add(root); root.position.set(3, 2, -4); root.rotation.y = .7;
 const first = new THREE.PointLight('#ffd89b', 1.7, 7, 2), second = new THREE.PointLight('#fa9030', .4, 0, 1);
 first.position.set(1, 3, 2); second.position.set(-2, .3, -1); root.add(first, second);
-const camera = new THREE.PerspectiveCamera(); camera.position.set(9, 20, 5); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+const camera = new THREE.OrthographicCamera(-200, 200, 200, -200, .1, 1000); camera.position.set(0, 100, 0); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
 const pool = new StablePointLightPool(); pool.sync(owner, root);
 assert.equal(first.layers.mask, 1, 'Inactive manager preserves ordinary rendering');
 pool.start(); scene.add(pool.group);
@@ -65,22 +65,45 @@ pool.remove(secondOwner); assert.equal(first.layers.mask, 8); assert.equal(secon
 const large = new THREE.Group(); scene.add(large);
 for (let i = 0; i < 65; i++) { const light = new THREE.PointLight('#ffe19a', 1 + i / 100, 5); light.position.x = i; large.add(light); }
 large.visible = false;
-pool.sync(owner, large); assert.equal(pool.group.children.length, 16, 'Hidden registrations do not increase shader light slots');
+pool.sync(owner, large); assert.equal(pool.group.children.length, 8, 'Hidden registrations do not increase shader light slots');
 parity([]); large.visible = true;
+large.children.forEach((light, i) => { light.visible = i < 8; });
+parity(large.children.slice(0, 8)); assert.equal(pool.group.children.length, 8, 'Eight visible lights fit the base pool');
+large.children[8].visible = true;
+parity(large.children.slice(0, 9)); assert.equal(pool.group.children.length, 16, 'The ninth light expands the pool without being dropped');
+large.children.forEach(light => { light.visible = true; });
 parity(large.children);
 assert.equal(pool.group.children.length, 128, 'All 65 visible sources fit without truncation');
 const peakIds = pool.group.children.map(light => light.id).sort((a, b) => a - b);
 large.visible = false; parity([]);
 now = 29_999; parity([]); assert.equal(pool.group.children.length, 128, 'Short region transitions preserve stable shader capacity');
-now = 30_000; parity([]); assert.equal(pool.group.children.length, 16, 'Sustained surplus releases peak light slots');
+now = 30_000; parity([]); assert.equal(pool.group.children.length, 8, 'Sustained surplus releases peak light slots');
 large.visible = true; parity(large.children); assert.equal(pool.group.children.length, 128, 'Returning to a lit city restores every light immediately');
 for (let round = 0; round < 20; round++) {
   large.visible = false; parity([]); now += 30_001; parity([]);
-  assert.equal(pool.group.children.length, 16, 'Repeated transitions do not retain historical peaks');
+  assert.equal(pool.group.children.length, 8, 'Repeated transitions do not retain historical peaks');
   large.visible = true; parity(large.children);
   assert.deepEqual(pool.group.children.map(light => light.id).sort((a, b) => a - b), peakIds, 'Capacity cycles reuse light IDs instead of accumulating native uniform-cache entries');
 }
 pool.stop(); assert.ok(large.children.every(light => light.layers.mask === 1), 'Cleanup restores every original layer');
 pool.start(); large.visible = true; parity(large.children); pool.stop(); pool.remove(owner);
 assert.equal(pool.group.children.length, 0, 'Strict-mode cleanup releases proxy lights');
+
+const viewScene = new THREE.Scene(), viewRoot = new THREE.Group(), viewOwner = {};
+viewScene.add(viewRoot);
+const viewCamera = new THREE.OrthographicCamera(-5, 5, 5, -5, .1, 50);
+viewCamera.position.set(0, 0, 10); viewCamera.lookAt(0, 0, 0); viewCamera.updateMatrixWorld();
+const edge = new THREE.PointLight(0xffffff, 1, 2), outside = new THREE.PointLight(0xffffff, 1, 2);
+const unlimited = new THREE.PointLight(0xffffff, 1, 0);
+edge.position.x = 6; outside.position.x = 10; unlimited.position.x = 100;
+viewRoot.add(edge, outside, unlimited);
+const viewPool = new StablePointLightPool(); viewPool.sync(viewOwner, viewRoot); viewPool.start(); viewScene.add(viewPool.group);
+viewScene.updateMatrixWorld(); viewPool.update(viewCamera, 0);
+assert.equal(viewPool.diagnostics.active, 2, 'Edge-intersecting and unlimited lights remain; fully outside light is culled');
+outside.position.x = 4; viewScene.updateMatrixWorld(); viewPool.update(viewCamera, 1);
+assert.equal(viewPool.diagnostics.active, 3, 'A light reappears as soon as its range enters the view');
+viewCamera.position.x = 100; viewCamera.lookAt(100, 0, 0); viewCamera.updateMatrixWorld();
+viewPool.update(viewCamera, 2);
+assert.equal(viewPool.diagnostics.active, 1, 'Camera movement culls finite lights and keeps the unlimited light');
+viewPool.stop(); viewPool.remove(viewOwner);
 console.log('Stable point lights: native uniform parity, hidden registrations, delayed capacity release, 20 repeated transitions, 65 visible sources without truncation, flicker, movement, layers, shadow fallback and restart/cleanup passed. No GPU timing claimed.');

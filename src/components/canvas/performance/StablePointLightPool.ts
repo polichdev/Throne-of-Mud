@@ -9,6 +9,9 @@ export class StablePointLightPool {
   private underusedSince: number | null = null;
   private activeCount = 0;
   private spare: THREE.PointLight[] = [];
+  private viewProjection = new THREE.Matrix4();
+  private viewFrustum = new THREE.Frustum();
+  private lightBounds = new THREE.Sphere();
 
   get diagnostics() { return { active: this.activeCount, slots: this.group.children.length, registered: this.sources.size }; }
 
@@ -46,6 +49,8 @@ export class StablePointLightPool {
 
   update(camera: THREE.Camera, now = performance.now()) {
     if (!this.active) return;
+    this.viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.viewFrustum.setFromProjectionMatrix(this.viewProjection, camera.coordinateSystem, camera.reversedDepth);
     let count = 0;
     for (const [source, mask] of this.sources) {
       source.layers.mask = source.castShadow ? mask : 0;
@@ -55,6 +60,11 @@ export class StablePointLightPool {
         if (!parent.visible) { visible = false; break; }
       }
       if (!visible) continue;
+      if (source.distance > 0) {
+        this.lightBounds.center.setFromMatrixPosition(source.matrixWorld);
+        this.lightBounds.radius = source.distance;
+        if (!this.viewFrustum.intersectsSphere(this.lightBounds)) continue;
+      }
       this.reserve(count + 1);
       const light = this.group.children[count++] as THREE.PointLight;
       light.layers.mask = camera.layers.mask;

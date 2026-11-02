@@ -4,6 +4,7 @@ export const RENDERING = {
   background: '#090d16',
   strategicBackground: '#18120c',
   metricsPublishMs: 200,
+  sceneObjectSampleMs: 2000,
   submissionSampleFrames: 16,
   submissionSampleMaxAgeMs: 2000,
 } as const;
@@ -34,4 +35,4 @@ export const FAUNA_LOD = {
   flockMargin: 10,
 } as const;
 
-export const POINT_LIGHT_POOL = { minSlots: 16, shrinkDelayMs: 30_000 } as const;
+export const POINT_LIGHT_POOL = { minSlots: 8, shrinkDelayMs: 30_000 } as const;

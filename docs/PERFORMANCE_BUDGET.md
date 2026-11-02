@@ -75,7 +75,7 @@ Garbage collection (GC) pauses cause sudden micro-stutters and frame drops. In t
 
 ### Rule 3.3: Point Light Clamping (`StablePointLightPool.ts`)
 - Dynamic Three.js point lights (torches, campfires, forge fires) are expensive due to forward lighting calculations.
-- Lights are pooled with a minimum allocation (`POINT_LIGHT_POOL.minSlots = 16`). Distant lights smoothly fade out and release their pool slot, with a 30-second shrink hysteresis to prevent thrashing.
+- Lights are pooled with a minimum allocation (`POINT_LIGHT_POOL.minSlots = 8`). The pool expands to fit all visible sources and retains excess capacity for 30 seconds before shrinking to avoid frequent shader changes.
 
 ---
 
