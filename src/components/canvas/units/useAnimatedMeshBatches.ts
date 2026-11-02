@@ -19,8 +19,8 @@ export function useAnimatedMeshBatches(rootRef: RefObject<THREE.Group | null>) {
     scene.add(batches.group);
     const removeTask = addSceneRenderTask(scene, () => {
       if (dirty.current && rootRef.current) {
-        rootRef.current.updateWorldMatrix(true, true);
-        batches.sync(rootRef.current);
+        if (batches instanceof BuildingMeshBatches) batches.syncIfChanged(rootRef.current);
+        else batches.sync(rootRef.current);
         dirty.current = false;
       }
       if (batches instanceof AnimatedMeshBatches) batches.update(camera);

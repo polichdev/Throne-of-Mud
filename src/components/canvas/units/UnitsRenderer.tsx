@@ -477,7 +477,8 @@ function Unit3D({
     if (characterBodyRef.current && !isSleepingNow) {
       characterBodyRef.current.rotation.y = facingAngle.current;
     }
-    prevPos.current = [ux, uz];
+    prevPos.current[0] = ux;
+    prevPos.current[1] = uz;
 
     let action: 'idle' | 'walk' | 'attack' | 'chop_standing' | 'chop_fallen' | 'build' | 'farm' | 'craft' | 'sleep' | 'sit' = 'idle';
 
@@ -1131,7 +1132,8 @@ function MuleCompanion({
     const uX = unit.position?.[0] || 0;
     const uZ = unit.position?.[2] || 0;
     const distMoved = Math.hypot(uX - prevUnitPos.current[0], uZ - prevUnitPos.current[1]);
-    prevUnitPos.current = [uX, uZ];
+    prevUnitPos.current[0] = uX;
+    prevUnitPos.current[1] = uZ;
 
     const t = clock.getElapsedTime();
     let isMoving = !isGamePaused && Boolean(unit.path && unit.path.length > 0) && distMoved > 0.0005;
@@ -1293,7 +1295,8 @@ function HorseCartCompanion({
     const uX = unit.position?.[0] || 0;
     const uZ = unit.position?.[2] || 0;
     const distMoved = Math.hypot(uX - prevUnitPos.current[0], uZ - prevUnitPos.current[1]);
-    prevUnitPos.current = [uX, uZ];
+    prevUnitPos.current[0] = uX;
+    prevUnitPos.current[1] = uZ;
 
     const t = clock.getElapsedTime();
     const isMoving = !isGamePaused && Boolean(unit.path && unit.path.length > 0) && distMoved > 0.0005;
