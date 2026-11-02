@@ -38,7 +38,7 @@ const { createRoot, extend, advance } = await import('@react-three/fiber');
 const { UnitsRenderer } = await import('../src/components/canvas/units/UnitsRenderer.tsx');
 const { AnimatedMeshBatches } = await import('../src/components/canvas/units/AnimatedMeshBatches.ts');
 const { BuildingMeshBatches } = await import('../src/components/canvas/buildings/BuildingMeshBatches.ts');
-const { registerColorBatchMaterial } = await import('../src/components/canvas/performance/colorBatchMaterials.ts');
+const { registerColorBatchMaterial, getColorBatchMaterial } = await import('../src/components/canvas/performance/colorBatchMaterials.ts');
 const { groundShadowMaterial, GROUND_SHADOW_RENDER_ORDER } = await import('../src/components/canvas/performance/groundShadows.ts');
 const { getSceneRenderTaskCount } = await import('../src/components/canvas/performance/sceneRenderTasks.ts');
 const { useStaticUnitMeshMatrices } = await import('../src/components/canvas/units/useStaticUnitMeshMatrices.ts');
@@ -412,6 +412,17 @@ assert.equal(first.layers.mask, 8, 'Removed source restores its original layers'
 assert.equal(batcher.group.children[0].count, 4, 'Removed source leaves no ghost instance');
 let disposedShared = 0; geo.addEventListener('dispose', () => disposedShared++); mat.addEventListener('dispose', () => disposedShared++);
 batcher.dispose(); assert.equal(first.layers.mask, 8); assert.equal(second.layers.mask, 8); assert.equal(disposedShared, 0);
+
+const sharedMap = new THREE.Texture(), otherMap = new THREE.Texture();
+const mappedRed = new THREE.MeshStandardMaterial({ map: sharedMap, color: '#b4513a', roughness: .85 });
+const mappedBlue = new THREE.MeshStandardMaterial({ map: sharedMap, color: '#357bab', roughness: .85 });
+const mappedOther = new THREE.MeshStandardMaterial({ map: otherMap, color: '#357bab', roughness: .85 });
+const mappedRough = new THREE.MeshStandardMaterial({ map: sharedMap, color: '#357bab', roughness: .5 });
+for (const material of [mappedRed, mappedBlue, mappedOther, mappedRough]) registerColorBatchMaterial(material);
+assert.strictEqual(getColorBatchMaterial(mappedRed), getColorBatchMaterial(mappedBlue), 'Same texture and properties share tintable base');
+assert.notStrictEqual(getColorBatchMaterial(mappedRed), getColorBatchMaterial(mappedOther), 'Different texture objects retain separate batches');
+assert.notStrictEqual(getColorBatchMaterial(mappedRed), getColorBatchMaterial(mappedRough), 'Different shading retains separate batches');
+assert.strictEqual(getColorBatchMaterial(mappedRed).map, sharedMap, 'Shared base retains the original texture');
 
 // Native instance colors must survive material replacement and buffer reuse.
 for (const Batcher of [AnimatedMeshBatches, BuildingMeshBatches]) {

@@ -4,9 +4,12 @@ const bindings = new WeakMap<THREE.Material, THREE.MeshStandardMaterial>();
 const shared = new Map<string, THREE.MeshStandardMaterial>();
 
 export function registerColorBatchMaterial(material: THREE.MeshStandardMaterial): void {
-  if (bindings.has(material) || material.map || material.transparent || material.vertexColors ||
+  if (bindings.has(material) || material.transparent || material.vertexColors ||
     material.onBeforeRender !== THREE.Material.prototype.onBeforeRender) return;
-  const serialized: Record<string, unknown> = { ...material.toJSON() };
+  const snapshot = material.map ? material.clone() : material;
+  if (snapshot !== material) snapshot.map = null;
+  const serialized: Record<string, unknown> = { ...snapshot.toJSON() };
+  if (material.map) serialized.map = material.map.uuid;
   delete serialized.uuid; delete serialized.name; delete serialized.metadata; delete serialized.color;
   const key = JSON.stringify(serialized) + ':' + material.customProgramCacheKey();
   let base = shared.get(key);

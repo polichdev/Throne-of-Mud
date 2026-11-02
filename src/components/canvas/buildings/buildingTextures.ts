@@ -377,15 +377,26 @@ function makeTexture(canvas: HTMLCanvasElement, repX = 1, repY = 1): THREE.Canva
   return tex;
 }
 
+function textureVariant(texture: THREE.CanvasTexture, repX: number, repY: number): THREE.CanvasTexture {
+  const variant = texture.clone();
+  variant.repeat.set(repX, repY);
+  variant.needsUpdate = true;
+  return variant;
+}
+
+const thatch = makeTexture(createThatchCanvas(), 2, 2);
+const timberPlanks = makeTexture(createTimberPlanksCanvas(), 2, 2);
+const stoneMasonry = makeTexture(createStoneMasonryCanvas(), 2, 2);
+
 export const BUILDING_TEXTURES = {
-  thatch: makeTexture(createThatchCanvas(), 2, 2),
-  thatchSteep: makeTexture(createThatchCanvas(), 2, 1),
-  timberPlanks: makeTexture(createTimberPlanksCanvas(), 2, 2),
-  timberPlanksFine: makeTexture(createTimberPlanksCanvas(), 4, 1),
+  thatch,
+  thatchSteep: textureVariant(thatch, 2, 1),
+  timberPlanks,
+  timberPlanksFine: textureVariant(timberPlanks, 4, 1),
   timberLogs: makeTexture(createTimberLogsCanvas(), 2, 2),
   wattleDaub: makeTexture(createWattleDaubCanvas(), 2, 2),
-  stoneMasonry: makeTexture(createStoneMasonryCanvas(), 2, 2),
-  stoneFoundation: makeTexture(createStoneMasonryCanvas(), 4, 1),
+  stoneMasonry,
+  stoneFoundation: textureVariant(stoneMasonry, 4, 1),
   tentFabric: makeTexture(createTentFabricCanvas(), 2, 2),
   soil: makeTexture(createSoilCanvas(), 2, 2),
   rug: makeTexture(createRugCanvas(), 1, 1),
